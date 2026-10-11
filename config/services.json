@@ -47,6 +47,85 @@
             "required": true
           }
         }
+      },
+      "payment_intent.create": {
+        "method": "POST",
+        "path": "/payment_intents",
+        "validation": {
+          "amount": {
+            "type": "number",
+            "required": true,
+            "min": 1
+          },
+          "currency": {
+            "type": "string",
+            "required": true
+          }
+        }
+      },
+      "payment_intent.refund": {
+        "method": "POST",
+        "path": "/refunds",
+        "validation": {
+          "payment_intent": {
+            "type": "string",
+            "required": true
+          }
+        }
+      },
+      "subscription.create": {
+        "method": "POST",
+        "path": "/subscriptions",
+        "validation": {
+          "customer": {
+            "type": "string",
+            "required": true
+          },
+          "items": {
+            "type": "array",
+            "required": true
+          }
+        },
+        "undo": {
+          "action": "subscription.cancel",
+          "with": {
+            "id": "response.id"
+          }
+        }
+      },
+      "subscription.cancel": {
+        "method": "DELETE",
+        "path": "/subscriptions/{id}",
+        "validation": {
+          "id": {
+            "type": "string",
+            "required": true
+          }
+        }
+      },
+      "invoice.create": {
+        "method": "POST",
+        "path": "/invoices",
+        "validation": {
+          "customer": {
+            "type": "string",
+            "required": true
+          }
+        }
+      }
+    },
+    "setup": {
+      "label": "Stripe",
+      "category": "Payments",
+      "key": "Secret key",
+      "keyHint": "Starts with sk_test_ or sk_live_. Try a test key first.",
+      "keyUrl": "https://dashboard.stripe.com/apikeys",
+      "example": {
+        "action": "payment_intent.create",
+        "payload": {
+          "amount": 500,
+          "currency": "usd"
+        }
       }
     }
   },
@@ -65,6 +144,12 @@
           }
         }
       }
+    },
+    "setup": {
+      "label": "Calendly",
+      "category": "Scheduling",
+      "key": "Personal access token",
+      "keyUrl": "https://calendly.com/integrations/api_webhooks"
     }
   },
   "hubspot": {
@@ -79,6 +164,46 @@
           "email": {
             "type": "string",
             "format": "email"
+          }
+        }
+      },
+      "deal.create": {
+        "method": "POST",
+        "path": "/objects/deals",
+        "validation": {
+          "properties": {
+            "type": "object",
+            "required": true
+          }
+        }
+      },
+      "contact.update": {
+        "method": "PATCH",
+        "path": "/objects/contacts/{contactId}",
+        "validation": {
+          "contactId": {
+            "type": "string",
+            "required": true
+          },
+          "properties": {
+            "type": "object",
+            "required": true
+          }
+        }
+      }
+    },
+    "setup": {
+      "label": "HubSpot",
+      "category": "CRM",
+      "key": "Private app access token",
+      "keyHint": "Create a private app with the CRM scopes you need.",
+      "keyUrl": "https://developers.hubspot.com/docs/api/private-apps",
+      "example": {
+        "action": "deal.create",
+        "payload": {
+          "properties": {
+            "dealname": "New order",
+            "amount": "500"
           }
         }
       }
@@ -118,7 +243,7 @@
     }
   },
   "shopify": {
-    "baseUrl": "https://YOUR_STORE.myshopify.com/admin/api/2024-01",
+    "baseUrl": "https://{shop}.myshopify.com/admin/api/2024-01",
     "authHeader": "X-Shopify-Access-Token",
     "contentType": "application/json",
     "actions": {
@@ -130,6 +255,10 @@
             "type": "array",
             "required": true,
             "minLength": 1
+          },
+          "shop": {
+            "type": "string",
+            "required": true
           }
         }
       },
@@ -144,6 +273,32 @@
           "available": {
             "type": "number",
             "min": 0
+          },
+          "shop": {
+            "type": "string",
+            "required": true
+          }
+        }
+      }
+    },
+    "setup": {
+      "label": "Shopify",
+      "category": "Commerce",
+      "key": "Admin API access token",
+      "keyHint": "From a custom app in your store admin. Starts with shpat_. Every call also sends \"shop\": your store name before .myshopify.com.",
+      "keyUrl": "https://help.shopify.com/en/manual/apps/app-types/custom-apps",
+      "example": {
+        "action": "order.create",
+        "payload": {
+          "shop": "your-store",
+          "order": {
+            "line_items": [
+              {
+                "title": "Test",
+                "price": "5.00",
+                "quantity": 1
+              }
+            ]
           }
         }
       }
@@ -215,6 +370,13 @@
           }
         }
       }
+    },
+    "setup": {
+      "label": "Razorpay",
+      "category": "Payments",
+      "username": "Key ID",
+      "password": "Key secret",
+      "keyUrl": "https://dashboard.razorpay.com/app/website-app-settings/api-keys"
     }
   },
   "twilio": {
@@ -224,7 +386,7 @@
     "actions": {
       "sms.send": {
         "method": "POST",
-        "path": "/Accounts/{TWILIO_SID}/Messages.json",
+        "path": "/Accounts/{ACCOUNT}/Messages.json",
         "validation": {
           "To": {
             "type": "string",
@@ -235,6 +397,21 @@
             "required": true,
             "maxLength": 1600
           }
+        }
+      }
+    },
+    "setup": {
+      "label": "Twilio",
+      "category": "Messaging",
+      "username": "Account SID",
+      "password": "Auth token",
+      "keyUrl": "https://console.twilio.com",
+      "example": {
+        "action": "sms.send",
+        "payload": {
+          "To": "+15555550100",
+          "From": "+15555550111",
+          "Body": "Your order shipped"
         }
       }
     }
@@ -319,6 +496,13 @@
           }
         }
       }
+    },
+    "setup": {
+      "label": "Mollie",
+      "category": "Payments",
+      "key": "API key",
+      "keyHint": "Starts with test_ or live_.",
+      "keyUrl": "https://my.mollie.com/dashboard/developers/api-keys"
     }
   },
   "airwallex": {
@@ -476,6 +660,20 @@
           }
         }
       }
+    },
+    "setup": {
+      "label": "Slack",
+      "category": "Messaging",
+      "key": "Bot token",
+      "keyHint": "Starts with xoxb-. Invite the bot to the channel.",
+      "keyUrl": "https://api.slack.com/apps",
+      "example": {
+        "action": "message.post",
+        "payload": {
+          "channel": "#general",
+          "text": "Deploy finished"
+        }
+      }
     }
   },
   "klarna": {
@@ -532,6 +730,13 @@
           }
         }
       }
+    },
+    "setup": {
+      "label": "Paystack",
+      "category": "Payments",
+      "key": "Secret key",
+      "keyHint": "Starts with sk_test_ or sk_live_.",
+      "keyUrl": "https://dashboard.paystack.com/#/settings/developers"
     }
   },
   "gocardless": {
@@ -596,6 +801,277 @@
           "email": {
             "type": "string",
             "format": "email"
+          }
+        }
+      }
+    }
+  },
+  "resend": {
+    "baseUrl": "https://api.resend.com",
+    "authHeader": "Authorization",
+    "contentType": "application/json",
+    "setup": {
+      "label": "Resend",
+      "category": "Email",
+      "key": "API key",
+      "keyHint": "Starts with re_. Send from a domain you verified in Resend.",
+      "keyUrl": "https://resend.com/api-keys",
+      "example": {
+        "action": "email.send",
+        "payload": {
+          "from": "you@yourdomain.com",
+          "to": "customer@example.com",
+          "subject": "Your receipt",
+          "text": "Thanks for your order."
+        }
+      }
+    },
+    "actions": {
+      "email.send": {
+        "method": "POST",
+        "path": "/emails",
+        "validation": {
+          "from": {
+            "type": "string",
+            "required": true
+          },
+          "to": {
+            "required": true
+          },
+          "subject": {
+            "type": "string",
+            "required": true
+          }
+        }
+      }
+    }
+  },
+  "sendgrid": {
+    "baseUrl": "https://api.sendgrid.com/v3",
+    "authHeader": "Authorization",
+    "contentType": "application/json",
+    "setup": {
+      "label": "SendGrid",
+      "category": "Email",
+      "key": "API key",
+      "keyHint": "Starts with SG. and needs Mail Send access.",
+      "keyUrl": "https://app.sendgrid.com/settings/api_keys",
+      "example": {
+        "action": "mail.send",
+        "payload": {
+          "personalizations": [
+            {
+              "to": [
+                {
+                  "email": "customer@example.com"
+                }
+              ]
+            }
+          ],
+          "from": {
+            "email": "you@yourdomain.com"
+          },
+          "subject": "Your receipt",
+          "content": [
+            {
+              "type": "text/plain",
+              "value": "Thanks for your order."
+            }
+          ]
+        }
+      }
+    },
+    "actions": {
+      "mail.send": {
+        "method": "POST",
+        "path": "/mail/send",
+        "validation": {
+          "personalizations": {
+            "type": "array",
+            "required": true
+          },
+          "from": {
+            "type": "object",
+            "required": true
+          },
+          "subject": {
+            "type": "string",
+            "required": true
+          }
+        }
+      }
+    }
+  },
+  "github": {
+    "baseUrl": "https://api.github.com",
+    "authHeader": "Authorization",
+    "contentType": "application/json",
+    "extraHeaders": {
+      "Accept": "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      "User-Agent": "AgentRaaS"
+    },
+    "setup": {
+      "label": "GitHub",
+      "category": "Developer tools",
+      "key": "Fine-grained personal access token",
+      "keyHint": "Give it Issues: read and write on the repositories your agent uses.",
+      "keyUrl": "https://github.com/settings/personal-access-tokens/new",
+      "example": {
+        "action": "issue.create",
+        "payload": {
+          "owner": "your-org",
+          "repo": "your-repo",
+          "title": "Bug found by the agent",
+          "body": "Details here"
+        }
+      }
+    },
+    "actions": {
+      "issue.create": {
+        "method": "POST",
+        "path": "/repos/{owner}/{repo}/issues",
+        "validation": {
+          "owner": {
+            "type": "string",
+            "required": true
+          },
+          "repo": {
+            "type": "string",
+            "required": true
+          },
+          "title": {
+            "type": "string",
+            "required": true
+          }
+        }
+      },
+      "issue.comment": {
+        "method": "POST",
+        "path": "/repos/{owner}/{repo}/issues/{issue_number}/comments",
+        "validation": {
+          "owner": {
+            "type": "string",
+            "required": true
+          },
+          "repo": {
+            "type": "string",
+            "required": true
+          },
+          "issue_number": {
+            "required": true
+          },
+          "body": {
+            "type": "string",
+            "required": true
+          }
+        }
+      },
+      "issue.update": {
+        "method": "PATCH",
+        "path": "/repos/{owner}/{repo}/issues/{issue_number}",
+        "validation": {
+          "owner": {
+            "type": "string",
+            "required": true
+          },
+          "repo": {
+            "type": "string",
+            "required": true
+          },
+          "issue_number": {
+            "required": true
+          }
+        }
+      }
+    }
+  },
+  "notion": {
+    "baseUrl": "https://api.notion.com/v1",
+    "authHeader": "Authorization",
+    "contentType": "application/json",
+    "extraHeaders": {
+      "Notion-Version": "2022-06-28"
+    },
+    "setup": {
+      "label": "Notion",
+      "category": "Docs",
+      "key": "Internal integration secret",
+      "keyHint": "Starts with ntn_. Share the page or database with the integration.",
+      "keyUrl": "https://www.notion.so/profile/integrations",
+      "example": {
+        "action": "page.create",
+        "payload": {
+          "parent": {
+            "database_id": "your-database-id"
+          },
+          "properties": {
+            "Name": {
+              "title": [
+                {
+                  "text": {
+                    "content": "New task"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "actions": {
+      "page.create": {
+        "method": "POST",
+        "path": "/pages",
+        "validation": {
+          "parent": {
+            "type": "object",
+            "required": true
+          },
+          "properties": {
+            "type": "object",
+            "required": true
+          }
+        }
+      }
+    }
+  },
+  "zendesk": {
+    "baseUrl": "https://{subdomain}.zendesk.com/api/v2",
+    "authType": "basic",
+    "contentType": "application/json",
+    "setup": {
+      "label": "Zendesk",
+      "category": "Support",
+      "username": "Email followed by /token",
+      "usernameHint": "For example you@company.com/token",
+      "password": "API token",
+      "keyUrl": "https://support.zendesk.com/hc/en-us/articles/4408889192858",
+      "example": {
+        "action": "ticket.create",
+        "payload": {
+          "subdomain": "yourcompany",
+          "ticket": {
+            "subject": "Refund request",
+            "comment": {
+              "body": "Customer asked for a refund."
+            }
+          }
+        }
+      }
+    },
+    "actions": {
+      "ticket.create": {
+        "method": "POST",
+        "path": "/tickets.json",
+        "validation": {
+          "subdomain": {
+            "type": "string",
+            "required": true
+          },
+          "ticket": {
+            "type": "object",
+            "required": true
           }
         }
       }

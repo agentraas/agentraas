@@ -546,7 +546,7 @@
     <div id="welcome-banner" class="panel first-run" style="display:none;margin-bottom:20px;">
       <h3>Get started in three steps</h3>
       <ol>
-        <li>Connect an agent: you get an API key and a webhook URL. <button type="button" class="btn filled" id="fr-connect-btn">+ Connect agent</button></li>
+        <li>Connect a service: paste your Stripe, Slack, GitHub or other API key, and copy the URL and key your agent uses. <button type="button" class="btn filled" id="fr-connect-btn">Connect a service</button></li>
         <li>See a duplicate caught: 8 identical calls go to a sandbox, 1 runs. <button type="button" class="btn" id="fr-test-btn">Run live dedup test</button></li>
         <li>Point your agent, n8n workflow or MCP client at AgentRaaS instead of the API. <a href="/guide" target="_blank" rel="noopener">Read the guide</a></li>
       </ol>
@@ -580,6 +580,7 @@
         </div>
         <div class="control-group" data-tab="setup">
           <span class="control-group-label">Setup</span>
+          <button class="btn filled" id="service-connect-btn">Connect a service</button>
           <button class="btn" id="credentials-btn">Credentials</button>
           <button class="btn" id="custom-actions-btn">Custom actions</button>
           <button class="btn" id="mcpsvr-btn">MCP servers</button>
@@ -718,6 +719,36 @@
       <div id="first-call-status" class="sub" style="margin-top:12px;padding:10px 12px;border-radius:8px;background:var(--panel-2);">Waiting for your first call. Run the curl example to see it arrive here.</div>
     </div>
     <button class="close-btn" id="modal-close">Close</button>
+  </div>
+</div>
+
+<!-- Connect a service: paste the provider's key, copy what your agent uses -->
+<div class="modal-overlay" id="service-modal-overlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Connect a service">
+    <div id="svc-step-pick">
+      <h3>Connect a service</h3>
+      <p class="sub">Paste the service's API key once. Your agent then calls AgentRaaS with its own key, and every call runs once, is checked and is logged. The service's key is encrypted and never shown again.</p>
+      <div class="modal-error" id="svc-error"></div>
+      <form id="svc-form">
+        <div class="field"><label for="svc-pick">Service</label><select id="svc-pick" required></select></div>
+        <div class="field" id="svc-key-field"><label for="svc-key" id="svc-key-label">API key</label><input type="password" id="svc-key" autocomplete="off"></div>
+        <div class="field" id="svc-user-field" style="display:none;"><label for="svc-user" id="svc-user-label">Username</label><input type="text" id="svc-user" autocomplete="off"><div class="sub" id="svc-user-hint" style="font-size:12px;margin-top:4px;"></div></div>
+        <div class="field" id="svc-pass-field" style="display:none;"><label for="svc-pass" id="svc-pass-label">Password</label><input type="password" id="svc-pass" autocomplete="off"></div>
+        <p class="sub" style="font-size:12.5px;margin:-4px 0 14px;"><span id="svc-key-hint"></span> <a id="svc-key-url" href="#" target="_blank" rel="noopener">Where do I find it?</a></p>
+        <button type="submit" class="primary" id="svc-submit">Save and connect</button>
+      </form>
+      <p class="sub" style="font-size:12px;margin-top:12px;">Not listed? Use Custom actions for any HTTP API, or MCP servers for any MCP tool.</p>
+    </div>
+    <div id="svc-step-done" style="display:none;">
+      <h3 id="svc-done-title">Connected</h3>
+      <p class="sub">Give your agent these two. The AgentRaaS key is shown once: copy it now.</p>
+      <div class="endpoint-block"><label>AgentRaaS URL</label><div class="row"><code id="svc-done-url"></code><button class="copy" data-target="svc-done-url">Copy</button></div></div>
+      <div class="endpoint-block"><label>AgentRaaS key</label><div class="row"><code id="svc-done-key"></code><button class="copy" data-target="svc-done-key">Copy</button></div></div>
+      <div class="endpoint-block"><label id="svc-done-example-label">Try it</label><div class="row"><code id="svc-done-curl"></code><button class="copy" data-target="svc-done-curl">Copy</button></div></div>
+      <div class="endpoint-block"><label>What your agent can call</label><div id="svc-done-actions" class="sub" style="font-size:12.5px;"></div></div>
+      <div id="svc-first-call" class="sub" style="margin-top:12px;padding:10px 12px;border-radius:8px;background:var(--panel-2);"></div>
+    </div>
+    <button class="close-btn" id="svc-modal-close">Close</button>
   </div>
 </div>
 
@@ -1019,10 +1050,10 @@
 <div class="modal-overlay" id="plugins-modal-overlay">
   <div class="modal" role="dialog" aria-modal="true" aria-label="Plugins">
     <h3>Plugins</h3>
-    <p class="sub">Optional integrations that sit alongside AgentRaaS. More get added here over time.</p>
+    <p class="sub">Optional integrations that sit alongside AgentRaaS.</p>
 
     <h3 style="margin-top:10px;">Agentgateway <span class="badge unverified" style="font-size:10px;vertical-align:1px;">beta</span></h3>
-    <p class="sub">List other MCP/tool backends you want unified behind one <a href="https://agentgateway.dev/" target="_blank" rel="noopener">agentgateway</a> gateway alongside AgentRaaS's own MCP endpoint. This saves your target list — provisioning the actual shared gateway endpoint is manual for now; we'll follow up once it's ready. Self-hosting? You can run agentgateway yourself today — see the <a href="/guide#agentgateway" target="_blank" rel="noopener">guide</a>.</p>
+    <p class="sub">List other MCP/tool backends you want unified behind one <a href="https://agentgateway.dev/" target="_blank" rel="noopener">agentgateway</a> gateway alongside AgentRaaS's own MCP endpoint. This saves your list of targets; AgentRaaS does not run the shared gateway for you. Run agentgateway yourself with this list: see the <a href="/guide#agentgateway" target="_blank" rel="noopener">guide</a>.</p>
     <div class="modal-error" id="agentgateway-error"></div>
     <form id="agentgateway-form">
       <div class="field"><label for="agentgateway-org">Org ID</label><input type="text" id="agentgateway-org" placeholder="org_acme" required></div>

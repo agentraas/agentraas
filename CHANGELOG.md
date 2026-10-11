@@ -15,6 +15,38 @@ safe to re-run.
 
 ## [Unreleased]
 
+## [0.16.4] - 2026-10-11
+
+No migration.
+
+### Security
+- A Custom Action URL containing `{NAME}` was filled from the server's
+  environment before the call, so a user could send server secrets (such as
+  `JWT_SECRET`) to a host they control. Custom Action and webhook URLs are
+  now used exactly as stored. Upgrade, and rotate `JWT_SECRET` and
+  `CREDENTIALS_ENCRYPTION_KEY` if untrusted users could create Custom
+  Actions on your server.
+
+### Added
+- Dashboard: Connect a service. Pick a service, paste its API key, and get
+  the AgentRaaS URL, key and a ready example call, plus the actions it
+  supports and their required fields.
+- Services: Resend, SendGrid, GitHub (issues), Notion (pages), Zendesk
+  (tickets); Stripe PaymentIntents, refunds of a PaymentIntent,
+  subscriptions (create, cancel, with undo) and invoices; HubSpot deals and
+  contact updates. 27 services in total.
+- A curated service's URL can take `{field}` from the call (removed from the
+  body; letters, digits, `.`, `_`, `-` only) and `{ACCOUNT}` from the stored
+  credential's username.
+
+### Fixed
+- Twilio's URL used the server's `TWILIO_SID` env var instead of the
+  customer's Account SID, so Twilio could not work for Cloud customers.
+- Shopify's URL contained a literal `YOUR_STORE`; calls now send `shop`.
+- Stripe form bodies sent nested values as JSON text; they now use Stripe's
+  bracket form (`items[0][price]`).
+- The Plugins window no longer promises a hosted gateway that does not exist.
+
 ## [0.16.3] - 2026-10-11
 
 No migration.

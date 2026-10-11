@@ -112,7 +112,24 @@ async fn build_request(
         });
     }
 
-    let url = substitute_env_placeholders(&route.url);
+    // A curated route's URL may name fields of the call ({owner}) or the
+    // stored account ({ACCOUNT}); those fields leave the body. Custom URLs are
+    // user-typed, so they are never filled in: a `{JWT_SECRET}` in one would
+    // otherwise send this server's secrets to the user's host.
+    let mut body = payload.clone();
+    let url = if service_name == "custom" {
+        route.url.clone()
+    } else {
+        let account = credential.as_ref().and_then(|c| c.username.as_deref());
+        fill_url_placeholders(&route.url, &mut body, account).map_err(|message| ForwardError {
+            message,
+            upstream_status: Some(400),
+            upstream_body: None,
+            circuit_already_recorded: false,
+            outcome_unknown: false,
+        })?
+    };
+    let payload = &body;
 
     let mut builder = state
         .http_client
@@ -184,14 +201,8 @@ async fn build_request(
         // (already-validated) JSON payload into form fields, same as
         // axios's `application/x-www-form-urlencoded` content type would
         // when handed a plain object.
-        let form: Vec<(String, String)> = payload
-            .as_object()
-            .map(|obj| {
-                obj.iter()
-                    .map(|(k, v)| (k.clone(), value_to_form_string(v)))
-                    .collect()
-            })
-            .unwrap_or_default();
+        let mut form = Vec::new();
+        flatten_form("", payload, &mut form);
         builder.form(&form)
     } else {
         builder.json(payload)
@@ -562,33 +573,77 @@ pub async fn forward_with_retry_streaming(
     Err(last_error.expect("loop always sets last_error before exiting without returning Ok"))
 }
 
-/// Fills `{KEY}` placeholders in a route URL from env vars of the same name,
-/// e.g. Twilio's path has `{TWILIO_SID}`. Left as the literal `{KEY}` text if
-/// the env var isn't set.
-fn substitute_env_placeholders(url: &str) -> String {
+/// Fills `{name}` placeholders in a curated route's URL. A lowercase or
+/// camelCase name comes from the call's own field of that name, which is
+/// then removed from the body (GitHub's `{owner}/{repo}`, Zendesk's
+/// `{subdomain}`); its value may only use letters, digits, `.`, `_` and `-`,
+/// with no `..`, so it can't change the host or climb the path. `{ACCOUNT}`
+/// is the stored credential's username (Twilio's Account SID). Any other
+/// UPPERCASE name reads the env var of that name (self-host settings).
+fn fill_url_placeholders(url: &str, body: &mut Value, account: Option<&str>) -> Result<String, String> {
     let mut result = String::with_capacity(url.len());
-    let bytes = url.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'{' {
-            if let Some(end) = url[i + 1..].find('}') {
-                let key = &url[i + 1..i + 1 + end];
-                if !key.is_empty() && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
-                    if let Ok(val) = std::env::var(key) {
-                        result.push_str(&val);
-                    } else {
-                        result.push_str(&url[i..=i + 1 + end]);
-                    }
-                    i += end + 2;
-                    continue;
+    let mut rest = url;
+    while let Some(start) = rest.find('{') {
+        result.push_str(&rest[..start]);
+        let after = &rest[start + 1..];
+        let Some(end) = after.find('}') else {
+            result.push_str(&rest[start..]);
+            return Ok(result);
+        };
+        let key = &after[..end];
+        rest = &after[end + 1..];
+        if key.is_empty() || !key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+            result.push('{');
+            result.push_str(key);
+            result.push('}');
+            continue;
+        }
+        if key.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_') {
+            let value = if key == "ACCOUNT" { account.map(str::to_string) } else { std::env::var(key).ok() };
+            match value {
+                Some(v) => result.push_str(&v),
+                None if key == "ACCOUNT" => return Err("The stored credential has no account ID (username) for this service.".to_string()),
+                None => {
+                    result.push('{');
+                    result.push_str(key);
+                    result.push('}');
                 }
             }
+            continue;
         }
-        let ch = url[i..].chars().next().unwrap();
-        result.push(ch);
-        i += ch.len_utf8();
+        let value = body.as_object_mut().and_then(|o| o.remove(key));
+        let text = match value {
+            Some(Value::String(s)) => s,
+            Some(Value::Number(n)) => n.to_string(),
+            _ => return Err(format!("Missing field \"{key}\": this action needs it in the URL.")),
+        };
+        let safe = !text.is_empty() && text.len() <= 200 && !text.contains("..") && text.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'));
+        if !safe {
+            return Err(format!("Field \"{key}\" may only contain letters, digits, '.', '_' and '-'."));
+        }
+        result.push_str(&text);
     }
-    result
+    result.push_str(rest);
+    Ok(result)
+}
+
+/// Form encoding the way Stripe reads it: nested objects and arrays become
+/// bracketed keys (`items[0][price]=...`, `metadata[order]=...`).
+fn flatten_form(prefix: &str, v: &Value, out: &mut Vec<(String, String)>) {
+    match v {
+        Value::Object(obj) => {
+            for (k, inner) in obj {
+                let key = if prefix.is_empty() { k.clone() } else { format!("{prefix}[{k}]") };
+                flatten_form(&key, inner, out);
+            }
+        }
+        Value::Array(items) => {
+            for (i, inner) in items.iter().enumerate() {
+                flatten_form(&format!("{prefix}[{i}]"), inner, out);
+            }
+        }
+        other => out.push((prefix.to_string(), value_to_form_string(other))),
+    }
 }
 
 fn value_to_form_string(v: &Value) -> String {
@@ -791,6 +846,45 @@ pub async fn log_circuit_transition(state: &SharedState, transition: circuit_bre
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn url_placeholders_come_from_the_call_and_leave_the_body() {
+        let mut body = serde_json::json!({"owner": "acme", "repo": "site.web", "title": "Bug"});
+        let url = fill_url_placeholders("https://api.github.com/repos/{owner}/{repo}/issues", &mut body, None).unwrap();
+        assert_eq!(url, "https://api.github.com/repos/acme/site.web/issues");
+        assert_eq!(body, serde_json::json!({"title": "Bug"}));
+    }
+
+    #[test]
+    fn url_placeholders_refuse_values_that_could_move_the_request() {
+        for bad in ["evil.com/x", "a..b", "x?y=1", "x#y", "x@evil.com", ""] {
+            let mut body = serde_json::json!({"subdomain": bad});
+            assert!(fill_url_placeholders("https://{subdomain}.zendesk.com/api/v2/tickets.json", &mut body, None).is_err(), "{bad}");
+        }
+        let mut body = serde_json::json!({});
+        assert!(fill_url_placeholders("https://x/{owner}", &mut body, None).unwrap_err().contains("owner"));
+    }
+
+    #[test]
+    fn account_placeholder_is_the_credential_username_not_an_env_var() {
+        let mut body = serde_json::json!({});
+        let url = fill_url_placeholders("https://api.twilio.com/2010-04-01/Accounts/{ACCOUNT}/Messages.json", &mut body, Some("AC123")).unwrap();
+        assert_eq!(url, "https://api.twilio.com/2010-04-01/Accounts/AC123/Messages.json");
+        assert!(fill_url_placeholders("https://x/{ACCOUNT}", &mut body, None).is_err());
+    }
+
+    #[test]
+    fn stripe_form_encoding_uses_brackets_for_nested_values() {
+        let mut out = Vec::new();
+        flatten_form("", &serde_json::json!({"customer": "cus_1", "items": [{"price": "price_9"}], "metadata": {"order": 7}}), &mut out);
+        out.sort();
+        assert_eq!(out, vec![
+            ("customer".to_string(), "cus_1".to_string()),
+            ("items[0][price]".to_string(), "price_9".to_string()),
+            ("metadata[order]".to_string(), "7".to_string()),
+        ]);
+    }
+
     use super::*;
 
     fn err(upstream_status: Option<u16>, outcome_unknown: bool) -> ForwardError {

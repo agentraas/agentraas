@@ -567,6 +567,7 @@ async fn services(State(state): State<SharedState>, user: AuthUser) -> Result<Js
                     "circuit_state": circuit_states.get(&svc).cloned().unwrap_or_else(|| "closed".to_string()),
                     "actions_24h": stats.map(|s| s.0).unwrap_or(0),
                     "last_used": stats.map(|s| s.1),
+                    "catalog": state.service_catalog.get(&svc),
                 })
             })
             .collect(),

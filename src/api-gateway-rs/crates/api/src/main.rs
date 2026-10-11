@@ -107,6 +107,29 @@ async fn main() -> anyhow::Result<()> {
     }
     let mcp_tools_list = serde_json::json!(tools);
     let curated_services: std::collections::HashSet<String> = services_config.keys().cloned().collect();
+    // What the dashboard's "Connect a service" shows per service: its setup
+    // text and each action with its required fields.
+    let service_catalog: std::collections::HashMap<String, serde_json::Value> = services_config
+        .iter()
+        .map(|(name, svc)| {
+            let mut actions: Vec<serde_json::Value> = svc
+                .actions
+                .iter()
+                .map(|(action, cfg)| {
+                    let mut required: Vec<String> = cfg
+                        .validation
+                        .as_object()
+                        .map(|v| v.iter().filter(|(_, rule)| rule.get("required").and_then(|r| r.as_bool()) == Some(true)).map(|(k, _)| k.clone()).collect())
+                        .unwrap_or_default();
+                    required.sort();
+                    serde_json::json!({ "name": action, "method": cfg.method, "required": required, "undo": cfg.undo.is_some() })
+                })
+                .collect();
+            actions.sort_by(|a, b| a["name"].as_str().cmp(&b["name"].as_str()));
+            let auth = svc.auth_type.clone().unwrap_or_else(|| "bearer".to_string());
+            (name.clone(), serde_json::json!({ "setup": svc.setup, "auth": auth, "actions": actions }))
+        })
+        .collect();
 
     let node_env = std::env::var("NODE_ENV").unwrap_or_else(|_| "development".to_string());
 
@@ -118,6 +141,7 @@ async fn main() -> anyhow::Result<()> {
         tool_name_to_route,
         mcp_tools_list,
         curated_services,
+        service_catalog,
         jwt_secret,
         public_url: std::env::var("PUBLIC_URL")
             .unwrap_or_else(|_| "http://localhost:13001".to_string()),

@@ -39,6 +39,10 @@ pub struct RawServiceConfig {
     pub internal: Option<bool>,
     #[serde(rename = "extraHeaders")]
     pub extra_headers: Option<serde_json::Value>,
+    /// Dashboard "Connect a service" text: what the key is called, where to
+    /// find it, and an example call. Not used for routing.
+    #[serde(default)]
+    pub setup: Option<serde_json::Value>,
     pub actions: HashMap<String, RawActionConfig>,
 }
 

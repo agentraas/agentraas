@@ -299,7 +299,7 @@
   showControlTab(['setup', 'rules', 'monitor', 'account'].includes(savedTab) ? savedTab : 'setup');
 
   document.getElementById('account-open-btn').addEventListener('click', () => accountBtn.click());
-  document.getElementById('fr-connect-btn').addEventListener('click', () => document.getElementById('connect-agent-btn').click());
+  document.getElementById('fr-connect-btn').addEventListener('click', () => openServiceModal());
   document.getElementById('fr-test-btn').addEventListener('click', () => document.getElementById('live-test-btn').click());
 
   async function checkWelcomeBannerState() {
@@ -795,10 +795,9 @@
 
   // Polls recent activity until this agent's first call shows up (10 min max).
   let firstCallTimer = null;
-  function watchForFirstCall(orgId, agentId) {
+  function watchForFirstCall(orgId, agentId, status = document.getElementById('first-call-status')) {
     clearInterval(firstCallTimer);
-    const status = document.getElementById('first-call-status');
-    status.textContent = 'Waiting for your first call. Run the curl example to see it arrive here.';
+    status.textContent = 'Waiting for your first call. Run the example to see it arrive here.';
     const since = Date.now() - 5000;
     const deadline = Date.now() + 10 * 60 * 1000;
     firstCallTimer = setInterval(async () => {
@@ -841,6 +840,114 @@
       navigator.clipboard.writeText(text).then(() => { btn.textContent = 'Copied'; setTimeout(() => btn.textContent = 'Copy', 1200); });
     });
   });
+
+  // ─── Connect a service ───
+  // One step for the end user: pick the service, paste its key, copy the
+  // URL, key and example the agent needs. Setup text and actions come from
+  // config/services.json via /api/v1/services. Everything is set with
+  // textContent: the example payload is config, the key is the user's.
+  const serviceModalOverlay = document.getElementById('service-modal-overlay');
+  let serviceCatalog = [];
+
+  async function openServiceModal() {
+    document.getElementById('svc-error').style.display = 'none';
+    document.getElementById('svc-form').reset();
+    document.getElementById('svc-step-pick').style.display = 'block';
+    document.getElementById('svc-step-done').style.display = 'none';
+    serviceModalOverlay.style.display = 'flex'; anyModalOpen = true;
+    if (!serviceCatalog.length) {
+      try {
+        const res = await fetch('/api/v1/services', { credentials: 'include' });
+        if (res.ok) serviceCatalog = (await res.json()).filter((s) => s.catalog && s.catalog.setup);
+      } catch (err) {}
+    }
+    const pick = document.getElementById('svc-pick');
+    const groups = {};
+    for (const s of serviceCatalog.slice().sort((a, b) => a.catalog.setup.label.localeCompare(b.catalog.setup.label))) {
+      (groups[s.catalog.setup.category || 'Other'] ||= []).push(s);
+    }
+    pick.replaceChildren(...Object.keys(groups).sort().map((cat) => {
+      const og = document.createElement('optgroup');
+      og.label = cat;
+      for (const s of groups[cat]) og.appendChild(new Option(s.catalog.setup.label, s.name));
+      return og;
+    }));
+    updateServiceFields();
+  }
+
+  function selectedService() { return serviceCatalog.find((s) => s.name === document.getElementById('svc-pick').value); }
+
+  function updateServiceFields() {
+    const s = selectedService();
+    if (!s) return;
+    const setup = s.catalog.setup;
+    const basic = s.catalog.auth === 'basic';
+    document.getElementById('svc-key-field').style.display = basic ? 'none' : 'block';
+    document.getElementById('svc-user-field').style.display = basic ? 'block' : 'none';
+    document.getElementById('svc-pass-field').style.display = basic ? 'block' : 'none';
+    document.getElementById('svc-key').required = !basic;
+    document.getElementById('svc-user').required = basic;
+    document.getElementById('svc-pass').required = basic;
+    document.getElementById('svc-key-label').textContent = `${setup.label} ${setup.key || 'API key'}`;
+    document.getElementById('svc-user-label').textContent = setup.username || 'Username';
+    document.getElementById('svc-user-hint').textContent = setup.usernameHint || '';
+    document.getElementById('svc-pass-label').textContent = setup.password || 'Password';
+    document.getElementById('svc-key-hint').textContent = setup.keyHint || '';
+    const link = document.getElementById('svc-key-url');
+    link.style.display = setup.keyUrl ? '' : 'none';
+    if (setup.keyUrl) link.href = setup.keyUrl;
+  }
+  document.getElementById('svc-pick').addEventListener('change', updateServiceFields);
+  document.getElementById('service-connect-btn').addEventListener('click', () => openServiceModal());
+  document.getElementById('svc-modal-close').addEventListener('click', () => { serviceModalOverlay.style.display = 'none'; anyModalOpen = false; });
+  serviceModalOverlay.addEventListener('click', (e) => { if (e.target === serviceModalOverlay) { serviceModalOverlay.style.display = 'none'; anyModalOpen = false; } });
+
+  document.getElementById('svc-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errorBox = document.getElementById('svc-error');
+    const submit = document.getElementById('svc-submit');
+    errorBox.style.display = 'none'; submit.disabled = true;
+    const restoreText = withLoadingText(submit, 'Connecting…');
+    const s = selectedService();
+    const fail = (msg) => { errorBox.textContent = msg; errorBox.style.display = 'block'; };
+    try {
+      const credentials = s.catalog.auth === 'basic'
+        ? { username: document.getElementById('svc-user').value.trim(), password: document.getElementById('svc-pass').value.trim() }
+        : { api_key: document.getElementById('svc-key').value.trim() };
+      const credRes = await fetch('/api/v1/credentials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ org_id: currentUserOrgId, service: s.name, credentials }) });
+      const credData = await credRes.json();
+      if (!credRes.ok) return fail(credData.error || 'Could not save the key.');
+      const agentRes = await fetch('/api/v1/agents/connect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ org_id: currentUserOrgId, agent_id: `${s.name}-agent`, label: `${s.catalog.setup.label} (Connect a service)` }) });
+      const agent = await agentRes.json();
+      if (!agentRes.ok) return fail(agent.error || 'Saved the key, but could not create the agent key.');
+      showServiceDone(s, agent);
+      window.dataLayer = window.dataLayer || [];
+      window.dataLayer.push({ event: 'service_connected', service: s.name });
+      document.getElementById('welcome-banner').style.display = 'none';
+      document.getElementById('svc-key').value = ''; document.getElementById('svc-pass').value = '';
+    } catch (err) { fail('Could not reach the server.'); }
+    finally { submit.disabled = false; restoreText(); }
+  });
+
+  function showServiceDone(s, agent) {
+    const setup = s.catalog.setup;
+    const ex = setup.example || { action: s.catalog.actions[0]?.name, payload: {} };
+    const body = JSON.stringify({ service: s.name, action: ex.action, payload: ex.payload });
+    document.getElementById('svc-done-title').textContent = `${setup.label} is connected`;
+    document.getElementById('svc-done-url').textContent = agent.webhook_url;
+    document.getElementById('svc-done-key').textContent = agent.api_key;
+    document.getElementById('svc-done-example-label').textContent = `Try it: ${ex.action}${setup.example ? ' (edit the values to yours first)' : ''}`;
+    document.getElementById('svc-done-curl').textContent = `curl -X POST ${agent.webhook_url} \\\n  -H "Authorization: Bearer ${agent.api_key}" \\\n  -H "Content-Type: application/json" \\\n  -d '${body}'`;
+    const list = document.getElementById('svc-done-actions');
+    list.replaceChildren(...s.catalog.actions.map((a) => {
+      const div = document.createElement('div');
+      div.textContent = `${a.name}${a.required.length ? `: needs ${a.required.join(', ')}` : ''}${a.undo ? ' (can be undone)' : ''}`;
+      return div;
+    }));
+    document.getElementById('svc-step-pick').style.display = 'none';
+    document.getElementById('svc-step-done').style.display = 'block';
+    watchForFirstCall(agent.org_id, agent.agent_id, document.getElementById('svc-first-call'));
+  }
 
   // ─── Credentials modal ───
   const credsModalOverlay = document.getElementById('creds-modal-overlay');

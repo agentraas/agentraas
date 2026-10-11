@@ -24,6 +24,8 @@ pub struct AppState {
     /// Top-level service names from `config/services.json` — used to
     /// validate a curated (non-"custom:") credential's `service` field.
     pub curated_services: std::collections::HashSet<String>,
+    /// Setup text and actions per curated service (`/api/v1/services`).
+    pub service_catalog: std::collections::HashMap<String, serde_json::Value>,
     /// Precomputed `tools/list` result, static for the process lifetime.
     pub mcp_tools_list: serde_json::Value,
 

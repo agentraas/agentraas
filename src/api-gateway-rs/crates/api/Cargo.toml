@@ -1,6 +1,6 @@
 [package]
 name = "api"
-version = "0.16.3"
+version = "0.16.4"
 edition.workspace = true
 publish.workspace = true
 
