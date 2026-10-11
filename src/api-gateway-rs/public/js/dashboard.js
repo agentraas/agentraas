@@ -747,7 +747,9 @@
     connectFormView.style.display = 'block'; connectResultView.style.display = 'none';
     connectError.style.display = 'none'; connectForm.reset(); modalOverlay.style.display = 'flex';
     anyModalOpen = true;
-    document.getElementById('connect-org').focus();
+    // Org ID is pre-filled; show More options only when it isn't.
+    document.querySelector('#connect-form details').open = !document.getElementById('connect-org').value;
+    document.getElementById('connect-platform').focus();
     loadConnectedAgentsList();
   });
 
@@ -788,9 +790,38 @@
     set('result-curl', `curl -X POST ${data.webhook_url} \\\n  -H "Authorization: Bearer ${data.api_key}" \\\n  -H "Content-Type: application/json" \\\n  -d '${body}'`);
     set('result-n8n', `Method: POST\nURL: ${data.webhook_url}\nHeader: Authorization = Bearer ${data.api_key}\nBody (JSON): ${body}`);
     set('result-python', `import requests\n\nr = requests.post(\n    "${data.webhook_url}",\n    headers={"Authorization": "Bearer ${data.api_key}"},\n    json={"service": "mockpay", "action": "payment.create", "payload": {"amount": 500, "currency": "usd"}},\n)\nprint(r.status_code, r.json())`);
-    set('result-mcp-config', JSON.stringify({ mcpServers: { agentraas: { command: 'npx', args: ['-y', 'mcp-remote', data.mcp_url, '--header', `x-agentraas-key:${data.api_key}`] } } }, null, 2));
+    const mcpConfig = JSON.stringify({ mcpServers: { agentraas: { command: 'npx', args: ['-y', 'mcp-remote', data.mcp_url, '--header', `x-agentraas-key:${data.api_key}`] } } }, null, 2);
+    set('result-mcp-config', mcpConfig);
+    const platform = document.getElementById('connect-platform').value;
+    const [label, text] = platformSetup(platform, data, mcpConfig);
+    set('result-platform-label', label);
+    set('result-platform', text);
+    document.getElementById('result-more').open = false;
     connectFormView.style.display = 'none'; connectResultView.style.display = 'block';
     watchForFirstCall(data.org_id, data.agent_id);
+  }
+
+  // The one setup block for the platform picked in Connect agent. The
+  // sandbox call (mockpay) works before any real service is connected.
+  function platformSetup(platform, d, mcpConfig) {
+    const base = d.mcp_url.replace(/\/mcp$/, '');
+    const py = `client = agentraas.Client(\n    agentraas_key="${d.api_key}",\n    org_id="${d.org_id}",\n    agent_id="${d.agent_id}",\n    base_url="${base}",\n)`;
+    switch (platform) {
+      case 'n8n':
+        return ['Set it up in n8n', `1. In n8n: Settings, Community Nodes, install n8n-nodes-agentraas\n2. Add an "AgentRaaS API" credential:\n   Base URL:      ${base}\n   Agent API Key: ${d.api_key}\n   Org ID:        ${d.org_id}\n   Agent ID:      ${d.agent_id}\n3. Add the AgentRaaS node to your workflow and pick the service and action.`];
+      case 'python':
+        return ['Set it up in Python (pip install agentraas)', `import agentraas\n\n${py}\n\n# mockpay is the built-in sandbox; use "stripe", "slack" and so on after Connect a service\nprint(client.call("mockpay", "payment.create", {"amount": 500, "currency": "usd"}))`];
+      case 'langchain':
+        return ['Set it up in LangChain or LangGraph (pip install agentraas langchain-core)', `import agentraas\nfrom langchain_core.tools import tool\n\n${py}\n\n@tool\ndef create_payment(amount: int, currency: str) -> dict:\n    """Create a payment. Runs once even if the agent retries."""\n    return client.call("mockpay", "payment.create", {"amount": amount, "currency": currency})\n\n# CrewAI: call client.call(...) the same way inside your tool's _run.`];
+      case 'typescript':
+        return ['Set it up in TypeScript (npm install agentraas)', `import { Client } from "agentraas";\n\nconst client = new Client({\n  agentraasKey: "${d.api_key}",\n  orgId: "${d.org_id}",\n  agentId: "${d.agent_id}",\n  baseUrl: "${base}",\n});\n\n// mockpay is the built-in sandbox; use "stripe", "slack" and so on after Connect a service\nconsole.log(await client.call("mockpay", "payment.create", { amount: 500, currency: "usd" }));`];
+      case 'mcp':
+        return ['Add this to your MCP client config (Claude Desktop: claude_desktop_config.json; Cursor: .cursor/mcp.json), then restart it', mcpConfig];
+      case 'nocode':
+        return ['Set it up in Make, Zapier or any HTTP tool', `Add an HTTP request step:\n  Method:  POST\n  URL:     ${d.webhook_url}\n  Header:  Authorization = Bearer ${d.api_key}\n  Body (JSON):\n  {"service": "mockpay", "action": "payment.create", "payload": {"amount": 500, "currency": "usd"}}\nChange "service" and "action" to a real one after Connect a service.`];
+      default:
+        return ['Send your first call', `curl -X POST ${d.webhook_url} \\\n  -H "Authorization: Bearer ${d.api_key}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"service":"mockpay","action":"payment.create","payload":{"amount":500,"currency":"usd"}}'`];
+    }
   }
 
   // Polls recent activity until this agent's first call shows up (10 min max).
@@ -820,8 +851,11 @@
     e.preventDefault(); connectError.style.display = 'none'; connectSubmit.disabled = true;
     const restoreText = withLoadingText(connectSubmit, 'Connecting…');
     const org_id = document.getElementById('connect-org').value.trim();
-    const agent_id = document.getElementById('connect-agent').value.trim();
     const label = document.getElementById('connect-label').value.trim();
+    const platform = document.getElementById('connect-platform').value;
+    // Agent ID: typed under More options, else made from the name, else the platform.
+    const slug = label.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
+    const agent_id = document.getElementById('connect-agent').value.trim() || slug || `${platform}-agent`;
     try {
       const res = await fetch('/api/v1/agents/connect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ org_id, agent_id, label: label || undefined }) });
       const data = await res.json();

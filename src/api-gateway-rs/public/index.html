@@ -693,29 +693,45 @@
   <div class="modal" role="dialog" aria-modal="true" aria-label="Connect an agent">
     <div id="connect-form-view">
       <h3>Connect an agent</h3>
-      <div id="connected-agents-section" style="margin-bottom:22px;">
+      <p class="sub">Pick where your agent runs. You get its key and the exact setup for that platform, ready to paste.</p>
+      <div class="modal-error" id="connect-error"></div>
+      <form id="connect-form">
+        <div class="field"><label for="connect-platform">Where does your agent run?</label>
+          <select id="connect-platform">
+            <option value="n8n">n8n</option>
+            <option value="python">Python</option>
+            <option value="langchain">LangChain, LangGraph or CrewAI</option>
+            <option value="typescript">TypeScript or Vercel AI SDK</option>
+            <option value="mcp">Claude Desktop, Cursor or another MCP client</option>
+            <option value="nocode">Make, Zapier or another HTTP tool</option>
+            <option value="curl">Something else (plain HTTP)</option>
+          </select>
+        </div>
+        <div class="field"><label for="connect-label">Name (optional)</label><input type="text" id="connect-label" placeholder="For example: invoice bot"></div>
+        <details style="margin:0 0 14px;"><summary class="sub" style="cursor:pointer;">More options</summary>
+          <div class="field" style="margin-top:10px;"><label for="connect-org">Org ID</label><input type="text" id="connect-org" placeholder="org_acme" required><div class="sub org-hint" style="font-size:12px;margin-top:4px;">Filled in with your org. A different ID creates a separate org, for example one per client.</div></div>
+          <div class="field"><label for="connect-agent">Agent ID</label><input type="text" id="connect-agent" placeholder="made from the name if left empty"></div>
+        </details>
+        <button type="submit" class="primary" id="connect-submit">Connect</button>
+      </form>
+      <div id="connected-agents-section" style="margin-top:22px;">
         <div id="connected-agents-count" style="font-size:12.5px;color:var(--muted);margin-bottom:8px;">Loading…</div>
         <div id="connected-agents-list"></div>
       </div>
-      <p class="sub">Generate a key scoped to one org/agent. Shown once — copy it now.</p>
-      <div class="modal-error" id="connect-error"></div>
-      <form id="connect-form">
-        <div class="field"><label for="connect-org">Org ID</label><input type="text" id="connect-org" placeholder="org_acme" required><div class="sub org-hint" style="font-size:12px;margin-top:4px;">Filled in with your org. A different ID creates a separate org, for example one per client.</div></div>
-        <div class="field"><label for="connect-agent">Agent ID</label><input type="text" id="connect-agent" placeholder="agent_invoice" required></div>
-        <div class="field"><label for="connect-label">Label (optional)</label><input type="text" id="connect-label" placeholder="n8n production workflow"></div>
-        <button type="submit" class="primary" id="connect-submit">Generate connection</button>
-      </form>
     </div>
     <div id="connect-result-view" style="display:none;">
       <h3>Connection ready</h3>
       <p class="sub" style="color:var(--alert);">Shown once — store this key now.</p>
       <div class="endpoint-block"><label>API key</label><div class="row"><code id="result-key"></code><button class="copy" data-target="result-key">Copy</button></div></div>
+      <div class="endpoint-block"><label id="result-platform-label">Set it up</label><div class="row"><code id="result-platform"></code><button class="copy" data-target="result-platform">Copy</button></div></div>
+      <details id="result-more"><summary class="sub" style="cursor:pointer;margin:6px 0 10px;">Other ways to connect</summary>
       <div class="endpoint-block"><label>Webhook URL (n8n / generic HTTP)</label><div class="row"><code id="result-webhook"></code><button class="copy" data-target="result-webhook">Copy</button></div></div>
       <div class="endpoint-block"><label>MCP endpoint</label><div class="row"><code id="result-mcp"></code><button class="copy" data-target="result-mcp">Copy</button></div></div>
       <div class="endpoint-block"><label>curl example</label><div class="row"><code id="result-curl"></code><button class="copy" data-target="result-curl">Copy</button></div></div>
       <div class="endpoint-block"><label>n8n HTTP Request node</label><div class="row"><code id="result-n8n"></code><button class="copy" data-target="result-n8n">Copy</button></div></div>
       <div class="endpoint-block"><label>Python</label><div class="row"><code id="result-python"></code><button class="copy" data-target="result-python">Copy</button></div></div>
       <div class="endpoint-block"><label>MCP client config (Claude Desktop, Cursor)</label><div class="row"><code id="result-mcp-config"></code><button class="copy" data-target="result-mcp-config">Copy</button></div></div>
+      </details>
       <div id="first-call-status" class="sub" style="margin-top:12px;padding:10px 12px;border-radius:8px;background:var(--panel-2);">Waiting for your first call. Run the curl example to see it arrive here.</div>
     </div>
     <button class="close-btn" id="modal-close">Close</button>

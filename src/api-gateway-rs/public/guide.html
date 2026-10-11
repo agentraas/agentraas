@@ -195,11 +195,10 @@
     <li><b>Register</b> at the dashboard and verify your email (check your inbox, or, if you don't receive anything, check whether your deployment has email configured; a verification link is always available as a fallback in that case).</li>
     <li><b>Log in.</b></li>
     <li>Click <b>Connect a service</b> (under Setup). Pick the service, paste its API key (the window says what it's called and links to where you find it), and click <b>Save and connect</b>. You get the URL, the key and an example call, and the window tells you when your first call arrives. That's the whole setup for one service.</li>
-    <li>To connect an agent without a service yet (for example for MCP), click <b>+ Connect agent</b> instead and fill in:
+    <li>To connect an agent without a service yet, click <b>+ Connect agent</b> instead, pick where it runs (n8n, Python, LangChain or CrewAI, TypeScript, an MCP client such as Claude Desktop or Cursor, Make or Zapier) and optionally name it. You get its key and the exact setup for that platform, ready to paste. Under <b>More options</b>:
       <ul>
         <li><b>Org ID</b>: already filled in with your org. A different ID creates a separate org, for example one per client or environment. Letters, numbers, underscores, and hyphens only.</li>
-        <li><b>Agent ID</b>: a short identifier for this specific agent, e.g. <code>invoice_bot</code> or <code>support_agent</code>. Same character rules as Org ID.</li>
-        <li><b>Label</b> (optional): a human-friendly name shown in your agent list, e.g. "Production invoice bot".</li>
+        <li><b>Agent ID</b>: made from the name if you leave it empty, e.g. <code>invoice-bot</code>. Same character rules as Org ID.</li>
       </ul>
     </li>
     <li>Click <b>Connect</b>. You'll see:
