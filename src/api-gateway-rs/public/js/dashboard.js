@@ -259,33 +259,45 @@
       fill.classList.remove('near-limit', 'over-limit');
       banner.style.display = 'none';
 
-      // Self-hosted deployments have no limit on any tier (see LICENSE.md) —
-      // the bar just shows a full, uncapped track with the raw call count.
+      // Self-hosted deployments have no action limit on any edition: the bar
+      // just shows a full, uncapped track with the raw call count.
       if (data.unlimited || data.limit == null) {
         fill.style.width = '100%';
         label.textContent = `${data.total.toLocaleString()} calls this month (self-hosted — unlimited)`;
         return;
       }
 
-      const pct = Math.min(100, (data.total / data.limit) * 100);
+      // One org's numbers, not the sum: each org has its own limit, and on
+      // the free plan that limit is a one-time trial, not a monthly one.
+      const org = (data.per_org || []).find((o) => o.org_id === currentUserOrgId);
+      const used = org ? org.count : data.total;
+      const limit = org ? org.limit : data.limit;
+      const trial = currentPlanTier === 'free';
+      const pct = Math.min(100, (used / limit) * 100);
       fill.style.width = `${pct}%`;
 
-      const isOverLimit = data.total >= data.limit;
+      const isOverLimit = used >= limit;
       if (isOverLimit) fill.classList.add('over-limit');
       else if (pct >= 80) fill.classList.add('near-limit');
 
       if (isOverLimit) {
         banner.className = data.enforced ? 'cloud' : 'exempt';
         banner.style.display = 'flex';
-        if (data.enforced) {
-          banner.innerHTML = `<span>You've reached the free Cloud account's ${data.limit.toLocaleString()}/month limit, so new actions are paused until next month. Self-hosting is free with no limit.</span><a class="btn filled" href="/docs#self-hosting">Self-host free</a>`;
-        } else {
-          banner.innerHTML = `<span>You've passed the free Cloud account's ${data.limit.toLocaleString()}/month limit (this account is exempt). Self-hosting is free with no limit.</span><a class="btn filled" href="/docs#self-hosting">Self-host free</a>`;
-        }
+        const what = trial
+          ? `the free trial's ${limit.toLocaleString()} actions`
+          : `this month's ${limit.toLocaleString()} actions (plan plus cap)`;
+        const next = trial
+          ? 'Pick Team or Enterprise under Account, or self-host the free Community edition.'
+          : 'Raise the cap under Account, or it resets next month.';
+        banner.innerHTML = data.enforced
+          ? `<span>You've used ${escapeHtml(what)}, so new actions are paused. ${escapeHtml(next)}</span><a class="btn filled" href="/#pricing">See plans</a>`
+          : `<span>You've passed ${escapeHtml(what)} (this account is exempt).</span>`;
       }
 
       const modeLabel = data.enforced ? '' : ' (exempt from limit)';
-      label.textContent = `${data.total.toLocaleString()} / ${data.limit.toLocaleString()} calls this month${modeLabel}`;
+      label.textContent = trial
+        ? `${used.toLocaleString()} / ${limit.toLocaleString()} free trial actions${modeLabel}`
+        : `${used.toLocaleString()} / ${limit.toLocaleString()} actions this month${modeLabel}`;
     } catch (err) { console.error('loadStats failed:', err); }
   }
 
