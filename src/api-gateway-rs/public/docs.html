@@ -719,6 +719,7 @@ histogram_quantile(0.95, sum by (le) (rate(agentraas_call_duration_ms_bucket[5m]
         <tr><td>Features</td><td>Exactly-once execution, MCP gateway, dashboard, audit trail, DLQ, undo, record and replay, blocking spend caps and action policies, DLP redaction</td><td>+ human approvals (also on spend caps and policies), semantic dedup, SSO</td><td>+ agent identity, inbound webhooks, white-label branding</td></tr>
         <tr><td>Seats</td><td>1</td><td>3</td><td>Unlimited</td></tr>
       </table>
+      <p>For production, self-host: your API keys and data stay on your servers. AgentRaaS Cloud is the quickest way to try it; use test or restricted keys there for now.</p>
       <p>On Cloud, actions above what a plan includes cost $1 per 500, up to a monthly cap you set. Duplicates AgentRaaS caught, blocked calls, approval waits and undos are never counted. A plan includes a self-hosted license key for the same tier. Need a contract, invoicing or SLA-backed support? <a href="mailto:hello@agentraas.io">Talk to us</a>.</p>
     </section>
 

@@ -855,6 +855,7 @@
     document.getElementById('svc-step-pick').style.display = 'block';
     document.getElementById('svc-step-done').style.display = 'none';
     serviceModalOverlay.style.display = 'flex'; anyModalOpen = true;
+    document.getElementById('svc-cloud-note').style.display = isSelfHosted ? 'none' : 'block';
     if (!serviceCatalog.length) {
       try {
         const res = await fetch('/api/v1/services', { credentials: 'include' });
