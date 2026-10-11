@@ -158,7 +158,14 @@ pub struct Claims {
     /// still tells them apart. Absent on tokens issued before 0.11.0.
     #[serde(default)]
     pub iat_ms: i64,
+    /// Read-only public demo session (`/api/v1/demo/session`): every
+    /// request but GET/HEAD is refused in the `AuthUser` extractor.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub ro: bool,
 }
+
+/// How long a public demo session lasts.
+pub const DEMO_SESSION_SECONDS: i64 = 2 * 3600;
 
 pub fn sign_session(secret: &str, sub: i32, email: &str, org_id: Option<&str>) -> String {
     let now_ms = chrono::Utc::now().timestamp_millis();
@@ -170,6 +177,7 @@ pub fn sign_session(secret: &str, sub: i32, email: &str, org_id: Option<&str>) -
         iat: now,
         exp: now + SESSION_MAX_AGE_SECONDS,
         iat_ms: now_ms,
+        ro: false,
     };
     // HS256, matching @fastify/jwt's default when only a plain secret
     // string is registered (no explicit algorithm/key-pair config).
@@ -179,6 +187,21 @@ pub fn sign_session(secret: &str, sub: i32, email: &str, org_id: Option<&str>) -
         &EncodingKey::from_secret(secret.as_bytes()),
     )
     .expect("JWT signing should never fail for a well-formed Claims struct")
+}
+
+/// A short read-only session for the public demo account.
+pub fn sign_demo_session(secret: &str, sub: i32, email: &str, org_id: Option<&str>) -> String {
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    let claims = Claims {
+        sub,
+        email: email.to_string(),
+        org_id: org_id.map(|s| s.to_string()),
+        iat: now_ms / 1000,
+        exp: now_ms / 1000 + DEMO_SESSION_SECONDS,
+        iat_ms: now_ms,
+        ro: true,
+    };
+    encode(&Header::default(), &claims, &EncodingKey::from_secret(secret.as_bytes())).expect("JWT signing should never fail for a well-formed Claims struct")
 }
 
 pub fn verify_session(secret: &str, token: &str) -> Option<Claims> {
@@ -217,6 +240,7 @@ pub struct AuthUser {
     pub sub: i32,
     pub email: String,
     pub org_id: Option<String>,
+    pub read_only: bool,
 }
 
 #[async_trait::async_trait]
@@ -252,10 +276,25 @@ where
         if session_revoked(&app_state, &claims, &token).await? {
             return Err(unauthenticated());
         }
+        if claims.ro {
+            // The live dedup test is the demo's point, so it stays allowed;
+            // it only writes to the demo org's own audit log.
+            let read = matches!(parts.method, axum::http::Method::GET | axum::http::Method::HEAD);
+            if !read && parts.uri.path() != "/api/v1/demo/live-test" {
+                return Err(ApiError::new(
+                    StatusCode::FORBIDDEN,
+                    "This is a read-only demo. Create a free account to try it with your own agents: https://agentraas.io/dashboard?signup=1",
+                ));
+            }
+            // Every demo visitor shares one user, so each session gets its
+            // own budget here and the per-user limiter skips the demo user.
+            check_rate_limit_key(&app_state, &format!("ratelimit:demo:{}", revoked_token_key(&token))).await?;
+        }
         Ok(AuthUser {
             sub: claims.sub,
             email: claims.email,
             org_id: claims.org_id,
+            read_only: claims.ro,
         })
     }
 }
@@ -318,9 +357,16 @@ pub fn request_session_token(headers: &axum::http::HeaderMap, jar: &CookieJar) -
 /// `requireAuthRateLimited`-equivalent handler does:
 /// `let user = AuthUser::from...; check_dashboard_rate_limit(&state, user.sub).await?;`
 pub async fn check_dashboard_rate_limit(state: &SharedState, user_id: i32) -> Result<(), ApiError> {
+    if state.demo_user_id.load(std::sync::atomic::Ordering::Relaxed) == user_id {
+        return Ok(()); // limited per demo session in the AuthUser extractor
+    }
+    check_rate_limit_key(state, &format!("ratelimit:dashboard:{user_id}")).await
+}
+
+async fn check_rate_limit_key(state: &SharedState, prefix: &str) -> Result<(), ApiError> {
     let mut conn = state.redis_conn_result()?;
     let window = chrono::Utc::now().timestamp() / 60;
-    let key = format!("ratelimit:dashboard:{user_id}:{window}");
+    let key = format!("{prefix}:{window}");
     let count: i64 = redis::cmd("INCR").arg(&key).query_async(&mut conn).await?;
     if count == 1 {
         let _: () = redis::cmd("EXPIRE")

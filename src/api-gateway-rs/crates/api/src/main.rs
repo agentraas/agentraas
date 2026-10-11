@@ -196,6 +196,7 @@ async fn main() -> anyhow::Result<()> {
             .expect("building the shared HTTP client should never fail"),
         cipher,
         license_tier: std::sync::RwLock::new(licensing::initial_tier()),
+        demo_user_id: std::sync::atomic::AtomicI32::new(0),
         tunnels: std::sync::Mutex::new(std::collections::HashMap::new()),
     });
 

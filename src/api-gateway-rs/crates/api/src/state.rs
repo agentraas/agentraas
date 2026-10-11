@@ -75,6 +75,10 @@ pub struct AppState {
     /// Cloud never reads it (`agent::db::effective_tier`).
     pub license_tier: std::sync::RwLock<agentraas_core::tier::Tier>,
 
+    /// The public demo account's user id, set when a demo session is first
+    /// issued (0 = none yet); `check_dashboard_rate_limit` skips it.
+    pub demo_user_id: std::sync::atomic::AtomicI32,
+
     /// CLI dev tunnel registry — `tunnel_id -> handle`,
     /// in-memory by design (a restart clearing every open tunnel is
     /// correct, not a bug; see `crate::tunnel`'s module doc). Only

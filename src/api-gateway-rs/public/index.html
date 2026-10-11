@@ -552,6 +552,11 @@
       </ol>
     </div>
 
+    <div id="demo-banner" class="panel" style="display:none;margin-bottom:20px;">
+      <h3>You're looking at a read-only demo</h3>
+      <p class="sub" style="margin:6px 0 10px;">Sample activity from a demo account: duplicates caught, blocked calls, failures. Click any row to see why. "Run live dedup test" works here too. Changes are off.</p>
+      <button type="button" class="btn filled" id="demo-signup-btn">Create your free account</button>
+    </div>
     <div id="usage-over-limit-banner" style="display:none;"></div>
     <div id="usage-bar-row" style="display:none;">
       <div id="usage-bar-track"><div id="usage-bar-fill"></div></div>
@@ -708,6 +713,9 @@
       <div class="endpoint-block"><label>MCP endpoint</label><div class="row"><code id="result-mcp"></code><button class="copy" data-target="result-mcp">Copy</button></div></div>
       <div class="endpoint-block"><label>curl example</label><div class="row"><code id="result-curl"></code><button class="copy" data-target="result-curl">Copy</button></div></div>
       <div class="endpoint-block"><label>n8n HTTP Request node</label><div class="row"><code id="result-n8n"></code><button class="copy" data-target="result-n8n">Copy</button></div></div>
+      <div class="endpoint-block"><label>Python</label><div class="row"><code id="result-python"></code><button class="copy" data-target="result-python">Copy</button></div></div>
+      <div class="endpoint-block"><label>MCP client config (Claude Desktop, Cursor)</label><div class="row"><code id="result-mcp-config"></code><button class="copy" data-target="result-mcp-config">Copy</button></div></div>
+      <div id="first-call-status" class="sub" style="margin-top:12px;padding:10px 12px;border-radius:8px;background:var(--panel-2);">Waiting for your first call. Run the curl example to see it arrive here.</div>
     </div>
     <button class="close-btn" id="modal-close">Close</button>
   </div>

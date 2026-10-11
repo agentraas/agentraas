@@ -24,6 +24,7 @@ pub fn router() -> Router<SharedState> {
         .route("/api/v1/tools/webhook-audit", post(webhook_audit_tool))
         .route("/api/v1/demo/seed", post(demo_seed))
         .route("/api/v1/demo/reset", post(demo_reset))
+        .route("/api/v1/demo/session", get(demo_session))
         .route("/api/v1/billing/checkout-info", get(billing_checkout_info))
         .route("/api/v1/webhooks/paddle", post(paddle_webhook))
         .route("/api/v1/org-branding/:org_id", get(get_org_branding).put(put_org_branding))
@@ -264,6 +265,34 @@ async fn demo_seed(State(state): State<SharedState>, user: AuthUser) -> Result<J
         .await?;
 
     Ok(Json(json!({ "seeded": 30, "circuit_events": 3, "dlq_entries": 2, "custom_actions": 1, "health_checks_enabled": 1 })))
+}
+
+/// Public read-only look at the demo account (Cloud only): sets a 2-hour
+/// session cookie whose writes the `AuthUser` extractor refuses, then
+/// sends the browser to the dashboard. Limited per IP like registration.
+async fn demo_session(
+    State(state): State<SharedState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    jar: axum_extra::extract::CookieJar,
+) -> Result<(axum_extra::extract::CookieJar, axum::response::Redirect), ApiError> {
+    if state.deployment_mode != "cloud" {
+        return Err(ApiError::new(StatusCode::NOT_FOUND, "Not found."));
+    }
+    let ip = crate::util::real_client_ip(&headers, &addr);
+    if !crate::auth::check_register_rate_limit(&state.redis_conn, &format!("demo:{ip}")).await? {
+        return Err(ApiError::new(StatusCode::TOO_MANY_REQUESTS, "Too many demo sessions from this network. Try again in an hour."));
+    }
+    let demo: Option<(i32, String, Option<String>)> =
+        sqlx::query_as("SELECT id, email, org_id FROM users WHERE is_demo AND NOT is_admin ORDER BY id LIMIT 1").fetch_optional(&state.pg).await?;
+    let Some((id, email, org_id)) = demo else {
+        return Err(ApiError::new(StatusCode::NOT_FOUND, "No demo account is set up on this server."));
+    };
+    state.demo_user_id.store(id, std::sync::atomic::Ordering::Relaxed);
+    let token = crate::auth::sign_demo_session(&state.jwt_secret, id, &email, org_id.as_deref());
+    let mut cookie = crate::auth::session_cookie(&state, token);
+    cookie.set_max_age(time::Duration::seconds(crate::auth::DEMO_SESSION_SECONDS));
+    Ok((jar.add(cookie), axum::response::Redirect::to("/dashboard")))
 }
 
 /// The super-admin (`is_admin`) or the designated self-serve demo account

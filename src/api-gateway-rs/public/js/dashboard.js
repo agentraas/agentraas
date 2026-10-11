@@ -47,6 +47,7 @@
   // the plan or license doesn't include. Only the label says which plan.
   const ACCOUNT_LABELS = { free: 'Free trial', team: 'Team', enterprise: 'Enterprise' };
   let isSelfHosted = false;
+  let isReadOnlyDemo = false;
   const TIER_RANK = { free: 0, team: 1, enterprise: 2 };
   function applyConsoleLayout(plan) {
     const label = isSelfHosted && plan === 'free' ? 'Community' : ACCOUNT_LABELS[plan];
@@ -153,6 +154,10 @@
     stopAutoRefresh(); hasEverAuthenticated = false;
     dashboard.style.display = 'none'; userInfo.style.display = 'none'; authScreen.style.display = 'block';
   }
+  document.getElementById('demo-signup-btn').addEventListener('click', async () => {
+    await fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'include' });
+    window.location.href = '/dashboard?signup=1';
+  });
   document.getElementById('logout-btn').addEventListener('click', async () => {
     await fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'include' });
     showLoggedOut();
@@ -256,7 +261,15 @@
     // for testing/demoing — regular users have their own real activity to
     // look at, not a reason to fabricate demo data. Export CSV is
     // available to everyone; it exports only their own data.
-    const canSeed = isCloud && (user.is_admin || user.is_demo);
+    const canSeed = isCloud && (user.is_admin || user.is_demo) && !user.read_only;
+    // Public read-only demo: say so, and hide what it can't use.
+    document.getElementById('demo-banner').style.display = user.read_only ? 'block' : 'none';
+    isReadOnlyDemo = !!user.read_only;
+    if (user.read_only) {
+      document.getElementById('console-label').style.display = 'none';
+      accountBtn.style.display = 'none';
+      document.getElementById('account-open-btn').style.display = 'none';
+    }
     document.getElementById('seed-btn').style.display = canSeed ? 'flex' : 'none';
     document.getElementById('reset-demo-btn').style.display = canSeed ? 'flex' : 'none';
     document.getElementById('export-btn').style.display = 'flex';
@@ -304,6 +317,7 @@
       if (!res.ok) return;
       const data = await res.json();
       const row = document.getElementById('usage-bar-row');
+      if (isReadOnlyDemo) { row.style.display = 'none'; return; }
       const fill = document.getElementById('usage-bar-fill');
       const label = document.getElementById('usage-bar-label');
       const banner = document.getElementById('usage-over-limit-banner');
@@ -752,17 +766,53 @@
         const res = await fetch(`/api/v1/agents/keys/${regenId}/regenerate`, { method: 'POST', credentials: 'include' });
         const data = await res.json();
         if (!res.ok) { alert(data.error || 'Could not regenerate key.'); return; }
-        document.getElementById('result-key').textContent = data.api_key;
-        document.getElementById('result-webhook').textContent = data.webhook_url;
-        document.getElementById('result-mcp').textContent = data.mcp_url;
-        document.getElementById('result-curl').textContent = `curl -X POST ${data.webhook_url} \\\n  -H "Authorization: Bearer ${data.api_key}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"service":"mockpay","action":"charge.create","payload":{"amount":500,"currency":"usd","customer":"cus_123"}}'`;
-        document.getElementById('result-n8n').textContent = `Method: POST\nURL: ${data.webhook_url}\nHeader: Authorization = Bearer ${data.api_key}\nBody (JSON): { "service": "mockpay", "action": "charge.create", "payload": { ... } }`;
-        connectFormView.style.display = 'none'; connectResultView.style.display = 'block';
+        fillConnectResult(data);
       } catch (err) { alert('Could not reach the server.'); }
     }
   });
   document.getElementById('modal-close').addEventListener('click', () => { modalOverlay.style.display = 'none'; anyModalOpen = false; });
   modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) { modalOverlay.style.display = 'none'; anyModalOpen = false; } });
+
+  // Ready-to-run snippets with the new key filled in. mockpay is the
+  // built-in sandbox (its one action is payment.create), so the examples
+  // work before any real credentials are added.
+  function fillConnectResult(data) {
+    const body = '{"service":"mockpay","action":"payment.create","payload":{"amount":500,"currency":"usd"}}';
+    const set = (id, text) => { document.getElementById(id).textContent = text; };
+    set('result-key', data.api_key);
+    set('result-webhook', data.webhook_url);
+    set('result-mcp', data.mcp_url);
+    set('result-curl', `curl -X POST ${data.webhook_url} \\\n  -H "Authorization: Bearer ${data.api_key}" \\\n  -H "Content-Type: application/json" \\\n  -d '${body}'`);
+    set('result-n8n', `Method: POST\nURL: ${data.webhook_url}\nHeader: Authorization = Bearer ${data.api_key}\nBody (JSON): ${body}`);
+    set('result-python', `import requests\n\nr = requests.post(\n    "${data.webhook_url}",\n    headers={"Authorization": "Bearer ${data.api_key}"},\n    json={"service": "mockpay", "action": "payment.create", "payload": {"amount": 500, "currency": "usd"}},\n)\nprint(r.status_code, r.json())`);
+    set('result-mcp-config', JSON.stringify({ mcpServers: { agentraas: { command: 'npx', args: ['-y', 'mcp-remote', data.mcp_url, '--header', `x-agentraas-key:${data.api_key}`] } } }, null, 2));
+    connectFormView.style.display = 'none'; connectResultView.style.display = 'block';
+    watchForFirstCall(data.org_id, data.agent_id);
+  }
+
+  // Polls recent activity until this agent's first call shows up (10 min max).
+  let firstCallTimer = null;
+  function watchForFirstCall(orgId, agentId) {
+    clearInterval(firstCallTimer);
+    const status = document.getElementById('first-call-status');
+    status.textContent = 'Waiting for your first call. Run the curl example to see it arrive here.';
+    const since = Date.now() - 5000;
+    const deadline = Date.now() + 10 * 60 * 1000;
+    firstCallTimer = setInterval(async () => {
+      if (Date.now() > deadline) { clearInterval(firstCallTimer); return; }
+      try {
+        const res = await fetch('/api/v1/recent?limit=50', { credentials: 'include' });
+        if (!res.ok) return;
+        const hit = (await res.json()).find((r) => r.org_id === orgId && r.agent_id === agentId && new Date(r.created_at).getTime() >= since);
+        if (!hit) return;
+        clearInterval(firstCallTimer);
+        status.textContent = `First call arrived: ${hit.service}.${hit.action}, ${hit.status}. Send the exact same call again and it comes back as deduplicated.`;
+        window.dataLayer = window.dataLayer || [];
+        window.dataLayer.push({ event: 'first_call' });
+        loadAll();
+      } catch (err) {}
+    }, 4000);
+  }
 
   connectForm.addEventListener('submit', async (e) => {
     e.preventDefault(); connectError.style.display = 'none'; connectSubmit.disabled = true;
@@ -776,12 +826,7 @@
       if (!res.ok) { connectError.textContent = data.error || 'Could not generate a connection.'; connectError.style.display = 'block'; return; }
       window.dataLayer = window.dataLayer || [];
       window.dataLayer.push({ event: 'agent_connected' });
-      document.getElementById('result-key').textContent = data.api_key;
-      document.getElementById('result-webhook').textContent = data.webhook_url;
-      document.getElementById('result-mcp').textContent = data.mcp_url;
-      document.getElementById('result-curl').textContent = `curl -X POST ${data.webhook_url} \\\n  -H "Authorization: Bearer ${data.api_key}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"service":"mockpay","action":"charge.create","payload":{"amount":500,"currency":"usd","customer":"cus_123"}}'`;
-      document.getElementById('result-n8n').textContent = `Method: POST\nURL: ${data.webhook_url}\nHeader: Authorization = Bearer ${data.api_key}\nBody (JSON): { "service": "mockpay", "action": "charge.create", "payload": { ... } }`;
-      connectFormView.style.display = 'none'; connectResultView.style.display = 'block';
+      fillConnectResult(data);
       document.getElementById('welcome-banner').style.display = 'none';
     } catch (err) { connectError.textContent = 'Could not reach the server.'; connectError.style.display = 'block'; }
     finally { connectSubmit.disabled = false; restoreText(); }

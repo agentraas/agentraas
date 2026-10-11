@@ -447,7 +447,8 @@ POST /webhooks/stripe -> 200 (4ms)</code></pre>
   "mcpServers": {
     "agentraas": {
       "command": "npx",
-      "args": ["-y", "mcp-remote", "https://your-instance/mcp"]
+      "args": ["-y", "mcp-remote", "https://your-instance/mcp",
+               "--header", "x-agentraas-key:ar_live_..."]
     }
   }
 }</code></pre>

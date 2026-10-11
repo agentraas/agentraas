@@ -15,6 +15,25 @@ safe to re-run.
 
 ## [Unreleased]
 
+## [0.16.3] - 2026-10-11
+
+No migration.
+
+### Added
+- Public read-only demo: `GET /api/v1/demo/session` (Cloud only) signs a
+  2-hour session for the demo account (`users.is_demo`) and opens the
+  dashboard. The session refuses every request except GET/HEAD and the live
+  dedup test, has its own per-visitor rate limit, and is limited per IP.
+  The homepage has a "See the live demo" button.
+- Connect agent: Python and MCP client config snippets with the new key
+  filled in, and a notice when the agent's first call arrives.
+
+### Fixed
+- The curl and n8n examples shown after connecting an agent called
+  `mockpay` `charge.create`, which does not exist, so every new user's first
+  test call failed; they use `payment.create` now.
+- The `/docs` MCP client example had no `x-agentraas-key` header.
+
 ## [0.16.2] - 2026-10-11
 
 No migration.

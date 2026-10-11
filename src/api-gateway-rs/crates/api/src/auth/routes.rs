@@ -590,6 +590,7 @@ async fn me(State(state): State<SharedState>, user: AuthUser) -> Result<Json<ser
             "plan": shown_plan(&state, &plan),
             "is_admin": is_admin,
             "is_demo": is_demo,
+            "read_only": user.read_only,
             "deployment_mode": state.deployment_mode,
             "must_change_password": must_change_password,
             "orgs": memberships,
