@@ -9,6 +9,7 @@ pub mod circuit_breaker;
 pub mod config;
 pub mod crypto;
 pub mod dedup;
+pub mod license;
 pub mod pruner;
 pub mod resource_lock;
 pub mod schema_drift;

@@ -60,6 +60,9 @@ jobs:
           file: ./src/api-gateway-rs/Containerfile
           load: true
           tags: agentraas-api:ci
+          # Test key, so the self-hosted run can unlock Team/Enterprise
+          # features with a token it mints itself (LICENSE_TOKEN below).
+          build-args: FEATURES=enterprise,test-license-key
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -76,6 +79,7 @@ jobs:
             -e JWT_SECRET="ci-$(openssl rand -hex 24)" \
             -e CREDENTIALS_ENCRYPTION_KEY="$(openssl rand -base64 32)" \
             -e DEPLOYMENT_MODE=${{ matrix.mode }} \
+            -e LICENSE_TOKEN="$(node src/api-gateway-rs/test/mint-test-license.js enterprise)" \
             -e ENTERPRISE_MODE=true \
             -e EXPOSE_DEV_VERIFY_URL=true \
             -e PROXY_TIMEOUT_SECONDS=2 \

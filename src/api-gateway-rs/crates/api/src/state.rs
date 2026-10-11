@@ -68,6 +68,12 @@ pub struct AppState {
     pub http_client: reqwest::Client,
     pub cipher: agentraas_core::crypto::CredentialCipher,
 
+    /// Self-host's verified license tier, from `LICENSE_TOKEN` at startup and
+    /// re-checked by `licensing::spawn_license_refresh_loop`. Missing,
+    /// invalid or expired means `Tier::Community`, never a refused startup.
+    /// Cloud never reads it (`agent::db::effective_tier`).
+    pub license_tier: std::sync::RwLock<agentraas_core::tier::Tier>,
+
     /// CLI dev tunnel registry — `tunnel_id -> handle`,
     /// in-memory by design (a restart clearing every open tunnel is
     /// correct, not a bug; see `crate::tunnel`'s module doc). Only

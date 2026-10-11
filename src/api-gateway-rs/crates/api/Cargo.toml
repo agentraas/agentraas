@@ -16,6 +16,8 @@ default = []
 # so this code doesn't even compile in there, mirroring `src/ee` being
 # absent from that repo's Node tree.
 enterprise = ["agentraas-core/enterprise"]
+# CI only: verify license tokens against the repo's test key.
+test-license-key = ["agentraas-core/test-license-key"]
 
 [dependencies]
 agentraas-core = { path = "../core" }

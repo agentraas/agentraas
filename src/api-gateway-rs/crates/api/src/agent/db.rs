@@ -617,14 +617,15 @@ pub async fn check_org_write_permission(pg: &PgPool, user_id: i32, org_id: &str)
     Ok(is_owner.is_some())
 }
 
-/// Every account gets every feature (since 2026-10-07): self-host is free
-/// with everything (LICENSE.md), and Cloud is priced by usage, not by plan
-/// (billing.rs). So this is always Enterprise. Kept as the one place every
-/// feature gate asks (`require_tier`), so a future tier only changes here.
-/// What still differs by plan on Cloud is limits, not features: the monthly
-/// action limit (`get_effective_limit`) and the per-minute rate limit.
+/// The one place every feature gate asks (`require_tier`). Self-host: the
+/// tier in `LICENSE_TOKEN` (Community without one). Cloud: still every
+/// feature until Cloud plans exist; its limits differ by plan, not features
+/// (`get_effective_limit`, the per-minute rate limit).
 #[allow(dead_code)]
-pub async fn effective_tier(_state: &SharedState, _org_id: &str) -> agentraas_core::tier::Tier {
+pub async fn effective_tier(state: &SharedState, _org_id: &str) -> agentraas_core::tier::Tier {
+    if state.deployment_mode != "cloud" {
+        return *state.license_tier.read().unwrap_or_else(|poisoned| poisoned.into_inner());
+    }
     agentraas_core::tier::Tier::Enterprise
 }
 
@@ -644,7 +645,7 @@ pub async fn require_tier(state: &SharedState, org_id: &str, minimum: agentraas_
     if effective_tier(state, org_id).await < minimum {
         return Err(ApiError::new(
             StatusCode::FORBIDDEN,
-            format!("This feature requires the {minimum:?} plan or higher. Everything else is free on Community."),
+            format!("This feature requires the {minimum:?} plan or higher (self-hosted: a license key in LICENSE_TOKEN). Everything else is free on Community."),
         ));
     }
     Ok(())

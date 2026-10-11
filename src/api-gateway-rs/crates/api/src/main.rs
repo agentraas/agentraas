@@ -10,6 +10,7 @@ mod dlq;
 mod ee;
 mod email;
 mod health_checks;
+mod licensing;
 mod long_tail;
 mod mcp;
 mod mcp_servers;
@@ -194,9 +195,11 @@ async fn main() -> anyhow::Result<()> {
             .build()
             .expect("building the shared HTTP client should never fail"),
         cipher,
+        license_tier: std::sync::RwLock::new(licensing::initial_tier()),
         tunnels: std::sync::Mutex::new(std::collections::HashMap::new()),
     });
 
+    licensing::spawn_license_refresh_loop(state.clone());
     health_checks::spawn_health_check_loop(state.clone());
     billing::spawn_monthly_charge_loop(state.clone());
     #[cfg(feature = "enterprise")]
@@ -224,6 +227,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(pruning_settings::router())
         .merge(chaos_settings::router())
         .merge(agentgateway::router())
+        .merge(licensing::router())
         .merge(spend_caps::router())
         .merge(action_policies::router())
         .merge(tunnel::router())

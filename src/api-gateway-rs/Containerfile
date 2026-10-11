@@ -3,9 +3,11 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
 COPY Cargo.toml ./
 COPY crates ./crates
-# --features enterprise: every build is the full edition (SSO, RBAC, DLP,
-# HITL, inbound-webhook HMAC). The ee/ code is FSL-licensed, see LICENSE.md.
-RUN cargo build --release -p api --features enterprise
+# --features enterprise: every build compiles the full edition; Team and
+# Enterprise features then unlock with a license key (LICENSE_TOKEN). CI adds
+# test-license-key so it can mint its own key; never for a release image.
+ARG FEATURES=enterprise
+RUN cargo build --release -p api --features "$FEATURES"
 
 FROM docker.io/library/debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libssl3 && rm -rf /var/lib/apt/lists/*
