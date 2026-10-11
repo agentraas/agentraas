@@ -48,7 +48,7 @@ def nav(path):
     <div class="sn-right">
       <a href="{REPO}" target="_blank" rel="noopener" class="sn-gh" aria-label="AgentRaaS on GitHub">{GITHUB}</a>
       <a href="/dashboard" class="sn-btn s">Log in</a>
-      <a href="/dashboard" class="sn-btn p" data-gtm-event="cta_click" data-gtm-label="nav_get_started">Get started</a>
+      <a href="/dashboard?signup=1" class="sn-btn p" data-gtm-event="cta_click" data-gtm-label="nav_get_started">Get started</a>
       <button class="sn-menu" type="button" aria-label="Menu" aria-expanded="false" aria-controls="sn-panel"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     </div>
   </div>

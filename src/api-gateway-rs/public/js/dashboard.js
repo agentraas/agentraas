@@ -86,13 +86,22 @@
       authTitle.textContent = 'Log in'; authSub.textContent = 'Watch what your agents are doing, in real time.';
       authSubmit.textContent = 'Log in'; switchText.textContent = 'Need an account?'; switchLink.textContent = 'Register';
       document.getElementById('password').autocomplete = 'current-password';
+      document.getElementById('password').minLength = 0;
+      document.getElementById('password-hint').style.display = 'none';
     } else {
-      authTitle.textContent = 'Create an account'; authSub.textContent = 'One account per organization is enough to get started.';
+      authTitle.textContent = 'Create an account';
+      authSub.textContent = location.hostname === 'agentraas.io'
+        ? 'Free trial: 1,000 actions with every feature. No card needed.'
+        : 'Create an account on this server.';
       authSubmit.textContent = 'Create account'; switchText.textContent = 'Already have an account?'; switchLink.textContent = 'Log in';
       document.getElementById('password').autocomplete = 'new-password';
+      document.getElementById('password').minLength = 8;
+      document.getElementById('password-hint').style.display = 'block';
     }
   }
   switchLink.addEventListener('click', () => setMode(mode === 'login' ? 'register' : 'login'));
+  // The site's "Get started" and "Start the free trial" links add ?signup.
+  if (new URLSearchParams(location.search).has('signup')) setMode('register');
 
   authForm.addEventListener('submit', async (e) => {
     e.preventDefault(); authError.style.display = 'none'; sessionBanner.style.display = 'none'; authSubmit.disabled = true;
@@ -228,6 +237,12 @@
     currentUserEmail = user.email;
     currentUserOrgId = user.org_id;
     accountBtn.textContent = user.email;
+    // Org ID fields start with the user's own org (defaultValue survives a
+    // form reset), so nobody has to invent one or creates a new org by typo.
+    for (const fid of ['connect-org', 'creds-org', 'branding-org-input']) {
+      const el = document.getElementById(fid);
+      if (el && user.org_id) { el.defaultValue = user.org_id; if (!el.value) el.value = user.org_id; }
+    }
     currentPlanTier = user.plan || 'free';
     isSelfHosted = user.deployment_mode !== 'cloud';
     applyConsoleLayout(currentPlanTier);

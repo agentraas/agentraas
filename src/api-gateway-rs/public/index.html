@@ -57,7 +57,7 @@
     display: flex; align-items: center; justify-content: space-between;
     padding: 22px 0 18px;
   }
-  .brand { display: flex; align-items: center; gap: 11px; }
+  .brand { display: flex; align-items: center; gap: 11px; color: inherit; text-decoration: none; }
   .brand svg { flex-shrink: 0; }
   .mark-tile { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; flex-shrink: 0; background: linear-gradient(180deg, #1D2127, #121418); box-shadow: inset 0 0 0 1px #2E343C, inset 0 1px 0 rgba(255,255,255,0.06); }
   .brand-text h1 { font-size: 17px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
@@ -451,7 +451,7 @@
 <body>
 <div class="wrap">
   <header class="top">
-    <div class="brand">
+    <a class="brand" href="/" title="AgentRaaS home">
       <span class="mark-tile"><svg width="18" height="18" viewBox="0 0 24 24" fill="none">
         <circle cx="8.5" cy="12" r="5.6" fill="none" stroke="#ECEFF3" stroke-width="2"/>
         <circle cx="15.5" cy="12" r="5.6" fill="#F2B544"/>
@@ -460,7 +460,7 @@
         <h1>AgentRaaS</h1>
         <p>The reliability layer for what AI agents do</p>
       </div>
-    </div>
+    </a>
     <div id="user-info">
       <a href="/docs" target="_blank" class="user-email-btn" style="text-decoration:none;">Docs</a>
       <a href="/guide" target="_blank" class="user-email-btn" style="text-decoration:none;">Guide</a>
@@ -477,14 +477,14 @@
     <div id="auth-error"></div>
     <form id="auth-form">
       <div class="field"><label for="email">Email</label><input type="email" id="email" autocomplete="email" required></div>
-      <div class="field"><label for="password">Password</label><input type="password" id="password" autocomplete="current-password" required></div>
+      <div class="field"><label for="password">Password</label><input type="password" id="password" autocomplete="current-password" required><div class="sub" id="password-hint" style="display:none;font-size:12px;margin-top:4px;">At least 8 characters.</div></div>
       <button type="submit" class="primary" id="auth-submit">Log in</button>
     </form>
     <div class="switch-mode"><span id="switch-text">Need an account?</span> <a id="switch-link">Register</a></div>
     <div class="switch-mode" id="forgot-link-row"><a id="forgot-link">Forgot password?</a></div>
     <div class="switch-mode"><a id="sso-link">Sign in with SSO</a></div>
     <form id="sso-org-form" style="display:none;margin-top:10px;">
-      <div class="field"><label for="sso-org-input">Your org ID</label><input type="text" id="sso-org-input" placeholder="org_acme" required></div>
+      <div class="field"><label for="sso-org-input">Your org ID</label><input type="text" id="sso-org-input" placeholder="org_acme" required><div class="sub" style="font-size:12px;margin-top:4px;">Your admin can find it in the dashboard (Setup, Connect agent).</div></div>
       <button type="submit" class="primary" id="sso-org-submit">Continue to your identity provider</button>
     </form>
   </div>
@@ -694,7 +694,7 @@
       <p class="sub">Generate a key scoped to one org/agent. Shown once — copy it now.</p>
       <div class="modal-error" id="connect-error"></div>
       <form id="connect-form">
-        <div class="field"><label for="connect-org">Org ID</label><input type="text" id="connect-org" placeholder="org_acme" required></div>
+        <div class="field"><label for="connect-org">Org ID</label><input type="text" id="connect-org" placeholder="org_acme" required><div class="sub org-hint" style="font-size:12px;margin-top:4px;">Filled in with your org. A different ID creates a separate org, for example one per client.</div></div>
         <div class="field"><label for="connect-agent">Agent ID</label><input type="text" id="connect-agent" placeholder="agent_invoice" required></div>
         <div class="field"><label for="connect-label">Label (optional)</label><input type="text" id="connect-label" placeholder="n8n production workflow"></div>
         <button type="submit" class="primary" id="connect-submit">Generate connection</button>
