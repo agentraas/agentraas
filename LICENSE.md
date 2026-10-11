@@ -8,7 +8,7 @@ license key. These licenses cover different parts of this repository:
 | Part | License | File |
 |---|---|---|
 | The server: everything under `src/api-gateway-rs/` except the files in the next row | GNU AGPL-3.0 | [LICENSE-AGPL](./LICENSE-AGPL) |
-| Team/Enterprise features: `src/api-gateway-rs/crates/api/src/ee/`, `src/api-gateway-rs/crates/core/src/semantic_dedup.rs`, `src/api-gateway-rs/crates/core/src/dlp.rs`, `src/api-gateway-rs/crates/core/src/hmac_verify.rs`, `compose.ee.yaml` | AgentRaaS Enterprise License, from server 0.16.0 (earlier releases: FSL-1.1-ALv2 for `ee/`, `dlp.rs`, `hmac_verify.rs`, `compose.ee.yaml`; AGPL-3.0 for `semantic_dedup.rs`) | [LICENSE-EE.md](./LICENSE-EE.md) ([LICENSE-FSL.md](./LICENSE-FSL.md) for the older releases) |
+| Team/Enterprise features: `src/api-gateway-rs/crates/api/src/ee/`, `src/api-gateway-rs/crates/core/src/semantic_dedup.rs`, `src/api-gateway-rs/crates/core/src/hmac_verify.rs`, `compose.ee.yaml` | AgentRaaS Enterprise License, from server 0.16.0 (`dlp.rs`, PII redaction, was in this row for 0.16.0 to 0.16.4 and is AGPL-3.0 again after them; earlier releases: FSL-1.1-ALv2 for `ee/`, `dlp.rs`, `hmac_verify.rs`, `compose.ee.yaml`; AGPL-3.0 for `semantic_dedup.rs`) | [LICENSE-EE.md](./LICENSE-EE.md) ([LICENSE-FSL.md](./LICENSE-FSL.md) for the older releases) |
 | Everything else: the SDKs (`src/sdk`, `src/sdk-js`), `src/chaos-action`, `integrations/`, `infra/`, `compose.yaml`, docs | MIT or Apache-2.0, your choice | [LICENSE-MIT](./LICENSE-MIT), [LICENSE-APACHE](./LICENSE-APACHE) |
 
 In plain words (the license files are what counts):

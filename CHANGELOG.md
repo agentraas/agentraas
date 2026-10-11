@@ -13,6 +13,13 @@ Every release that adds a file under `infra/migrations/` says so. Apply
 migrations in order before starting the new version; they are written to be
 safe to re-run.
 
+## Unreleased
+
+- **License.** `dlp.rs` (PII redaction) is AGPL-3.0 again, as part of the
+  free Community edition, matching what the server and the pricing page
+  already did. It was listed under the Enterprise License in 0.16.0 to
+  0.16.4.
+
 ## [Unreleased]
 
 ## [0.16.4] - 2026-10-11
