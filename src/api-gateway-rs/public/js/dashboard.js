@@ -266,6 +266,9 @@
     document.getElementById('demo-banner').style.display = user.read_only ? 'block' : 'none';
     isReadOnlyDemo = !!user.read_only;
     if (user.read_only) {
+      // Demo data isn't from today, so open on 30 days, not an empty 24h.
+      currentRange = '30d';
+      document.querySelectorAll('.ranges button').forEach((b) => b.classList.toggle('active', b.dataset.range === '30d'));
       document.getElementById('console-label').style.display = 'none';
       accountBtn.style.display = 'none';
       document.getElementById('account-open-btn').style.display = 'none';
