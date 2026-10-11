@@ -15,7 +15,7 @@
 //! `paddle_webhook` handler in `long_tail.rs` (untouched by this file).
 //! Signing lazily means there's no separate token storage to keep in
 //! sync or invalidate — every dashboard fetch just re-signs fresh claims
-//! over whatever the billing tables currently say, right up until the
+//! over whatever the billing tables currently say, up to a week past the
 //! subscription's own period end.
 
 use std::time::Duration;
@@ -99,6 +99,22 @@ struct OrgQuery {
 /// backing it.
 const FALLBACK_LICENSE_HOURS: i64 = 24;
 
+/// A key stays valid this long past the billing period's end, so a
+/// self-hoster has a week to paste the renewed key instead of losing
+/// features on the renewal day.
+const LICENSE_GRACE_DAYS: i64 = 7;
+
+/// When a key for a subscription ending at `period_end` expires, or `None`
+/// when that period (plus grace) is already over: never sign a key that is
+/// dead on arrival.
+fn license_expiry(period_end: Option<chrono::DateTime<chrono::Utc>>, now: chrono::DateTime<chrono::Utc>) -> Option<chrono::DateTime<chrono::Utc>> {
+    let expires_at = match period_end {
+        Some(end) => end + chrono::Duration::days(LICENSE_GRACE_DAYS),
+        None => now + chrono::Duration::hours(FALLBACK_LICENSE_HOURS),
+    };
+    (expires_at > now).then_some(expires_at)
+}
+
 async fn get_license_token(State(state): State<SharedState>, user: AuthUser, Query(q): Query<OrgQuery>) -> Result<Json<Value>, ApiError> {
     check_dashboard_rate_limit(&state, user.sub).await?;
     if !is_valid_identifier(&q.org_id) {
@@ -133,8 +149,13 @@ async fn get_license_token(State(state): State<SharedState>, user: AuthUser, Que
             .fetch_optional(&state.pg)
             .await?
             .flatten();
-    let expires_at = period_end.unwrap_or_else(|| chrono::Utc::now() + chrono::Duration::hours(FALLBACK_LICENSE_HOURS));
-    let ttl_seconds = (expires_at - chrono::Utc::now()).num_seconds().max(0) as u64;
+    let Some(expires_at) = license_expiry(period_end, chrono::Utc::now()) else {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "This subscription's billing period has ended and no renewal has been recorded, so there is no valid license key. Check the subscription, or contact support@agentraas.io.",
+        ));
+    };
+    let ttl_seconds = (expires_at - chrono::Utc::now()).num_seconds() as u64;
 
     let Some(private_key_pem) = crate::util::configured_env("LICENSE_SIGNING_PRIVATE_KEY") else {
         return Err(ApiError::new(StatusCode::SERVICE_UNAVAILABLE, "Licensing is not configured on this deployment."));
@@ -149,4 +170,22 @@ async fn get_license_token(State(state): State<SharedState>, user: AuthUser, Que
         .map_err(|_| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "An internal error occurred."))?;
 
     Ok(Json(json!({ "tier": tier.as_plan_str(), "token": token, "expires_at": expires_at })))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn keys_run_a_week_past_the_period_and_never_start_expired() {
+        let now = chrono::Utc::now();
+        let end = now + chrono::Duration::days(20);
+        assert_eq!(license_expiry(Some(end), now), Some(end + chrono::Duration::days(7)));
+        // Period ended 3 days ago: still inside the grace week.
+        let recent = now - chrono::Duration::days(3);
+        assert_eq!(license_expiry(Some(recent), now), Some(recent + chrono::Duration::days(7)));
+        // Ended 9 days ago (test3's case): no key at all, not an expired one.
+        assert_eq!(license_expiry(Some(now - chrono::Duration::days(9)), now), None);
+        assert_eq!(license_expiry(None, now), Some(now + chrono::Duration::hours(24)));
+    }
 }

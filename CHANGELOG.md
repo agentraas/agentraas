@@ -15,6 +15,20 @@ safe to re-run.
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-10-11
+
+No migration.
+
+### Fixed
+- A license key for a subscription whose billing period had ended was
+  signed with an expiry equal to its issue time, so it was dead on arrival
+  and the self-hosted server silently fell back to Community. Such a request
+  now answers 409, and every key stays valid 7 days past the period's end so
+  a renewal can be pasted in without losing features.
+- Account panel: a paid account no longer sees the free-trial pitch; the
+  usage line says overage is not charged while overage billing is off;
+  white-label branding shows only on Enterprise (and the Cloud trial).
+
 ## [0.16.0] - 2026-10-11
 
 No migration.

@@ -2148,7 +2148,9 @@
       planEl.textContent = data.user?.deployment_mode !== 'cloud'
         ? SELF_HOSTED_DESCRIPTIONS[plan] || SELF_HOSTED_DESCRIPTIONS.free
         : ACCOUNT_DESCRIPTIONS[plan] || ACCOUNT_DESCRIPTIONS.other;
-      brandingSection.style.display = 'block';
+      // White-label is Enterprise; the Cloud free trial gets every feature.
+      const cloudTrial = data.user?.deployment_mode === 'cloud' && plan === 'free';
+      brandingSection.style.display = plan === 'enterprise' || cloudTrial ? 'block' : 'none';
     } catch (err) {
       planEl.textContent = 'Could not load plan status.';
     }
@@ -2168,9 +2170,13 @@
       if (!u.cloud) return;
       const paid = u.plan !== 'free';
       section.style.display = 'block';
+      const overage = u.enabled
+        ? ` Overage so far: $${(u.estimated_cents / 100).toFixed(2)}. Cap: $${u.monthly_cap_usd}.`
+        : ' Actions over the plan are not charged yet; calls stop at the cap below.';
       document.getElementById('payg-usage').textContent = paid
-        ? `${u.month}: ${u.actions} actions ran (${u.included_actions} included). Overage so far: $${(u.estimated_cents / 100).toFixed(2)}. Cap: $${u.monthly_cap_usd}.`
+        ? `${u.month}: ${u.actions} actions ran (${u.included_actions} included).${overage}`
         : `Free trial: ${u.trial_used} of ${u.trial_actions} actions used.`;
+      document.getElementById('plans-intro').style.display = paid ? 'none' : 'block';
       document.getElementById('plan-buttons').style.display = paid ? 'none' : 'flex';
       document.getElementById('payg-cap-row').style.display = paid ? 'flex' : 'none';
       document.getElementById('license-row').style.display = paid ? 'block' : 'none';
