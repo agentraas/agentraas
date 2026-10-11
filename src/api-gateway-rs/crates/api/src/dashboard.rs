@@ -206,9 +206,15 @@ async fn recent(State(state): State<SharedState>, user: AuthUser, Query(q): Quer
         created_at: chrono::DateTime<chrono::Utc>,
         run_id: Option<String>,
         step_id: Option<String>,
+        payload_hash: Option<String>,
+        redacted_payload_preview: Option<String>,
+        end_user_id: Option<String>,
     }
+    // payload_hash is the dedup hash: the dashboard's row detail uses it to
+    // point a duplicate at the call it repeated.
     let rows = sqlx::query_as::<_, Row>(
-        "SELECT req_id, api_key, org_id, agent_id, service, action, status, error_type, duration_ms::bigint as duration_ms, (created_at AT TIME ZONE 'UTC') as created_at, run_id, step_id
+        "SELECT req_id, api_key, org_id, agent_id, service, action, status, error_type, duration_ms::bigint as duration_ms, (created_at AT TIME ZONE 'UTC') as created_at, run_id, step_id,
+                payload_hash, redacted_payload_preview, end_user_id
          FROM audit_log WHERE org_id = ANY($1) ORDER BY created_at DESC LIMIT $2",
     )
     .bind(&org_ids)
@@ -223,6 +229,7 @@ async fn recent(State(state): State<SharedState>, user: AuthUser, Query(q): Quer
                     "service": r.service, "action": r.action, "status": r.status, "error_type": r.error_type,
                     "duration_ms": r.duration_ms, "created_at": r.created_at,
                     "run_id": r.run_id, "step_id": r.step_id,
+                    "payload_hash": r.payload_hash, "payload_preview": r.redacted_payload_preview, "end_user_id": r.end_user_id,
                 })
             })
             .collect(),

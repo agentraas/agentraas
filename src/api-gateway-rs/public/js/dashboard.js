@@ -47,13 +47,30 @@
   // the plan or license doesn't include. Only the label says which plan.
   const ACCOUNT_LABELS = { free: 'Free trial', team: 'Team', enterprise: 'Enterprise' };
   let isSelfHosted = false;
+  const TIER_RANK = { free: 0, team: 1, enterprise: 2 };
   function applyConsoleLayout(plan) {
     const label = isSelfHosted && plan === 'free' ? 'Community' : ACCOUNT_LABELS[plan];
     document.getElementById('console-label').textContent = label || 'Console';
+    // The Cloud free trial gets every feature; otherwise the plan (Cloud) or
+    // license (self-hosted) decides. A locked button still opens, so people
+    // can see what the feature does; the server answers 403 on save.
+    const effective = !isSelfHosted && plan === 'free' ? 'enterprise' : plan;
+    document.querySelectorAll('[data-tier]').forEach((btn) => {
+      btn.querySelector('.tier-tag')?.remove();
+      const need = btn.dataset.tier;
+      if ((TIER_RANK[effective] ?? 0) >= TIER_RANK[need]) { btn.removeAttribute('title'); return; }
+      const tag = document.createElement('span');
+      tag.className = 'tier-tag';
+      tag.textContent = need === 'team' ? 'Team' : 'Enterprise';
+      btn.appendChild(tag);
+      btn.title = isSelfHosted
+        ? `Needs a ${tag.textContent} license key (LICENSE_TOKEN).`
+        : `Needs the ${tag.textContent} plan: see Account and billing.`;
+    });
     document.getElementById('hitl-rules-btn').style.display = '';
     const membersBtn = document.getElementById('enterprise-btn');
     membersBtn.style.display = '';
-    membersBtn.textContent = 'SSO & members';
+    membersBtn.firstChild.textContent = 'SSO & members';
   }
   let refreshTimer = null;
   let anyModalOpen = false;
@@ -88,7 +105,7 @@
       const data = await res.json();
       if (!res.ok) {
         if (data.code === 'EMAIL_NOT_VERIFIED') {
-          authError.innerHTML = `${data.error} <a href="#" id="inline-resend-link">Resend verification email</a>`;
+          authError.innerHTML = `${escapeHtml(data.error)} <a href="#" id="inline-resend-link">Resend verification email</a>`;
           authError.style.display = 'block';
           document.getElementById('inline-resend-link').addEventListener('click', async (ev) => {
             ev.preventDefault();
@@ -107,7 +124,7 @@
         const devBox = document.getElementById('verify-notice-dev');
         if (data.dev_verify_url) {
           devBox.style.display = 'block';
-          devBox.innerHTML = `No email server configured on this deployment — verify directly: <a href="${data.dev_verify_url}">${data.dev_verify_url}</a>`;
+          devBox.innerHTML = `No email server configured on this deployment — verify directly: <a href="${escapeHtml(data.dev_verify_url)}">${escapeHtml(data.dev_verify_url)}</a>`;
         } else {
           devBox.style.display = 'none';
         }
@@ -234,11 +251,31 @@
     startAutoRefresh();
   }
 
+  // ─── Control tabs ───
+  // One group of buttons at a time; the last tab chosen is remembered per
+  // browser (a convenience only, so storage failures are ignored).
+  function showControlTab(name) {
+    document.querySelectorAll('.control-tabs button').forEach((b) => {
+      b.classList.toggle('active', b.dataset.tab === name);
+      b.setAttribute('aria-selected', String(b.dataset.tab === name));
+    });
+    document.querySelectorAll('.control-group[data-tab]').forEach((g) => { g.hidden = g.dataset.tab !== name; });
+    try { localStorage.setItem('ar-control-tab', name); } catch (err) {}
+  }
+  document.querySelectorAll('.control-tabs button').forEach((b) => b.addEventListener('click', () => showControlTab(b.dataset.tab)));
+  let savedTab = null;
+  try { savedTab = localStorage.getItem('ar-control-tab'); } catch (err) {}
+  showControlTab(['setup', 'rules', 'monitor', 'account'].includes(savedTab) ? savedTab : 'setup');
+
+  document.getElementById('account-open-btn').addEventListener('click', () => accountBtn.click());
+  document.getElementById('fr-connect-btn').addEventListener('click', () => document.getElementById('connect-agent-btn').click());
+  document.getElementById('fr-test-btn').addEventListener('click', () => document.getElementById('live-test-btn').click());
+
   async function checkWelcomeBannerState() {
     try {
       const res = await fetch('/api/v1/agents/keys', { credentials: 'include' });
       const keys = await res.json();
-      document.getElementById('welcome-banner').style.display = (Array.isArray(keys) && keys.length === 0) ? 'flex' : 'none';
+      document.getElementById('welcome-banner').style.display = (Array.isArray(keys) && keys.length === 0) ? 'block' : 'none';
     } catch (err) { /* not critical — just skip showing the banner if this fails */ }
   }
   function loadAll() {
@@ -263,7 +300,7 @@
       // just shows a full, uncapped track with the raw call count.
       if (data.unlimited || data.limit == null) {
         fill.style.width = '100%';
-        label.textContent = `${data.total.toLocaleString()} calls this month (self-hosted — unlimited)`;
+        label.textContent = `${data.total.toLocaleString()} actions this month (self-hosted, no limit)`;
         return;
       }
 
@@ -345,6 +382,12 @@
     return n < 1000 ? `${Math.round(n)}ms` : `${(n / 1000).toFixed(2)}s`;
   }
   function timeOnly(iso) { return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
+  // Today: just the time. Older: the date too, or a 7d/90d list is ambiguous.
+  function rowTime(iso) {
+    const d = new Date(iso);
+    if (d.toDateString() === new Date().toDateString()) return timeOnly(iso);
+    return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  }
 
   async function loadStats() {
     try {
@@ -396,6 +439,11 @@
     } catch (err) { console.error('loadServices failed:', err); }
   }
 
+  const SERVICE_NAMES = { hubspot: 'HubSpot', paypal: 'PayPal', gocardless: 'GoCardless', whatsapp: 'WhatsApp', opn_payments: 'Opn Payments', mockpay: 'Mockpay (sandbox)' };
+  function serviceName(id) {
+    return SERVICE_NAMES[id] || id.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  }
+
   async function loadServices() {
     try {
       const res = await fetch('/api/v1/services', { credentials: 'include' });
@@ -409,7 +457,7 @@
         div.className = 'service-pill';
         // Idle = no calls today and nothing wrong; hidden on phones (see the 560px CSS).
         if (healthy && !Number(svc.actions_24h)) div.classList.add('idle');
-        div.innerHTML = `<span class="heartbeat ${healthy ? '' : 'down'}"></span><span class="name">${escapeHtml(svc.name.charAt(0).toUpperCase() + svc.name.slice(1))}</span><span class="count">${escapeHtml(String(svc.actions_24h))} today</span>`;
+        div.innerHTML = `<span class="heartbeat ${healthy ? '' : 'down'}"></span><span class="name">${escapeHtml(serviceName(svc.name))}</span><span class="count">${escapeHtml(String(svc.actions_24h))} today</span>`;
         strip.appendChild(div);
       }
     } catch (err) {}
@@ -433,8 +481,21 @@
     const search = document.getElementById('activity-search').value.trim().toLowerCase();
     const statusFilter = document.getElementById('activity-status-filter').value;
     const sortMode = document.getElementById('activity-sort').value;
+    const orgSelect = document.getElementById('activity-org-filter');
+    const orgs = [...new Set(activityRows.map((r) => r.org_id))].sort();
+    if (orgs.length > 1) {
+      const chosen = orgSelect.value;
+      orgSelect.replaceChildren(new Option('All orgs', ''), ...orgs.map((o) => new Option(o, o)));
+      orgSelect.value = orgs.includes(chosen) ? chosen : '';
+      orgSelect.style.display = '';
+    } else {
+      orgSelect.value = '';
+      orgSelect.style.display = 'none';
+    }
+    const orgFilter = orgSelect.value;
 
     let rows = activityRows.filter((row) => {
+      if (orgFilter && row.org_id !== orgFilter) return false;
       if (statusFilter && row.status !== statusFilter) return false;
       if (search) {
         const haystack = `${row.service} ${row.action} ${row.org_id} ${row.agent_id} ${row.run_id||''} ${row.step_id||''}`.toLowerCase();
@@ -458,6 +519,7 @@
     for (const row of rows) {
       const div = document.createElement('div');
       div.className = `log-row ${row.status}`;
+      div.dataset.req = row.req_id;
       // Runs/steps are optional (agent-supplied run_id/step_id tags on a
       // multi-step task) — most rows have neither, so the badge is only
       // shown when present rather than reserving space for it always.
@@ -466,10 +528,10 @@
           + ` <a href="#" class="see-run" title="Load the complete, unfiltered step list for this run" data-run-id="${escapeHtml(row.run_id)}" style="font-size:11px;">see full run</a>`
         : '';
       div.innerHTML = `
-        <span class="time">${timeOnly(row.created_at)}</span>
+        <span class="time">${escapeHtml(rowTime(row.created_at))}</span>
         <span class="desc">${escapeHtml(row.service)}.${escapeHtml(row.action)} <span class="agent">— ${escapeHtml(row.org_id)}/${escapeHtml(row.agent_id)}</span>${runBadge}</span>
         <span class="dur">${formatDuration(row.duration_ms)}</span>
-        <span class="status-word">${row.status}</span>`;
+        <span class="status-word">${escapeHtml(row.status)}</span>`;
       const badgeEl = div.querySelector('.run-badge');
       if (badgeEl) {
         badgeEl.addEventListener('click', () => {
@@ -481,11 +543,104 @@
       if (seeRunEl) {
         seeRunEl.addEventListener('click', (e) => { e.preventDefault(); openRunModal(seeRunEl.dataset.runId); });
       }
+      div.addEventListener('click', (e) => {
+        if (e.target.closest('.run-badge, .see-run')) return;
+        const open = div.nextElementSibling?.classList.contains('log-detail');
+        body.querySelectorAll('.log-detail').forEach((d) => d.remove());
+        if (!open) div.after(buildRowDetail(row));
+      });
       body.appendChild(div);
     }
   }
 
+  // Plain-language reason for a blocked or failed row (audit error_type).
+  const BLOCK_REASONS = {
+    circuit_open: 'The circuit breaker is open: this service failed repeatedly, so calls are paused until it recovers.',
+    duplicate_in_progress: 'An identical call was still running, so this copy was stopped instead of running twice.',
+    duplicate_of_streamed_response: 'An identical streamed call already ran; streamed answers cannot be replayed from cache.',
+    hitl_denied: 'A person denied this call in the approval step.',
+    hitl_forward_failed: 'It was approved, but forwarding it afterwards failed.',
+    hitl_quota_exceeded: 'Too many calls were waiting for approval at once.',
+    idempotency_key_reused: 'The same idempotency key was sent with a different payload.',
+    outcome_unknown: 'An earlier identical call timed out after it was sent, so it may have run. This copy was not run again. See Failed requests.',
+    resource_locked: 'Another call held the lock on the same resource.',
+    spend_cap_exceeded: 'A spend cap for this agent or service was reached.',
+    usage_limit_exceeded: 'The account limit was reached (free trial or monthly cap). See Account and billing.',
+    validation_failed: 'A validation rule rejected the payload.',
+  };
+
+  function statusExplanation(row, original) {
+    if (row.status === 'success') return 'Forwarded to the real API and completed.';
+    if (row.status === 'deduplicated') {
+      return original
+        ? `A repeat of an earlier identical call (${rowTime(original.created_at)}). It got that call's result back and did not run again.`
+        : 'A repeat of an earlier identical call. It got that call\'s result back and did not run again. The original is older than the rows loaded here.';
+    }
+    if (row.status === 'pending_approval') return 'Held for a person to approve before it runs.';
+    if (row.status === 'blocked') return BLOCK_REASONS[row.error_type] || `Stopped before it ran${row.error_type ? `: ${row.error_type}` : ''}.`;
+    if (row.status === 'error') return `The call failed${row.error_type ? `: ${row.error_type}` : ''}. Failed calls are kept under Failed requests, where you can replay them.`;
+    return row.status;
+  }
+
+  // Built with textContent only: every value here comes from the agent.
+  function buildRowDetail(row) {
+    const original = row.status === 'deduplicated' && row.payload_hash
+      ? activityRows.filter((r) => r.payload_hash === row.payload_hash && r.status === 'success').sort((a, b) => new Date(a.created_at) - new Date(b.created_at))[0]
+      : null;
+    const box = document.createElement('div');
+    box.className = 'log-detail';
+    const p = document.createElement('p');
+    p.textContent = statusExplanation(row, original);
+    box.appendChild(p);
+    const dl = document.createElement('dl');
+    const add = (label, value) => {
+      if (value === null || value === undefined || value === '') return;
+      const dt = document.createElement('dt'); dt.textContent = label;
+      const dd = document.createElement('dd'); dd.textContent = String(value);
+      dl.append(dt, dd);
+    };
+    add('When', new Date(row.created_at).toLocaleString());
+    add('Call', `${row.service}.${row.action}`);
+    add('Agent', `${row.org_id}/${row.agent_id}`);
+    add('End user', row.end_user_id);
+    add('Duration', formatDuration(row.duration_ms));
+    add('Request ID', row.req_id);
+    add('Dedup hash', row.payload_hash);
+    add('Run / step', row.run_id ? `${row.run_id}${row.step_id ? ` / ${row.step_id}` : ''}` : '');
+    box.appendChild(dl);
+    if (row.payload_preview) {
+      const pre = document.createElement('pre');
+      pre.textContent = row.payload_preview;
+      box.appendChild(pre);
+    }
+    const links = document.createElement('p');
+    links.style.margin = '8px 0 0';
+    if (original) {
+      const a = document.createElement('a');
+      a.textContent = 'Show the original call';
+      a.addEventListener('click', () => {
+        document.getElementById('activity-search').value = '';
+        document.getElementById('activity-status-filter').value = '';
+        renderActivity();
+        const idx = [...document.querySelectorAll('#activity-body .log-row')].findIndex((el) => el.dataset.req === original.req_id);
+        document.querySelectorAll('#activity-body .log-row')[idx]?.click();
+        document.querySelectorAll('#activity-body .log-row')[idx]?.scrollIntoView({ block: 'center' });
+      });
+      links.appendChild(a);
+    }
+    if (row.status === 'error' || row.error_type === 'outcome_unknown') {
+      if (links.childNodes.length) links.append(' · ');
+      const a = document.createElement('a');
+      a.textContent = 'Open Failed requests';
+      a.addEventListener('click', () => document.getElementById('dlq-btn').click());
+      links.appendChild(a);
+    }
+    if (links.childNodes.length) box.appendChild(links);
+    return box;
+  }
+
   document.getElementById('activity-search').addEventListener('input', renderActivity);
+  document.getElementById('activity-org-filter').addEventListener('change', renderActivity);
   document.getElementById('activity-status-filter').addEventListener('change', renderActivity);
   document.getElementById('activity-sort').addEventListener('change', renderActivity);
   document.getElementById('load-more-btn').addEventListener('click', () => { activityLimit += 50; loadRecent(); });
@@ -645,7 +800,7 @@
     credsError.style.display = 'none'; credsForm.reset(); updateCredsFieldVisibility();
     if (!knownServices.length) {
       try { const res = await fetch('/api/v1/services', { credentials: 'include' }); if (res.ok) knownServices = await res.json(); } catch (err) {}
-      credsServiceSelect.innerHTML = knownServices.map(s => `<option value="${s.name}">${s.name.charAt(0).toUpperCase() + s.name.slice(1)}</option>`).join('');
+      credsServiceSelect.innerHTML = knownServices.map(s => `<option value="${escapeHtml(s.name)}">${escapeHtml(serviceName(s.name))}</option>`).join('');
     }
     credsModalOverlay.style.display = 'flex'; anyModalOpen = true;
     document.getElementById('creds-org').focus();
@@ -1772,7 +1927,7 @@
         const uptimeColor = svc.uptime_pct >= 99.9 ? 'var(--signal)' : svc.uptime_pct >= 99 ? '#9A5B00' : 'var(--alert)';
         const div = document.createElement('div');
         div.className = 'cred-row';
-        div.innerHTML = `<div class="info"><div class="svc">${svc.service.charAt(0).toUpperCase() + svc.service.slice(1)}</div><div class="meta">${svc.total_actions} action${svc.total_actions === 1 ? '' : 's'}${svc.success_rate !== null ? ` · ${svc.success_rate}% success` : ''}${svc.duplicates_prevented > 0 ? ` · ${svc.duplicates_prevented} duplicate${svc.duplicates_prevented === 1 ? '' : 's'} prevented` : ''}</div></div><div style="font-family:'Archivo',sans-serif;font-weight:700;font-size:15px;color:${uptimeColor};">${svc.uptime_pct}% uptime</div>`;
+        div.innerHTML = `<div class="info"><div class="svc">${escapeHtml(serviceName(svc.service))}</div><div class="meta">${escapeHtml(String(svc.total_actions))} action${svc.total_actions === 1 ? '' : 's'}${svc.success_rate !== null ? ` · ${svc.success_rate}% success` : ''}${svc.duplicates_prevented > 0 ? ` · ${svc.duplicates_prevented} duplicate${svc.duplicates_prevented === 1 ? '' : 's'} prevented` : ''}</div></div><div style="font-family:'Archivo',sans-serif;font-weight:700;font-size:15px;color:${uptimeColor};">${svc.uptime_pct}% uptime</div>`;
         list.appendChild(div);
       }
     } catch (err) {}

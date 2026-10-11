@@ -6,7 +6,7 @@
 <!-- End Google Tag Manager -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AgentRaaS — Signal</title>
+<title>AgentRaaS dashboard</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2024%2024%27%3E%3Crect%20x=%270.75%27%20y=%270.75%27%20width=%2722.5%27%20height=%2722.5%27%20rx=%276%27%20fill=%27%2316191E%27%20stroke=%27%232E343C%27%20stroke-width=%271.5%27/%3E%3Ccircle%20cx=%278.6%27%20cy=%2712%27%20r=%275.1%27%20fill=%27none%27%20stroke=%27%23ECEFF3%27%20stroke-width=%271.9%27/%3E%3Ccircle%20cx=%2715.4%27%20cy=%2712%27%20r=%275.1%27%20fill=%27%23F2B544%27/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -164,6 +164,17 @@
     font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
     color: var(--muted); margin-bottom: 10px;
   }
+  /* One tab of controls at a time instead of every button at once. */
+  .control-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin: 4px 0 10px; flex-wrap: wrap; }
+  .control-tabs button {
+    background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -1px;
+    color: var(--muted); font-family: inherit; font-size: 13px; font-weight: 600; padding: 8px 12px; cursor: pointer;
+  }
+  .control-tabs button:hover { color: var(--text); }
+  .control-tabs button.active { color: var(--text); border-bottom-color: var(--text); }
+  .control-group[data-tab][hidden] { display: none; }
+  .tier-tag { font-size: 10px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; color: var(--dedup); border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; }
+  .range-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .ranges { display: flex; gap: 2px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 3px; }
   .ranges button {
     background: none; border: none; color: var(--muted); font-family: inherit; font-size: 12px;
@@ -218,6 +229,21 @@
     display: grid; grid-template-columns: 68px 1fr auto auto; gap: 12px; align-items: center;
     padding: 9px 4px; border-left: 2px solid var(--border); padding-left: 12px; margin-bottom: 1px;
   }
+  .log-row { cursor: pointer; }
+  .log-row:hover { background: var(--panel-2); }
+  .log-detail { margin: 0 0 8px 14px; padding: 12px 14px; background: var(--panel-2); border-radius: 8px; font-size: 12.5px; }
+  .log-detail p { margin: 0 0 8px; }
+  .log-detail dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0; }
+  .log-detail dt { color: var(--muted); }
+  .log-detail dd { margin: 0; word-break: break-all; font-variant-numeric: tabular-nums; }
+  .log-detail pre { margin: 8px 0 0; padding: 10px; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; font-size: 11.5px; white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow: auto; }
+  .log-detail a { cursor: pointer; color: var(--signal); text-decoration: underline; }
+  .control-group[data-tab] .control-group-label { display: none; }
+  .first-run ol { margin: 8px 0 0; padding-left: 20px; }
+  .first-run li { margin: 6px 0; }
+  .first-run li .btn { display: inline-flex; margin-left: 6px; }
+  .service-pill.idle { display: none; }
+  #service-strip:not(:has(.service-pill:not(.idle)))::after { content: "No service calls in the last 24 hours."; color: var(--muted); font-size: 13px; }
   .log-row.success { border-left-color: var(--signal); }
   .log-row.deduplicated { border-left-color: var(--dedup); }
   .log-row.blocked { border-left-color: var(--alert); }
@@ -412,9 +438,6 @@
     /* Only the email shrinks; Docs, Guide and Log out keep their size (they squeezed to "D…" at 320px). */
     #user-info > * { flex-shrink: 0; white-space: nowrap; }
     #user-info > #account-btn { flex-shrink: 1; min-width: 0; }
-    /* Phones: only services used today (or failing) instead of every curated service. */
-    .service-pill.idle { display: none; }
-    #service-strip:not(:has(.service-pill:not(.idle)))::after { content: "No service calls in the last 24 hours."; color: var(--muted); font-size: 13px; }
     .stat-sentence { font-size: 16px; }
     .control-group { gap: 6px; }
     .control-group-label { min-width: 0; width: 100%; }
@@ -435,7 +458,7 @@
       </svg></span>
       <div class="brand-text">
         <h1>AgentRaaS</h1>
-        <p>The reliability layer for autonomous agent fleets</p>
+        <p>The reliability layer for what AI agents do</p>
       </div>
     </div>
     <div id="user-info">
@@ -520,11 +543,13 @@
       </svg>
     </div>
 
-    <div id="welcome-banner" style="display:none;background:rgba(78,139,107,0.08);border:1px solid rgba(78,139,107,0.3);border-radius:12px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
-      <div>
-        <div style="font-weight:700;margin-bottom:3px;">Welcome — let's connect your first agent</div>
-        <div style="color:var(--muted);font-size:13.5px;">Click "+ Connect agent" below to get your API key and webhook URL. Need a walkthrough? <a href="/guide" target="_blank" style="color:var(--signal);">Read the guide →</a></div>
-      </div>
+    <div id="welcome-banner" class="panel first-run" style="display:none;margin-bottom:20px;">
+      <h3>Get started in three steps</h3>
+      <ol>
+        <li>Connect an agent: you get an API key and a webhook URL. <button type="button" class="btn filled" id="fr-connect-btn">+ Connect agent</button></li>
+        <li>See a duplicate caught: 8 identical calls go to a sandbox, 1 runs. <button type="button" class="btn" id="fr-test-btn">Run live dedup test</button></li>
+        <li>Point your agent, n8n workflow or MCP client at AgentRaaS instead of the API. <a href="/guide" target="_blank" rel="noopener">Read the guide</a></li>
+      </ol>
     </div>
 
     <div id="usage-over-limit-banner" style="display:none;"></div>
@@ -542,23 +567,29 @@
           <button class="btn filled" id="connect-agent-btn">+ Connect agent</button>
           <button class="btn filled" id="live-test-btn" title="Fires 8 identical requests at a sandbox endpoint through the real dedup pipeline and shows what happened">Run live dedup test</button>
         </div>
-        <div class="control-group">
-          <span class="control-group-label">Configure</span>
+        <div class="control-tabs" role="tablist" aria-label="Dashboard sections">
+          <button type="button" data-tab="setup" role="tab">Setup</button>
+          <button type="button" data-tab="rules" role="tab">Rules</button>
+          <button type="button" data-tab="monitor" role="tab">Monitor</button>
+          <button type="button" data-tab="account" role="tab">Account</button>
+        </div>
+        <div class="control-group" data-tab="setup">
+          <span class="control-group-label">Setup</span>
           <button class="btn" id="credentials-btn">Credentials</button>
           <button class="btn" id="custom-actions-btn">Custom actions</button>
           <button class="btn" id="mcpsvr-btn">MCP servers</button>
           <button class="btn" id="plugins-btn">Plugins</button>
         </div>
-        <div class="control-group">
+        <div class="control-group" data-tab="rules">
           <span class="control-group-label">Rules</span>
           <button class="btn" id="validation-rules-btn">Validation rules</button>
           <button class="btn" id="dedup-rules-btn">Dedup rules</button>
-          <button class="btn" id="hitl-rules-btn">HITL rules</button>
+          <button class="btn" id="hitl-rules-btn" data-tier="team">Approval rules</button>
           <button class="btn" id="spendcap-rules-btn">Spend caps</button>
           <button class="btn" id="policy-rules-btn">Action policies</button>
           <button class="btn" id="pruning-btn">Output pruning</button>
         </div>
-        <div class="control-group">
+        <div class="control-group" data-tab="monitor">
           <span class="control-group-label">Monitor</span>
           <button class="btn" id="notification-webhooks-btn">Outage alerts</button>
           <button class="btn" id="dlq-btn">Failed requests</button>
@@ -568,21 +599,24 @@
           <button class="btn" id="reliability-btn">Reliability report</button>
           <button class="btn" id="tunnel-btn">Dev tunnel</button>
         </div>
-        <div class="control-group">
+        <div class="control-group" data-tab="account">
           <span class="control-group-label">Account</span>
+          <button class="btn" id="account-open-btn">Account and billing</button>
           <button class="btn" id="admin-btn" style="display:none;">Admin</button>
-          <button class="btn" id="enterprise-btn">Enterprise</button>
+          <button class="btn" id="enterprise-btn" data-tier="team">Enterprise</button>
           <button class="btn" id="seed-btn">Seed demo data</button>
           <button class="btn" id="reset-demo-btn">Reset demo data</button>
           <button class="btn" id="export-btn">Export CSV</button>
-          <button class="btn" id="refresh-btn">Refresh</button>
         </div>
       </div>
-      <div class="ranges">
-        <button data-range="24h" class="active">24h</button>
-        <button data-range="7d">7d</button>
-        <button data-range="30d">30d</button>
-        <button data-range="90d">90d</button>
+      <div class="range-row">
+        <div class="ranges">
+          <button data-range="24h" class="active">24h</button>
+          <button data-range="7d">7d</button>
+          <button data-range="30d">30d</button>
+          <button data-range="90d">90d</button>
+        </div>
+        <button class="btn" id="refresh-btn">Refresh</button>
       </div>
     </div>
 
@@ -619,6 +653,7 @@
         <div class="panel-error" id="activity-error"><span>Couldn't load activity.</span><button id="activity-retry">Retry</button></div>
         <div class="activity-toolbar">
           <input type="text" id="activity-search" placeholder="Search service, action, agent...">
+          <select id="activity-org-filter" aria-label="Organization" style="display:none;"><option value="">All orgs</option></select>
           <select id="activity-status-filter">
             <option value="">All statuses</option>
             <option value="success">Success</option>
@@ -634,7 +669,8 @@
           </select>
         </div>
         <div id="activity-body"></div>
-        <div id="empty-state" style="display:none;">Nothing here yet in this range.</div>
+        <div id="empty-state" style="display:none;">Nothing here yet in this range. Run the live dedup test to see a duplicate caught.</div>
+        <p class="sub" id="activity-hint" style="margin:6px 0 0;font-size:12px;">Click a row for its details.</p>
         <button id="load-more-btn">Load more</button>
       </div>
       <div class="panel">

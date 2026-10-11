@@ -15,6 +15,30 @@ safe to re-run.
 
 ## [Unreleased]
 
+## [0.16.2] - 2026-10-11
+
+No migration.
+
+### Added
+- Dashboard: click an activity row for its details: why it was
+  deduplicated, blocked or failed in plain words, request ID, dedup hash,
+  end user, run and step, the redacted payload preview when there is one,
+  and a link to the original call a duplicate repeated. `/api/v1/recent`
+  now returns `payload_hash`, `payload_preview` and `end_user_id`.
+- Dashboard: a three-step first-run card, Setup/Rules/Monitor/Account tabs
+  instead of every button at once, an Account and billing button, an org
+  filter in the activity list when you belong to more than one org, and
+  Team/Enterprise tags on buttons your plan or license does not include.
+
+### Changed
+- Dashboard: only services with calls (or a failing circuit) are listed,
+  with proper names; older activity rows show their date; "HITL rules" is
+  "Approval rules"; Refresh sits next to the time range; page title and
+  tagline match the site.
+
+### Fixed
+- Dashboard: four `innerHTML` sites inserted values without `escapeHtml`.
+
 ## [0.16.1] - 2026-10-11
 
 No migration.
