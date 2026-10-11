@@ -7,11 +7,12 @@ later.
 ## The short version
 
 1. Register and log in.
-2. Click **+ Connect agent**, give it a name.
-3. You get three things, shown **once**: an API key, a webhook URL, and an
-   MCP URL. Save the API key somewhere safe — it's not shown again.
-4. Point your agent at the webhook URL (or MCP URL, if your agent framework
-   speaks MCP), with the API key in the `Authorization` header.
+2. Click **Connect a service**, pick the service (Stripe, Slack, GitHub,
+   ...) and paste its API key.
+3. You get your AgentRaaS URL, an AgentRaaS key (shown **once**) and a
+   ready example call. Save the key somewhere safe.
+4. Point your agent at that URL, with the key in the `Authorization` header.
+   For MCP, use **+ Connect agent**, which also shows an MCP client config.
 5. Done — every call your agent makes now goes through AgentRaaS first.
 
 The rest of this guide explains each piece in more detail.
@@ -159,14 +160,14 @@ curl -X POST https://your-instance/v1/webhook/<org_id>/<agent_id> \
 This example uses `mockpay` — a built-in fake service made for testing,
 so it works immediately with no setup. To call a real service like
 Stripe instead, change `"service"` to `"stripe"` — but that only works
-once you've saved your real Stripe key in the **Credentials** panel
-first (see below); without it, the call will fail since there's no
+once you've saved your real Stripe key with **Connect a service** (or the
+**Credentials** panel) first; without it, the call will fail since there's no
 credential to use.
 
-- `service` — which connector to use (`stripe`, `twilio`, `slack`, etc. —
-  see the full list on the dashboard's Credentials panel).
-- `action` — which operation on that service (each connector supports a
-  few — check the Credentials panel's dropdown for the exact list).
+- `service` — which connector to use (`stripe`, `slack`, `github`,
+  `resend` and the rest; the **Connect a service** window lists them).
+- `action` — which operation on that service; after you connect a service,
+  the window lists its actions and the fields each one needs.
 - `payload` — whatever that action needs, matching the real API's own
   fields.
 

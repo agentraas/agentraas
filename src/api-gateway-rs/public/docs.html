@@ -252,8 +252,7 @@
       <h2>Quickstart</h2>
       <ol>
         <li>Register and log in at <a href="/dashboard">the dashboard</a> (Cloud), or self-host with <code>./install.sh</code>. See <a href="#self-hosting">Self-hosting</a> below.</li>
-        <li>Click <b>+ Connect agent</b>. You get an API key, a webhook URL, and an MCP URL, shown once. Save the API key; it can't be retrieved again.</li>
-        <li>Add credentials for whatever service you're calling (<b>Credentials</b> panel); AgentRaaS forwards using those, so your agent code never touches a raw upstream API key.</li>
+        <li>Click <b>Connect a service</b>, pick the service and paste its API key. You get your AgentRaaS URL, an AgentRaaS key (shown once) and an example call. AgentRaaS forwards with the service's key, so your agent code never touches it. (<b>+ Connect agent</b> gives a key and URL without a service, for example for MCP.)</li>
         <li>Call AgentRaaS instead of the real API, using either calling style below.</li>
       </ol>
     </section>

@@ -9,6 +9,11 @@ once even when it is retried, is checked against what that agent may do,
 waits for a human when it is risky, and is recorded. Connect by webhook URL,
 SDK headers or MCP. The core is open source and free to self-host.
 
+Look first: [live read-only demo](https://agentraas.io/api/v1/demo/session),
+no signup. Built-in services include Stripe, Slack, GitHub, HubSpot, Resend,
+SendGrid, Notion, Zendesk, Twilio and Shopify; any other HTTP API works as a
+Custom Action and any MCP tool through `agentraas wrap`.
+
 ## The problem
 
 Your n8n workflow calls Stripe. It times out, n8n retries, and the customer
