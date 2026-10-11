@@ -1,6 +1,6 @@
 #!/bin/bash
 # set-org-limit.sh — set (or remove) a custom monthly call limit for one
-# specific user or org, overriding the global CLOUD_MONTHLY_LIMIT default.
+# specific user or org, overriding the plan default (CLOUD_TRIAL_ACTIONS or the plan's included actions).
 # Only takes effect in cloud mode — self-hosted deployments don't enforce a
 # limit at all (see checkUsageLimit in server.js).
 #

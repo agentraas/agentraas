@@ -141,10 +141,10 @@ async fn main() -> anyhow::Result<()> {
             .ok()
             .and_then(|v| v.parse().ok())
             .unwrap_or(2000),
-        cloud_monthly_limit: std::env::var("CLOUD_MONTHLY_LIMIT")
+        cloud_trial_actions: std::env::var("CLOUD_TRIAL_ACTIONS")
             .ok()
             .and_then(|v| v.parse().ok())
-            .unwrap_or(500),
+            .unwrap_or(1000),
         team_monthly_limit: std::env::var("TEAM_MONTHLY_LIMIT")
             .ok()
             .and_then(|v| v.parse().ok())
@@ -152,7 +152,7 @@ async fn main() -> anyhow::Result<()> {
         enterprise_monthly_limit: std::env::var("ENTERPRISE_MONTHLY_LIMIT")
             .ok()
             .and_then(|v| v.parse().ok())
-            .unwrap_or(50000),
+            .unwrap_or(20000),
         enterprise_max_client_tenants: std::env::var("ENTERPRISE_MAX_CLIENT_TENANTS")
             .ok()
             .and_then(|v| v.parse().ok())

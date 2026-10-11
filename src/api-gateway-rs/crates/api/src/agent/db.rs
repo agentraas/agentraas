@@ -441,39 +441,50 @@ pub async fn get_effective_limit(state: &SharedState, org_id: &str) -> Result<i6
     if let Some(limit) = override_limit {
         return Ok(limit as i64);
     }
-    if crate::billing::is_payg_org(&state.pg, org_id).await? {
-        return crate::billing::payg_limit(state, org_id).await;
+    let tier = org_plan_tier(state, org_id).await?;
+    match crate::billing::included_actions(state, tier) {
+        Some(included) => crate::billing::paid_limit(state, org_id, included).await,
+        None => Ok(state.cloud_trial_actions),
     }
-    let plan = get_org_owner_plan(&state.pg, org_id).await?;
-    Ok(match agentraas_core::tier::Tier::from_plan_str(&plan) {
-        agentraas_core::tier::Tier::Enterprise => state.enterprise_monthly_limit,
-        agentraas_core::tier::Tier::Team => state.team_monthly_limit,
-        agentraas_core::tier::Tier::Community => state.cloud_monthly_limit,
-    })
+}
+
+pub async fn org_plan_tier(state: &SharedState, org_id: &str) -> Result<agentraas_core::tier::Tier, sqlx::Error> {
+    Ok(agentraas_core::tier::Tier::from_plan_str(&get_org_owner_plan(&state.pg, org_id).await?))
+}
+
+/// What counts against the limit: a free org's trial is one-time, so its
+/// count never resets; a paid org's resets each month.
+pub async fn get_limit_usage(state: &SharedState, org_id: &str) -> Result<i64, sqlx::Error> {
+    let count = if org_plan_tier(state, org_id).await? == agentraas_core::tier::Tier::Community {
+        get_trial_usage(state, org_id).await
+    } else {
+        get_monthly_usage(state, org_id).await
+    };
+    Ok(count.unwrap_or(0))
 }
 
 pub struct UsageCheck {
     pub ok: bool,
     pub count: i64,
     pub limit: i64,
-    pub payg: bool,
+    pub paid: bool,
 }
 
 impl UsageCheck {
-    /// The 402 text: a payg org hit its own spend cap, anyone else the free
-    /// Cloud allowance (pointed at self-hosting, never at a paid plan).
+    /// The 402 text: a paid org hit its own spend cap, a free org used up
+    /// its one-time trial.
     pub fn exceeded_message(&self) -> String {
-        if self.payg {
+        if self.paid {
             format!("Monthly spend cap reached ({}/{} actions this month). Raise it under Account, or it resets next month.", self.count, self.limit)
         } else {
-            format!("Monthly limit of the free Cloud account reached ({}/{} actions this month). Self-hosting is free with no limit: https://agentraas.io/docs#self-hosting", self.count, self.limit)
+            format!("The free Cloud trial is used up ({}/{} actions). Pick Team or Enterprise under Account, or self-host the free Community edition: https://agentraas.io/docs#self-hosting", self.count, self.limit)
         }
     }
 }
 
 pub async fn check_usage_limit(state: &SharedState, org_id: &str) -> Result<UsageCheck, sqlx::Error> {
     if state.deployment_mode != "cloud" {
-        return Ok(UsageCheck { ok: true, count: 0, limit: 0, payg: false });
+        return Ok(UsageCheck { ok: true, count: 0, limit: 0, paid: false });
     }
 
     let owner_exempt: Option<i32> = sqlx::query_scalar(
@@ -489,16 +500,16 @@ pub async fn check_usage_limit(state: &SharedState, org_id: &str) -> Result<Usag
     .fetch_optional(&state.pg)
     .await?;
     if owner_exempt.is_some() {
-        return Ok(UsageCheck { ok: true, count: 0, limit: 0, payg: false });
+        return Ok(UsageCheck { ok: true, count: 0, limit: 0, paid: false });
     }
 
     let limit = get_effective_limit(state, org_id).await?;
-    let count = get_monthly_usage(state, org_id).await.unwrap_or(0);
+    let count = get_limit_usage(state, org_id).await?;
     Ok(UsageCheck {
         ok: count < limit,
         count,
         limit,
-        payg: crate::billing::is_payg_org(&state.pg, org_id).await?,
+        paid: org_plan_tier(state, org_id).await? != agentraas_core::tier::Tier::Community,
     })
 }
 
@@ -518,12 +529,21 @@ pub async fn increment_monthly_usage(state: &SharedState, org_id: &str) -> redis
             .query_async(&mut conn)
             .await?;
     }
+    // ponytail: the one-time trial count lives only in Redis (no expiry);
+    // losing Redis data resets it. Move to Postgres if anyone games that.
+    let _: () = redis::cmd("INCR").arg(format!("usage:{org_id}:trial")).query_async(&mut conn).await?;
     let _: Result<(), _> = redis::cmd("PUBLISH")
         .arg("usage:updates")
         .arg(serde_json::json!({ "org_id": org_id, "total": count }).to_string())
         .query_async(&mut conn)
         .await;
     Ok(count)
+}
+
+pub async fn get_trial_usage(state: &SharedState, org_id: &str) -> redis::RedisResult<i64> {
+    let mut conn = state.redis_conn_result()?;
+    let val: Option<String> = redis::cmd("GET").arg(format!("usage:{org_id}:trial")).query_async(&mut conn).await?;
+    Ok(val.and_then(|v| v.parse().ok()).unwrap_or(0))
 }
 
 pub async fn get_monthly_usage(state: &SharedState, org_id: &str) -> redis::RedisResult<i64> {
@@ -618,15 +638,19 @@ pub async fn check_org_write_permission(pg: &PgPool, user_id: i32, org_id: &str)
 }
 
 /// The one place every feature gate asks (`require_tier`). Self-host: the
-/// tier in `LICENSE_TOKEN` (Community without one). Cloud: still every
-/// feature until Cloud plans exist; its limits differ by plan, not features
-/// (`get_effective_limit`, the per-minute rate limit).
+/// tier in `LICENSE_TOKEN` (Community without one). Cloud: the org's plan,
+/// except that the free trial gets every feature (its limit is the
+/// one-time action allowance, `get_effective_limit`).
 #[allow(dead_code)]
-pub async fn effective_tier(state: &SharedState, _org_id: &str) -> agentraas_core::tier::Tier {
+pub async fn effective_tier(state: &SharedState, org_id: &str) -> agentraas_core::tier::Tier {
+    use agentraas_core::tier::Tier;
     if state.deployment_mode != "cloud" {
         return *state.license_tier.read().unwrap_or_else(|poisoned| poisoned.into_inner());
     }
-    agentraas_core::tier::Tier::Enterprise
+    match org_plan_tier(state, org_id).await.unwrap_or(Tier::Community) {
+        Tier::Community => Tier::Enterprise,
+        paid => paid,
+    }
 }
 
 /// Runtime replacement for `require_enterprise_mode` on features that

@@ -314,7 +314,7 @@ async fn usage(State(state): State<SharedState>, user: AuthUser) -> Result<Json<
     let mut total: i64 = 0;
     let mut limit: Option<i64> = if cloud { Some(0) } else { None };
     for org_id in &org_ids {
-        let count = get_monthly_usage(&state, org_id).await.unwrap_or(0);
+        let count = if cloud { crate::agent::db::get_limit_usage(&state, org_id).await? } else { get_monthly_usage(&state, org_id).await.unwrap_or(0) };
         total += count;
         if cloud {
             let org_limit = get_effective_limit(&state, org_id).await?;

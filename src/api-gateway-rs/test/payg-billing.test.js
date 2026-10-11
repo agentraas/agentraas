@@ -1,4 +1,4 @@
-// Pay-as-you-go Cloud billing (billing.rs). Needs a cloud-mode server:
+// Cloud billing (billing.rs): one-time trial, Team/Enterprise plans, overage. Needs a cloud-mode server:
 // DEPLOYMENT_MODE=cloud, and for the BILLING_ON cases also
 // BILLING_PAYG_ENABLED=true with no PADDLE_API_KEY (so the monthly job can
 // never reach Paddle: a due charge must end up "failed", not charged).
@@ -43,20 +43,22 @@ test.after(async () => {
   await pg.end();
 });
 
-test('usage endpoint, cap validation and the payg limit', { skip: CHARGE_CHECK }, async (t) => {
+test('usage endpoint, cap validation, trial and plan limits', { skip: CHARGE_CHECK }, async (t) => {
   const orgId = `org_payg_${RUN_ID}`;
   const cookie = await registerAndVerify(`payg-${RUN_ID}@internal.test`, 'validpassword123', orgId);
   const headers = { Cookie: cookie };
   const mode = (await client.get('/api/v1/auth/me', { headers })).data.user.deployment_mode;
   if (mode !== 'cloud') {
-    t.skip('pay as you go is Cloud only; self-hosted servers have no usage limit');
+    t.skip('Cloud billing only; self-hosted servers have no usage limit');
     return;
   }
 
   let u = await client.get(`/api/v1/billing/usage?org_id=${orgId}`, { headers });
   assert.equal(u.status, 200, JSON.stringify(u.data));
   assert.equal(u.data.enabled, BILLING_ON);
-  assert.equal(u.data.payg, false);
+  assert.equal(u.data.cloud, true);
+  assert.equal(u.data.plan, 'free');
+  assert.equal(u.data.trial_used, 0);
   assert.equal(u.data.monthly_cap_usd, 10);
 
   const other = await client.get('/api/v1/billing/usage?org_id=org_someone_else', { headers });
@@ -65,29 +67,51 @@ test('usage endpoint, cap validation and the payg limit', { skip: CHARGE_CHECK }
   assert.equal((await client.put('/api/v1/billing/usage', { org_id: orgId, monthly_cap_usd: 0 }, { headers })).status, 422);
   assert.equal((await client.put('/api/v1/billing/usage', { org_id: orgId, monthly_cap_usd: 3 }, { headers })).status, 200);
 
-  const checkout = await client.get('/api/v1/billing/checkout-info?plan=payg', { headers });
-  assert.equal(checkout.status, 503, 'billing off, or no Paddle keys locally: never a checkout');
+  assert.equal((await client.get('/api/v1/billing/checkout-info?plan=payg', { headers })).status, 422, 'payg is no longer a plan');
+  const checkout = await client.get('/api/v1/billing/checkout-info?plan=enterprise', { headers });
+  assert.equal(checkout.status, 503, 'no Paddle keys locally: never a checkout');
 
-  // Free account: the free allowance. Payg: free + what $3 buys.
+  // Free: the one-time trial. Team: what it includes + what $3 buys (3 x 500).
   let usage = await client.get('/api/v1/usage', { headers });
-  const free = usage.data.limit;
-  await pg.query("UPDATE users SET plan = 'payg' WHERE org_id = $1", [orgId]);
-  usage = await client.get('/api/v1/usage', { headers });
-  assert.equal(usage.data.limit, free + 3000);
-
+  assert.equal(usage.data.limit, u.data.trial_actions);
+  await pg.query("UPDATE users SET plan = 'team' WHERE org_id = $1", [orgId]);
   u = await client.get(`/api/v1/billing/usage?org_id=${orgId}`, { headers });
-  assert.equal(u.data.payg, true);
+  assert.equal(u.data.plan, 'team');
   assert.equal(u.data.estimated_cents, 0);
+  usage = await client.get('/api/v1/usage', { headers });
+  assert.equal(usage.data.limit, u.data.included_actions + 1500);
 
   const me = await client.get('/api/v1/auth/me', { headers });
-  assert.equal(me.data.user.plan, 'payg');
+  assert.equal(me.data.user.plan, 'team');
 });
 
-// Seeds two payg orgs with last month's actions: one under the free
-// allowance (skipped, nothing owed), one over it (a charge is due).
+// The trial is one-time: a free org stops with 402 once it is used up, and
+// a plan lifts it. Needs CLOUD_TRIAL_ACTIONS <= 5 on the server.
+test('free trial stops at its limit, a plan lifts it', { skip: CHARGE_CHECK }, async (t) => {
+  const orgId = `org_trial_${RUN_ID}`;
+  const agentId = 'agent_trial';
+  const cookie = await registerAndVerify(`trial-${RUN_ID}@internal.test`, 'validpassword123', orgId);
+  const headers = { Cookie: cookie };
+  const u = (await client.get(`/api/v1/billing/usage?org_id=${orgId}`, { headers })).data;
+  if (!u.cloud || u.trial_actions > 5) {
+    t.skip('needs a cloud-mode server with CLOUD_TRIAL_ACTIONS <= 5');
+    return;
+  }
+  const apiKey = (await client.post('/api/v1/agents/connect', { org_id: orgId, agent_id: agentId }, { headers })).data.api_key;
+  const call = (i) => client.post(`/v1/webhook/${orgId}/${agentId}`, { service: 'mockpay', action: 'payment.create', payload: { amount: i, fail: false } }, { headers: { Authorization: `Bearer ${apiKey}` } });
+  for (let i = 1; i <= u.trial_actions; i++) assert.equal((await call(i)).status, 200, `call ${i} is inside the trial`);
+  const over = await call(999);
+  assert.equal(over.status, 402, JSON.stringify(over.data));
+  assert.match(JSON.stringify(over.data), /trial is used up/);
+  await pg.query("UPDATE users SET plan = 'team' WHERE org_id = $1", [orgId]);
+  assert.equal((await call(1000)).status, 200, 'a Team plan has its own monthly volume');
+});
+
+// Seeds two Team orgs with last month's actions: one under what the plan
+// includes (skipped, nothing owed), one over it (an overage charge is due).
 test('seed last month for the charge job', { skip: !BILLING_ON || CHARGE_CHECK }, async () => {
   const { at } = lastMonth();
-  for (const [name, actions] of [['under', 300], ['over', 2600]]) {
+  for (const [name, actions] of [['under', 9000], ['over', 10600]]) {
     const orgId = `org_paygjob_${name}`;
     await pg.query('DELETE FROM billing_charges WHERE org_id = $1', [orgId]);
     await pg.query('DELETE FROM audit_log WHERE org_id = $1', [orgId]);
@@ -98,7 +122,7 @@ test('seed last month for the charge job', { skip: !BILLING_ON || CHARGE_CHECK }
       user = await pg.query('SELECT id FROM users WHERE email = $1', [email]);
     }
     const userId = user.rows[0].id;
-    await pg.query("UPDATE users SET plan = 'payg' WHERE id = $1", [userId]);
+    await pg.query("UPDATE users SET plan = 'team' WHERE id = $1", [userId]);
     await pg.query(
       `INSERT INTO subscriptions (user_id, paddle_subscription_id, paddle_customer_id, status)
        VALUES ($1, $2, 'ctm_test', 'active') ON CONFLICT (paddle_subscription_id) DO UPDATE SET status = 'active'`,
@@ -125,13 +149,13 @@ test('charge job: claims each month once, skips under a block, never charges wit
   const over = by.org_paygjob_over;
   const under = by.org_paygjob_under;
   assert.ok(over && under, `expected both rows, got ${JSON.stringify(rows.rows)}`);
-  assert.equal(Number(under.actions), 300);
+  assert.equal(Number(under.actions), 9000);
   assert.equal(under.status, 'skipped');
   assert.equal(Number(under.carried_out), 0);
-  // 2600 ran, 500 free: 2100 billable = 2 blocks ($2), 100 carried over.
-  assert.equal(Number(over.actions), 2600);
-  assert.equal(Number(over.blocks), 2);
-  assert.equal(Number(over.amount_cents), 200);
+  // 10,600 ran, Team includes 10,000: 600 over = 1 block of 500 ($1), 100 carried.
+  assert.equal(Number(over.actions), 10600);
+  assert.equal(Number(over.blocks), 1);
+  assert.equal(Number(over.amount_cents), 100);
   assert.equal(Number(over.carried_out), 100);
   assert.equal(over.status, 'failed');
   assert.match(over.error, /PADDLE_API_KEY/);

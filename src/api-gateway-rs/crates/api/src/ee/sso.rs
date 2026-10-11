@@ -136,6 +136,9 @@ async fn create_config(
     check_dashboard_rate_limit(&state, user.sub).await?;
     require_org_admin(&state, user.sub, &org_id).await?;
     require_enterprise_mode(&state)?;
+    // Configuring SSO is Team; logging in through an existing config is not
+    // gated, so a lapsed license never locks SSO-only users out.
+    require_tier(&state, &org_id, agentraas_core::tier::Tier::Team).await?;
     if let Some(err) = validate_sso_config_body(&body) {
         return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, err));
     }
@@ -171,6 +174,9 @@ async fn update_config(
     check_dashboard_rate_limit(&state, user.sub).await?;
     require_org_admin(&state, user.sub, &org_id).await?;
     require_enterprise_mode(&state)?;
+    // Configuring SSO is Team; logging in through an existing config is not
+    // gated, so a lapsed license never locks SSO-only users out.
+    require_tier(&state, &org_id, agentraas_core::tier::Tier::Team).await?;
 
     let existing_org_id: Option<String> = sqlx::query_scalar("SELECT org_id FROM sso_configs WHERE id = $1").bind(config_id).fetch_optional(&state.pg).await?;
     if existing_org_id.as_deref() != Some(org_id.as_str()) {

@@ -1,15 +1,15 @@
-//! Pay-as-you-go Cloud billing: $1 per 1,000 actions that ran, after the
-//! free monthly allowance (`CLOUD_MONTHLY_LIMIT`, 500), up to a monthly
-//! spend cap each org sets. Off unless `BILLING_PAYG_ENABLED=true` (and
-//! cloud mode): until then nobody can check out the `payg` plan and the
-//! charge loop never starts.
+//! Cloud billing. A free org gets a one-time trial (`CLOUD_TRIAL_ACTIONS`,
+//! 1,000, every feature). Team ($19/month) and Enterprise ($29/month) are
+//! Paddle subscriptions that include `TEAM_MONTHLY_LIMIT` /
+//! `ENTERPRISE_MONTHLY_LIMIT` actions a month; above that, $1 per 500
+//! actions, up to a monthly spend cap each org sets. The overage charge
+//! loop is off unless `BILLING_PAYG_ENABLED=true` (and cloud mode).
 //!
-//! Paddle has no metering: a `payg` customer subscribes to a $0/month
-//! price (`PADDLE_PAYG_PRICE_ID`) that saves their card, and once a month
-//! this file bills the previous month as a one-time charge on that
-//! subscription (`POST /subscriptions/{id}/charge`, effective immediately,
-//! a non-catalog $1 price on `PADDLE_PAYG_PRODUCT_ID`, quantity = blocks).
-//! Charged in whole 1,000-action blocks; the remainder carries over, so
+//! Paddle has no metering, so once a month this file bills the previous
+//! month's overage as a one-time charge on the org's subscription
+//! (`POST /subscriptions/{id}/charge`, effective immediately, a
+//! non-catalog $1 price on `PADDLE_PAYG_PRODUCT_ID`, quantity = blocks).
+//! Charged in whole 500-action blocks; the remainder carries over, so
 //! nobody gets a sub-dollar charge.
 //!
 //! "Actions that ran" = `audit_log` rows with status `success` (forwarded
@@ -28,8 +28,9 @@ use crate::agent::db::{check_org_write_permission, get_user_org_ids};
 use crate::auth::{check_dashboard_rate_limit, is_valid_identifier, AuthUser};
 use crate::state::{ApiError, SharedState};
 use crate::util::configured_env;
+use agentraas_core::tier::Tier;
 
-pub const BLOCK_ACTIONS: i64 = 1_000;
+pub const BLOCK_ACTIONS: i64 = 500;
 pub const BLOCK_PRICE_CENTS: i64 = 100;
 /// Cap for an org that never set one.
 pub const DEFAULT_CAP_USD: i64 = 10;
@@ -40,15 +41,24 @@ pub fn enabled(state: &SharedState) -> bool {
 }
 
 /// (blocks to charge, actions carried into next month).
-pub fn compute_charge(actions: i64, carried_in: i64, free: i64) -> (i64, i64) {
-    let billable = (actions - free).max(0) + carried_in.max(0);
+pub fn compute_charge(actions: i64, carried_in: i64, included: i64) -> (i64, i64) {
+    let billable = (actions - included).max(0) + carried_in.max(0);
     (billable / BLOCK_ACTIONS, billable % BLOCK_ACTIONS)
 }
 
-/// Actions allowed this month: the free allowance plus what the cap buys,
-/// less the remainder already owed from last month.
-pub fn monthly_limit(free: i64, cap_usd: i64, carried_in: i64) -> i64 {
-    (free + cap_usd * BLOCK_ACTIONS * 100 / BLOCK_PRICE_CENTS - carried_in).max(free)
+/// Actions allowed this month: what the plan includes plus what the cap
+/// buys, less the remainder already owed from last month.
+pub fn monthly_limit(included: i64, cap_usd: i64, carried_in: i64) -> i64 {
+    (included + cap_usd * BLOCK_ACTIONS * 100 / BLOCK_PRICE_CENTS - carried_in).max(included)
+}
+
+/// Actions a plan includes each month; `None` = the free one-time trial.
+pub fn included_actions(state: &SharedState, tier: Tier) -> Option<i64> {
+    match tier {
+        Tier::Community => None,
+        Tier::Team => Some(state.team_monthly_limit),
+        Tier::Enterprise => Some(state.enterprise_monthly_limit),
+    }
 }
 
 /// "YYYY-MM" for `months_back` months before the current UTC month.
@@ -64,11 +74,6 @@ fn month_key(months_back: u32) -> (String, chrono::DateTime<chrono::Utc>, chrono
     let (ny, nm) = if m == 12 { (y + 1, 1) } else { (y, m as u32 + 1) };
     let end = chrono::Utc.with_ymd_and_hms(ny, nm, 1, 0, 0, 0).unwrap();
     (format!("{y}-{m:02}"), start, end)
-}
-
-pub async fn is_payg_org(pg: &sqlx::PgPool, org_id: &str) -> Result<bool, sqlx::Error> {
-    let row: Option<i32> = sqlx::query_scalar("SELECT 1 FROM users WHERE org_id = $1 AND plan = 'payg' LIMIT 1").bind(org_id).fetch_optional(pg).await?;
-    Ok(row.is_some())
 }
 
 async fn cap_usd(pg: &sqlx::PgPool, org_id: &str) -> Result<i64, sqlx::Error> {
@@ -96,9 +101,9 @@ async fn actions_in(pg: &sqlx::PgPool, org_id: &str, months_back: u32) -> Result
         .await
 }
 
-/// The current month's action limit for a `payg` org (see `get_effective_limit`).
-pub async fn payg_limit(state: &SharedState, org_id: &str) -> Result<i64, sqlx::Error> {
-    Ok(monthly_limit(state.cloud_monthly_limit, cap_usd(&state.pg, org_id).await?, carried_into(&state.pg, org_id, 0).await?))
+/// The current month's action limit for a paid org (see `get_effective_limit`).
+pub async fn paid_limit(state: &SharedState, org_id: &str, included: i64) -> Result<i64, sqlx::Error> {
+    Ok(monthly_limit(included, cap_usd(&state.pg, org_id).await?, carried_into(&state.pg, org_id, 0).await?))
 }
 
 pub fn router() -> Router<SharedState> {
@@ -124,15 +129,20 @@ async fn get_usage(State(state): State<SharedState>, user: AuthUser, Query(q): Q
     check_dashboard_rate_limit(&state, user.sub).await?;
     member_org(&state, &user, &q.org_id).await?;
     let (month, _, _) = month_key(0);
+    let tier = crate::agent::db::org_plan_tier(&state, &q.org_id).await?;
+    let included = included_actions(&state, tier);
     let actions = actions_in(&state.pg, &q.org_id, 0).await?;
     let carried_in = carried_into(&state.pg, &q.org_id, 0).await?;
-    let (blocks, _) = compute_charge(actions, carried_in, state.cloud_monthly_limit);
+    let blocks = included.map(|inc| compute_charge(actions, carried_in, inc).0).unwrap_or(0);
     Ok(Json(json!({
         "enabled": enabled(&state),
-        "payg": is_payg_org(&state.pg, &q.org_id).await?,
+        "cloud": state.deployment_mode == "cloud",
+        "plan": tier.as_plan_str(),
         "month": month,
         "actions": actions,
-        "free_actions": state.cloud_monthly_limit,
+        "included_actions": included,
+        "trial_actions": state.cloud_trial_actions,
+        "trial_used": crate::agent::db::get_trial_usage(&state, &q.org_id).await.unwrap_or(0),
         "carried_in": carried_in,
         "monthly_cap_usd": cap_usd(&state.pg, &q.org_id).await?,
         "estimated_cents": blocks * BLOCK_PRICE_CENTS,
@@ -184,13 +194,13 @@ pub fn spawn_monthly_charge_loop(state: SharedState) {
 
 async fn charge_previous_month(state: &SharedState) -> Result<(), sqlx::Error> {
     let (month, _, _) = month_key(1);
-    // ponytail: one org per payg account (users.org_id); usage in other
+    // ponytail: one org per paid account (users.org_id); usage in other
     // orgs the user owns isn't billed. Usage in the month a subscription is
     // canceled isn't billed either (the webhook drops the plan to free).
-    let accounts: Vec<(String, String)> = sqlx::query_as(
-        "SELECT DISTINCT ON (u.org_id) u.org_id, s.paddle_subscription_id FROM users u
+    let accounts: Vec<(String, String, String)> = sqlx::query_as(
+        "SELECT DISTINCT ON (u.org_id) u.org_id, s.paddle_subscription_id, u.plan FROM users u
          JOIN subscriptions s ON s.user_id = u.id AND s.status IN ('active', 'trialing', 'past_due')
-         WHERE u.plan = 'payg' AND u.org_id IS NOT NULL
+         WHERE u.plan IN ('team', 'enterprise', 'pro', 'agency') AND u.org_id IS NOT NULL
            AND NOT EXISTS (SELECT 1 FROM billing_charges b WHERE b.org_id = u.org_id AND b.month = $1)
          ORDER BY u.org_id, s.updated_at DESC",
     )
@@ -198,10 +208,11 @@ async fn charge_previous_month(state: &SharedState) -> Result<(), sqlx::Error> {
     .fetch_all(&state.pg)
     .await?;
 
-    for (org_id, sub_id) in accounts {
+    for (org_id, sub_id, plan) in accounts {
+        let Some(included) = included_actions(state, Tier::from_plan_str(&plan)) else { continue };
         let actions = actions_in(&state.pg, &org_id, 1).await?;
         let carried_in = carried_into(&state.pg, &org_id, 1).await?;
-        let (blocks, carried_out) = compute_charge(actions, carried_in, state.cloud_monthly_limit);
+        let (blocks, carried_out) = compute_charge(actions, carried_in, included);
         let status = if blocks == 0 { "skipped" } else { "pending" };
         let claimed = sqlx::query(
             "INSERT INTO billing_charges (org_id, month, actions, carried_in, blocks, carried_out, amount_cents, status)
@@ -253,8 +264,8 @@ async fn paddle_charge(state: &SharedState, sub_id: &str, month: &str, blocks: i
         "items": [{
             "quantity": blocks,
             "price": {
-                "description": format!("AgentRaaS Cloud actions, {month} (per 1,000)"),
-                "name": "Actions (per 1,000)",
+                "description": format!("AgentRaaS Cloud actions over the plan, {month} (per 500)"),
+                "name": "Actions (per 500)",
                 "product_id": product_id,
                 "unit_price": { "amount": BLOCK_PRICE_CENTS.to_string(), "currency_code": "USD" },
             },
@@ -282,27 +293,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn free_allowance_is_never_billed() {
-        assert_eq!(compute_charge(0, 0, 500), (0, 0));
-        assert_eq!(compute_charge(500, 0, 500), (0, 0));
+    fn included_actions_are_never_billed() {
+        assert_eq!(compute_charge(0, 0, 10_000), (0, 0));
+        assert_eq!(compute_charge(10_000, 0, 10_000), (0, 0));
     }
 
     #[test]
-    fn bills_whole_blocks_and_carries_the_rest() {
-        assert_eq!(compute_charge(1_499, 0, 500), (0, 999));
-        assert_eq!(compute_charge(1_500, 0, 500), (1, 0));
-        assert_eq!(compute_charge(12_345, 0, 500), (11, 845));
-        assert_eq!(compute_charge(500, 999, 500), (0, 999));
-        assert_eq!(compute_charge(501, 999, 500), (1, 0));
+    fn bills_whole_500_blocks_and_carries_the_rest() {
+        assert_eq!(compute_charge(10_499, 0, 10_000), (0, 499));
+        assert_eq!(compute_charge(10_500, 0, 10_000), (1, 0));
+        assert_eq!(compute_charge(12_345, 0, 10_000), (4, 345));
+        assert_eq!(compute_charge(10_000, 499, 10_000), (0, 499));
+        assert_eq!(compute_charge(10_001, 499, 10_000), (1, 0));
     }
 
     #[test]
-    fn limit_is_free_plus_what_the_cap_buys() {
-        assert_eq!(monthly_limit(500, 10, 0), 10_500);
-        assert_eq!(monthly_limit(500, 10, 999), 9_501);
-        assert_eq!(monthly_limit(500, 1, 5_000), 500);
-        // At the limit, the bill is exactly the cap.
-        let (blocks, _) = compute_charge(monthly_limit(500, 10, 0), 0, 500);
+    fn limit_is_included_plus_what_the_cap_buys() {
+        // $10 cap buys 10 blocks of 500.
+        assert_eq!(monthly_limit(10_000, 10, 0), 15_000);
+        assert_eq!(monthly_limit(10_000, 10, 499), 14_501);
+        assert_eq!(monthly_limit(10_000, 1, 5_000), 10_000);
+        // At the limit, the overage bill is exactly the cap.
+        let (blocks, _) = compute_charge(monthly_limit(10_000, 10, 0), 0, 10_000);
         assert_eq!(blocks * BLOCK_PRICE_CENTS, 10 * 100);
     }
 

@@ -15,13 +15,42 @@ safe to re-run.
 
 ## [Unreleased]
 
+## [0.16.0] - unreleased
+
+No migration.
+
+### Breaking
+- **Self-hosted Team and Enterprise features need a license key again.**
+  Without `LICENSE_TOKEN` the server runs as the free Community edition:
+  no action limit, one dashboard seat, blocking spend caps and action
+  policies included; human approvals (HITL rules, and the "hold for
+  approval" action of spend caps and policies), semantic dedup, SSO
+  configuration and invites (Team) and agent identity, inbound webhooks,
+  white-label branding (Enterprise) answer 403. A Team ($19/month) or
+  Enterprise ($29/month) plan shows the key under Account in the dashboard.
+  A missing, invalid or expired key falls back to Community; the server
+  always starts.
+- **License.** From this release, `ee/`, `semantic_dedup.rs`, `dlp.rs`,
+  `hmac_verify.rs` and
+  `compose.ee.yaml` are under the AgentRaaS Enterprise License
+  (`LICENSE-EE.md`). 0.10.0 to 0.15.1 keep the licenses they shipped under.
+- **Cloud billing.** A free Cloud org gets 1,000 actions once (was 500 a
+  month), with every feature. Team includes 10,000 actions a month,
+  Enterprise 20,000; above that, $1 per 500 actions up to the org's monthly
+  cap. `CLOUD_MONTHLY_LIMIT` is replaced by `CLOUD_TRIAL_ACTIONS`;
+  `PADDLE_PAYG_PRICE_ID` is gone, `PADDLE_ENTERPRISE_PRICE_ID` is new.
+
 ### Added
 - Dashboard: **Monitor → Recordings** lists recordings, shows each call's
   payload and response, and deletes a recording.
+- Dashboard Account: Team/Enterprise checkout, trial usage, and the
+  self-hosted license key.
 
 ### Fixed
 - The homepage's PyPI version badge was blocked by the CSP since 0.12.0;
   `connect-src` now allows `https://pypi.org`.
+- The Paddle webhook set the plan from `custom_data`, which the buyer's
+  browser writes; it now uses the price actually paid.
 
 ## [0.15.1] - 2026-10-09
 

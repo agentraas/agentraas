@@ -52,10 +52,10 @@ cookie banner. To change your choice, clear this site's data in your
 browser and the banner asks again. Neither sees your credentials, agent
 traffic or audit log. Blocking them doesn't affect the product.
 
-**Billing (pay as you go):** payment is handled entirely by our payment
+**Billing:** payment is handled entirely by our payment
 processor, Paddle — we never see or store your card number. What we do
-store is whether pay as you go is on, your monthly cap, your monthly
-action counts and charges, and the customer/subscription identifiers
+store is your plan, your monthly overage cap, your action counts and
+charges, and the customer/subscription identifiers
 Paddle gives us, so we can bill the right usage. See
 [paddle.com/legal/privacy](https://www.paddle.com/legal/privacy) for
 how Paddle itself handles payment data.

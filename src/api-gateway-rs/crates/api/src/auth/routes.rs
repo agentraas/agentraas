@@ -544,10 +544,13 @@ async fn reset_password(
     Ok(Json(json!({ "reset": true })))
 }
 
-/// Self-host gets every feature (see `effective_tier`), so the dashboard is
-/// told Enterprise there whatever `users.plan` says.
+/// Self-host: the tier its license key unlocks ("free" without one), not
+/// `users.plan`. Cloud: the plan.
 fn shown_plan(state: &SharedState, plan: &str) -> String {
-    if state.deployment_mode != "cloud" { "enterprise".to_string() } else { plan.to_string() }
+    if state.deployment_mode != "cloud" {
+        return state.license_tier.read().unwrap_or_else(|poisoned| poisoned.into_inner()).as_plan_str().to_string();
+    }
+    plan.to_string()
 }
 
 // ─── GET /api/v1/auth/me ───

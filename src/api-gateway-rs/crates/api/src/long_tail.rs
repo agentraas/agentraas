@@ -311,11 +311,12 @@ async fn demo_reset(State(state): State<SharedState>, user: AuthUser) -> Result<
 }
 
 // ─── Paddle billing ───
-// Self-serve checkout for "team" and, once billing.rs is switched on,
-// "payg". Without the PADDLE_* settings both routes 503 "not configured".
-// Enterprise is contact-sales: `users.plan` is set to "enterprise" by hand
-// once a contract is signed. The webhook accepts camelCase and snake_case
-// field names (Paddle's SDKs and raw API differ).
+// Self-serve checkout for "team" ($19/month) and "enterprise" ($29/month);
+// overage above the plan is billed by billing.rs. Without the PADDLE_*
+// settings both routes 503 "not configured". The webhook sets the plan from
+// the price actually paid, never from custom_data (the buyer's browser
+// writes that). It accepts camelCase and snake_case field names (Paddle's
+// SDKs and raw API differ).
 
 #[derive(Deserialize)]
 struct CheckoutQuery {
@@ -327,10 +328,8 @@ async fn billing_checkout_info(State(state): State<SharedState>, user: AuthUser,
     let target_plan = q.plan.unwrap_or_else(|| "team".to_string());
     let price_id_env = match target_plan.as_str() {
         "team" => "PADDLE_TEAM_PRICE_ID",
-        // The $0/month price that saves the card; usage is charged by billing.rs.
-        "payg" if crate::billing::enabled(&state) => "PADDLE_PAYG_PRICE_ID",
-        "payg" => return Err(ApiError::new(StatusCode::SERVICE_UNAVAILABLE, "Pay as you go is not open yet.")),
-        other => return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, format!("plan must be \"team\" or \"payg\", got \"{other}\"."))),
+        "enterprise" => "PADDLE_ENTERPRISE_PRICE_ID",
+        other => return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, format!("plan must be \"team\" or \"enterprise\", got \"{other}\"."))),
     };
     let client_token = configured_env("PADDLE_CLIENT_TOKEN");
     let price_id = configured_env(price_id_env);
@@ -404,7 +403,14 @@ async fn paddle_webhook(State(state): State<SharedState>, headers: HeaderMap, ra
 
     let custom_data = sub.get("customData").or_else(|| sub.get("custom_data"));
     let user_id = custom_data.and_then(|c| c.get("user_id")).and_then(Value::as_i64);
-    let target_plan = custom_data.and_then(|c| c.get("plan")).and_then(Value::as_str).unwrap_or("team").to_string();
+    let paid_price = sub.pointer("/items/0/price/id").and_then(Value::as_str);
+    let target_plan = if paid_price.is_some() && paid_price == configured_env("PADDLE_ENTERPRISE_PRICE_ID").as_deref() {
+        "enterprise"
+    } else if paid_price.is_some() && paid_price == configured_env("PADDLE_TEAM_PRICE_ID").as_deref() {
+        "team"
+    } else {
+        "free"
+    };
 
     if ["subscription.created", "subscription.activated", "subscription.updated"].contains(&event_type.as_str()) {
         if let Some(user_id) = user_id {
@@ -430,7 +436,7 @@ async fn paddle_webhook(State(state): State<SharedState>, headers: HeaderMap, ra
             .execute(&state.pg)
             .await?;
 
-            let plan = if ["active", "trialing"].contains(&status.as_str()) { target_plan.as_str() } else { "free" };
+            let plan = if ["active", "trialing"].contains(&status.as_str()) { target_plan } else { "free" };
             sqlx::query("UPDATE users SET plan = $1 WHERE id = $2").bind(plan).bind(user_id).execute(&state.pg).await?;
         }
     } else if event_type == "subscription.canceled" && sub.is_object() {

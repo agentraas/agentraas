@@ -24,7 +24,7 @@ The rest of this guide explains each piece in more detail.
 |---|---|---|
 | Where it runs | Our servers | Your own server |
 | Setup | Register, log in, done | Register, download, run `install.sh` |
-| Monthly limit | 500 free each month, then pay as you go | None — unlimited, on any tier |
+| Limit | Free trial of 1,000 actions once, then Team ($19/month, 10,000 a month) or Enterprise ($29/month, 20,000 a month) | None: unlimited actions; Team/Enterprise features need a license key |
 | Good for | Trying it out, no infra to manage | Your own data residency, unlimited volume |
 
 You can do both — try it on Cloud first, and self-host later if you want

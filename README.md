@@ -7,7 +7,7 @@
 AgentRaaS sits between your agents and the APIs they act on. Every call runs
 once even when it is retried, is checked against what that agent may do,
 waits for a human when it is risky, and is recorded. Connect by webhook URL,
-SDK headers or MCP. Free to self-host with every feature.
+SDK headers or MCP. The core is open source and free to self-host.
 
 ## The problem
 
@@ -117,12 +117,18 @@ on one machine (Intel Core i3-12100, local stack, three runs of 500 calls) with
 
 ## Pricing
 
-Open source and free to self-host, with every feature, for any use inside
-your company, no action limit. AgentRaaS Cloud at agentraas.io runs it for
-you, pay as you go: every feature, the first 500 actions each month free,
-then $1 per 1,000 actions that run (duplicates, blocked calls and approval
-waits are never billed), up to a monthly cap you set. Paid usage opens soon;
-until then Cloud accounts get the free 500 a month. No plans or tiers.
+| | Community | Team | Enterprise |
+|---|---|---|---|
+| Price | Free | $19/month | $29/month |
+| Self-hosted | No action limit, one seat | License key, up to 3 seats | License key, unlimited seats |
+| Cloud | Free trial: 1,000 actions once, every feature | 10,000 actions a month | 20,000 actions a month |
+| Adds | Exactly-once execution, MCP gateway, dashboard, audit trail, DLQ, undo, record and replay, blocking spend caps and action policies, DLP redaction | Human approvals (also as the action of a spend cap or policy), semantic dedup, SSO | Agent identity, inbound webhooks, white-label branding |
+
+On Cloud, actions above what a plan includes cost $1 per 500, up to a
+monthly cap you set; duplicates, blocked calls and approval waits are never
+counted. A plan also gives you a self-hosted license key for the same tier
+(`LICENSE_TOKEN`). The core server is AGPL-3.0; the Team and Enterprise
+features are source-available (see [LICENSE.md](./LICENSE.md)).
 
 ## Testing
 

@@ -43,12 +43,13 @@
   let currentUserEmail = '';
   let currentUserOrgId = '';
   let currentPlanTier = 'free';
-  // Every account gets every feature (no plans or tiers; Cloud is priced by
-  // usage), so the console is the same for everyone. Only the label says
-  // which kind of account this is.
-  const ACCOUNT_LABELS = { free: 'Free Cloud', payg: 'Pay as you go' };
+  // The console shows every control; the server answers 403 for a feature
+  // the plan or license doesn't include. Only the label says which plan.
+  const ACCOUNT_LABELS = { free: 'Free trial', team: 'Team', enterprise: 'Enterprise' };
+  let isSelfHosted = false;
   function applyConsoleLayout(plan) {
-    document.getElementById('console-label').textContent = ACCOUNT_LABELS[plan] || 'Console';
+    const label = isSelfHosted && plan === 'free' ? 'Community' : ACCOUNT_LABELS[plan];
+    document.getElementById('console-label').textContent = label || 'Console';
     document.getElementById('hitl-rules-btn').style.display = '';
     const membersBtn = document.getElementById('enterprise-btn');
     membersBtn.style.display = '';
@@ -211,6 +212,7 @@
     currentUserOrgId = user.org_id;
     accountBtn.textContent = user.email;
     currentPlanTier = user.plan || 'free';
+    isSelfHosted = user.deployment_mode !== 'cloud';
     applyConsoleLayout(currentPlanTier);
     hasEverAuthenticated = true;
     sessionBanner.style.display = 'none';
@@ -2125,9 +2127,15 @@
   // does server-side.
   // textContent only, never innerHTML.
   const ACCOUNT_DESCRIPTIONS = {
-    free: 'Free Cloud account: every feature, 500 actions a month.',
-    payg: 'Pay as you go: every feature, $1 per 1,000 actions after 500 free each month.',
-    other: 'Every feature included.',
+    free: 'Free trial: every feature, 1,000 actions once.',
+    team: 'Team: $19/month, 10,000 actions a month, then $1 per 500.',
+    enterprise: 'Enterprise: $29/month, 20,000 actions a month, then $1 per 500.',
+    other: 'Cloud account.',
+  };
+  const SELF_HOSTED_DESCRIPTIONS = {
+    free: 'Self-hosted Community: the core, no action limit. Human approvals, SSO and the other Team/Enterprise features need a license key in LICENSE_TOKEN (Team $19/month, Enterprise $29/month at agentraas.io).',
+    team: 'Self-hosted Team license: no action limit.',
+    enterprise: 'Self-hosted Enterprise license: no action limit.',
   };
 
   async function loadBillingPlanState() {
@@ -2137,7 +2145,9 @@
       const res = await fetch('/api/v1/auth/me', { credentials: 'include' });
       const data = await res.json();
       const plan = data.user?.plan || 'free';
-      planEl.textContent = ACCOUNT_DESCRIPTIONS[plan] || ACCOUNT_DESCRIPTIONS.other;
+      planEl.textContent = data.user?.deployment_mode !== 'cloud'
+        ? SELF_HOSTED_DESCRIPTIONS[plan] || SELF_HOSTED_DESCRIPTIONS.free
+        : ACCOUNT_DESCRIPTIONS[plan] || ACCOUNT_DESCRIPTIONS.other;
       brandingSection.style.display = 'block';
     } catch (err) {
       planEl.textContent = 'Could not load plan status.';
@@ -2145,8 +2155,8 @@
     loadPaygState();
   }
 
-  // Shown only once billing.rs is switched on (BILLING_PAYG_ENABLED), or
-  // to an org already on pay as you go.
+  // Cloud only. Free orgs see the trial and the plan buttons; paid orgs
+  // see this month's usage, the overage cap and their self-hosted key.
   async function loadPaygState() {
     const section = document.getElementById('payg-section');
     section.style.display = 'none';
@@ -2155,19 +2165,40 @@
       const res = await fetch(`/api/v1/billing/usage?org_id=${encodeURIComponent(currentUserOrgId)}`, { credentials: 'include' });
       if (!res.ok) return;
       const u = await res.json();
-      if (!u.enabled && !u.payg) return;
+      if (!u.cloud) return;
+      const paid = u.plan !== 'free';
       section.style.display = 'block';
-      document.getElementById('payg-usage').textContent = u.payg
-        ? `${u.month}: ${u.actions} actions ran (${u.free_actions} free). So far: $${(u.estimated_cents / 100).toFixed(2)}. Cap: $${u.monthly_cap_usd}.`
-        : `${u.month}: ${u.actions} actions ran of ${u.free_actions} free.`;
-      document.getElementById('payg-start-btn').style.display = u.payg ? 'none' : 'flex';
-      document.getElementById('payg-cap-row').style.display = u.payg ? 'flex' : 'none';
+      document.getElementById('payg-usage').textContent = paid
+        ? `${u.month}: ${u.actions} actions ran (${u.included_actions} included). Overage so far: $${(u.estimated_cents / 100).toFixed(2)}. Cap: $${u.monthly_cap_usd}.`
+        : `Free trial: ${u.trial_used} of ${u.trial_actions} actions used.`;
+      document.getElementById('plan-buttons').style.display = paid ? 'none' : 'flex';
+      document.getElementById('payg-cap-row').style.display = paid ? 'flex' : 'none';
+      document.getElementById('license-row').style.display = paid ? 'block' : 'none';
       document.getElementById('payg-cap-input').value = u.monthly_cap_usd;
     } catch (err) {}
   }
 
-  document.getElementById('payg-start-btn').addEventListener('click', () => {
-    startCheckout('payg', document.getElementById('payg-start-btn'), document.getElementById('payg-error'));
+  document.getElementById('plan-team-btn').addEventListener('click', () => {
+    startCheckout('team', document.getElementById('plan-team-btn'), document.getElementById('payg-error'));
+  });
+  document.getElementById('plan-enterprise-btn').addEventListener('click', () => {
+    startCheckout('enterprise', document.getElementById('plan-enterprise-btn'), document.getElementById('payg-error'));
+  });
+
+  document.getElementById('license-show-btn').addEventListener('click', async () => {
+    const errorBox = document.getElementById('payg-error');
+    errorBox.style.display = 'none';
+    try {
+      const res = await fetch(`/api/v1/licensing/token?org_id=${encodeURIComponent(currentUserOrgId)}`, { credentials: 'include' });
+      const data = await res.json();
+      if (!res.ok || !data.token) { errorBox.textContent = data.error || 'No license key for this plan.'; errorBox.style.display = 'block'; return; }
+      const box = document.getElementById('license-token');
+      box.value = data.token;
+      box.style.display = 'block';
+      document.getElementById('license-note').style.display = 'block';
+    } catch (err) {
+      errorBox.textContent = 'Could not load the license key.'; errorBox.style.display = 'block';
+    }
   });
 
   document.getElementById('payg-cap-save').addEventListener('click', async () => {
@@ -2199,9 +2230,8 @@
     });
   }
 
-  // Shared checkout trigger - used by the header's quick-access button and
-  // the Account modal's Team button, so the logic lives in one place. Team
-  // is the only self-serve paid plan (Enterprise is sales-assisted).
+  // Shared checkout trigger for the Account modal's Team and Enterprise
+  // buttons.
   // errorBox is optional: pass an element to show errors inline, or omit
   // to fall back to alert() (used by the header button, which has no
   // nearby space for an inline error message).

@@ -41,7 +41,8 @@ pub struct AppState {
     pub agent_rate_limit_per_min: u32,
     pub team_rate_limit_per_min: u32,
     pub enterprise_rate_limit_per_min: u32,
-    pub cloud_monthly_limit: i64,
+    /// Actions a free Cloud org gets once, ever (`CLOUD_TRIAL_ACTIONS`).
+    pub cloud_trial_actions: i64,
     pub team_monthly_limit: i64,
     pub enterprise_monthly_limit: i64,
     pub enterprise_max_client_tenants: i64,

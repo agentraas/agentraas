@@ -34,21 +34,25 @@ breaking.
 - **Compliance with the license.** Usage beyond the free tiers described in
   [LICENSE.md](./LICENSE.md), or offering AgentRaaS as a competing hosted
   service, requires a separate commercial agreement.
-- **Pay as you go (AgentRaaS Cloud).** Every account gets every feature;
-  you pay only for usage: the first 500 actions that run each month are
-  free, then $1 per 1,000, billed monthly in whole thousands for the
-  month before. Actions caught as duplicates, blocked, or waiting for
-  approval are not billed. You set a monthly spending cap; calls stop at
-  it. Billing is handled by Paddle, our payment processor and merchant of
-  record; turning on pay as you go means you also agree to
+- **Plans.** A new AgentRaaS Cloud account gets a one-time free trial of
+  1,000 actions with every feature. Team ($19/month, 10,000 actions a
+  month) and Enterprise ($29/month, 20,000 actions a month) are monthly
+  subscriptions. On Cloud, actions above what your plan includes cost $1
+  per 500, billed monthly in whole blocks of 500 for the month before.
+  Actions caught as duplicates, blocked, or waiting for approval are not
+  counted. You set a monthly spending cap for overage; calls stop at it. A
+  plan includes a self-hosted license key for the same tier, valid while
+  the subscription is. Billing is handled by Paddle, our payment processor
+  and merchant of record; subscribing means you also agree to
   [Paddle's terms](https://www.paddle.com/legal/checkout-buyer-terms).
-  Self-hosting needs no payment: every feature is included.
+  The self-hosted Community edition needs no payment.
 
 <a id="refunds"></a>
 ## 3. Refunds and cancellation
 
-- **Stop anytime.** Turning pay as you go off stops future charges; usage
-  that already ran is billed in the next monthly charge.
+- **Stop anytime.** Canceling a plan stops future charges at the end of
+  the billing period; overage that already ran is billed in the next
+  monthly charge.
 - **First charge: full refund, no questions asked.** Email
   support@agentraas.io within 7 days of your first charge and we'll
   refund it in full.
