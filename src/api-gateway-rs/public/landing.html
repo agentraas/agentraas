@@ -611,9 +611,9 @@ agentraas-chaos: 6 write requests, 3 responses dropped after execution
         <div class="proof-cell"><div class="n accent">8</div><div class="l">concurrent identical requests fired</div></div>
         <div class="proof-cell"><div class="n">1</div><div class="l">executed for real</div></div>
         <div class="proof-cell"><div class="n">7</div><div class="l">caught as duplicates</div></div>
-        <div class="proof-cell"><div class="n">3.4<small>ms</small></div><div class="l">p50 added latency, self-hosted</div></div>
+        <div class="proof-cell"><div class="n">2.2<small>ms</small></div><div class="l">p50 added latency, self-hosted</div></div>
       </div>
-      <div class="proof-foot">Measured by the automated test suite, not estimated: clone the repo, start the stack and run <code>npm test</code> to reproduce.</div>
+      <div class="proof-foot">Measured, not estimated: the duplicate counts come from the automated test suite (<code>npm test</code>), the latency from <code>infra/scripts/bench-overhead.py</code>. Clone the repo and run both to reproduce.</div>
       <div class="verify">
         <span class="verify-label">Verify it yourself</span>
         <a href="https://github.com/sumedhchatse/agentraas/blob/main/src/api-gateway-rs/test/dedup.test.js" target="_blank" rel="noopener"><svg class="icon"><use href="#i-check"/></svg>The test behind these numbers</a>
@@ -666,7 +666,7 @@ agentraas-chaos: 6 write requests, 3 responses dropped after execution
 charge(<span class="c-str">"cus_1"</span>, 4200)  <span class="c-comment"># runs</span>
 charge(<span class="c-str">"cus_1"</span>, 4200)  <span class="c-comment"># cached, no second charge</span></pre>
         </div>
-        <p class="oss-note">Retries, concurrent duplicates and lost responses covered. Python today; TypeScript coming.</p>
+        <p class="oss-note">Retries, concurrent duplicates and lost responses covered. Python and TypeScript (<code>npm install agentraas</code>, <code>exactlyOnce</code>).</p>
       </div>
     </div>
     <div class="split" style="margin-top:28px;align-items:start">
@@ -823,14 +823,14 @@ charge(<span class="c-str">"cus_1"</span>, 4200)  <span class="c-comment"># cach
       <div class="card" style="padding:30px">
         <div class="ico"><svg class="icon"><use href="#i-gauge"/></svg></div>
         <h3>Measured, not marketing</h3>
-        <p>Added latency, self-hosted single node: 1,000 sequential requests against real Postgres and Redis, warm connection.</p>
+        <p>Added latency, self-hosted single node (Intel Core i3-12100, 8 GB RAM): 500 sequential calls per run, three runs, real Postgres and Redis.</p>
         <div class="latency">
-          <div><b>3.4ms</b><span>p50</span></div>
-          <div><b>4.2ms</b><span>p90</span></div>
-          <div><b>12.0ms</b><span>p99</span></div>
-          <div><b>14.3ms</b><span>p999</span></div>
+          <div><b>2.1-2.4ms</b><span>p50, forwarded</span></div>
+          <div><b>2.9-3.7ms</b><span>p95, forwarded</span></div>
+          <div><b>2.1-2.3ms</b><span>p50, duplicate</span></div>
+          <div><b>3.0-3.5ms</b><span>p95, duplicate</span></div>
         </div>
-        <p class="fine">That's the dedup check plus audit log, before the request leaves for the real API. Concurrent multi-client throughput numbers aren't published yet.</p>
+        <p class="fine">That's auth, the dedup claim, spend caps and the audit write, before the request leaves for the real API. A duplicate is answered from cache and never reaches it. Concurrent multi-client throughput numbers aren't published yet.</p>
       </div>
     </div>
   </div>
@@ -907,7 +907,7 @@ charge(<span class="c-str">"cus_1"</span>, 4200)  <span class="c-comment"># cach
           <li>Human-in-the-Loop approvals, action policies, spend caps</li>
           <li>OIDC SSO, RBAC, unlimited seats</li>
           <li>PII/DLP redaction, inbound webhook receivers, agent identity</li>
-          <li>Community support (GitHub &amp; Discord)</li>
+          <li>Community support on GitHub</li>
         </ul>
         <a href="https://github.com/sumedhchatse/agentraas" target="_blank" rel="noopener" class="btn primary" data-gtm-event="pricing_cta_click" data-gtm-label="community_clone_github">Clone on GitHub</a>
         <p class="aside">Try it without installing: <a href="/dashboard">start a free Cloud account →</a></p>
