@@ -1076,5 +1076,107 @@
         }
       }
     }
+  },
+  "jira": {
+    "baseUrl": "https://{site}.atlassian.net/rest/api/2",
+    "authType": "basic",
+    "contentType": "application/json",
+    "setup": {
+      "label": "Jira",
+      "category": "Support",
+      "username": "Atlassian account email",
+      "usernameHint": "The email you log in to Jira with",
+      "password": "API token",
+      "keyUrl": "https://id.atlassian.com/manage-profile/security/api-tokens",
+      "example": {
+        "action": "issue.create",
+        "payload": {
+          "site": "yourcompany",
+          "fields": {
+            "project": {
+              "key": "OPS"
+            },
+            "issuetype": {
+              "name": "Task"
+            },
+            "summary": "Refund failed for order 1042",
+            "description": "The agent's refund call returned a card_declined error."
+          }
+        }
+      }
+    },
+    "actions": {
+      "issue.create": {
+        "method": "POST",
+        "path": "/issue",
+        "validation": {
+          "site": {
+            "type": "string",
+            "required": true
+          },
+          "fields": {
+            "type": "object",
+            "required": true
+          }
+        },
+        "undo": {
+          "action": "issue.delete",
+          "with": {
+            "site": "payload.site",
+            "issueKey": "response.key"
+          }
+        }
+      },
+      "issue.comment": {
+        "method": "POST",
+        "path": "/issue/{issueKey}/comment",
+        "validation": {
+          "site": {
+            "type": "string",
+            "required": true
+          },
+          "issueKey": {
+            "type": "string",
+            "required": true
+          },
+          "body": {
+            "type": "string",
+            "required": true
+          }
+        }
+      },
+      "issue.transition": {
+        "method": "POST",
+        "path": "/issue/{issueKey}/transitions",
+        "validation": {
+          "site": {
+            "type": "string",
+            "required": true
+          },
+          "issueKey": {
+            "type": "string",
+            "required": true
+          },
+          "transition": {
+            "type": "object",
+            "required": true
+          }
+        }
+      },
+      "issue.delete": {
+        "method": "DELETE",
+        "path": "/issue/{issueKey}",
+        "validation": {
+          "site": {
+            "type": "string",
+            "required": true
+          },
+          "issueKey": {
+            "type": "string",
+            "required": true
+          }
+        }
+      }
+    }
   }
 }

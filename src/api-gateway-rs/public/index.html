@@ -1088,7 +1088,7 @@
 <div class="modal-overlay" id="nw-modal-overlay">
   <div class="modal" role="dialog" aria-modal="true" aria-label="Outage alerts">
     <h3>Instant outage alerts</h3>
-    <p class="sub">Get pinged in Slack, Discord, or Telegram the moment AgentRaaS's circuit breaker shields your org from an unresponsive service — rate-limited to one alert per service per minute, so a burst of blocked requests doesn't spam you.</p>
+    <p class="sub">Get pinged in Slack, Discord or Telegram, or get a Jira ticket, when a service your agents use stops answering, its response shape changes, or a call may have run without an answer back. Chat alerts come at most once a minute per service; Jira opens at most one ticket per alert per day.</p>
     <div class="modal-error" id="nw-error"></div>
     <form id="nw-form">
       <div class="field"><label for="nw-org">Org ID</label><input type="text" id="nw-org" placeholder="org_acme" required></div>
@@ -1097,10 +1097,17 @@
           <option value="slack">Slack (incoming webhook)</option>
           <option value="discord">Discord (webhook URL)</option>
           <option value="telegram">Telegram (bot)</option>
+          <option value="jira">Jira (create a ticket)</option>
         </select>
       </div>
       <div class="field"><label for="nw-target" id="nw-target-label">Webhook URL</label><input type="text" id="nw-target" placeholder="https://hooks.slack.com/services/..." required></div>
       <div class="field" id="nw-chatid-field" style="display:none;"><label for="nw-chatid">Chat ID</label><input type="text" id="nw-chatid" placeholder="-1001234567890"></div>
+      <div id="nw-jira-fields" style="display:none;">
+        <div class="field"><label for="nw-jira-site">Jira site</label><input type="text" id="nw-jira-site" placeholder="yourcompany (from yourcompany.atlassian.net)"></div>
+        <div class="field"><label for="nw-jira-email">Atlassian account email</label><input type="email" id="nw-jira-email" placeholder="you@company.com"></div>
+        <div class="field"><label for="nw-jira-project">Project key</label><input type="text" id="nw-jira-project" placeholder="OPS"></div>
+        <div class="field"><label for="nw-jira-issuetype">Issue type</label><input type="text" id="nw-jira-issuetype" placeholder="Task"></div>
+      </div>
       <button type="submit" class="primary" id="nw-submit">Save</button>
     </form>
     <h3 style="margin-top:26px;">Configured alerts</h3>

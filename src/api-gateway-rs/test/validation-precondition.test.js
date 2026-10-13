@@ -38,6 +38,12 @@ test('maxField rejects a payload where the field exceeds the referenced field, a
   const overBalance = await client.post(`/v1/webhook/${orgId}/${agentId}`, { service: 'mockpay', action: 'payment.create', payload: { amount: 500, balance: 100, fail: false } }, { headers: { Authorization: `Bearer ${apiKey}` } });
   assert.equal(overBalance.status, 422, JSON.stringify(overBalance.data));
   assert.match(overBalance.data.error, /amount.*balance/);
+  // Every failing field comes back with a fix the agent can apply.
+  assert.equal(overBalance.data.validation_errors.length, 1);
+  assert.equal(overBalance.data.validation_errors[0].field, 'amount');
+  assert.equal(overBalance.data.validation_errors[0].rule, 'maxField');
+  assert.match(overBalance.data.validation_errors[0].hint, /100 or less/);
+  assert.match(overBalance.data.next_step, /Nothing was sent/);
 
   const withinBalance = await client.post(`/v1/webhook/${orgId}/${agentId}`, { service: 'mockpay', action: 'payment.create', payload: { amount: 50, balance: 100, fail: false } }, { headers: { Authorization: `Bearer ${apiKey}` } });
   assert.equal(withinBalance.status, 200, JSON.stringify(withinBalance.data));

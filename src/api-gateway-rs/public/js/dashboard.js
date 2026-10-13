@@ -1867,9 +1867,11 @@
 
   function updateNwFieldVisibility() {
     const isTelegram = nwType.value === 'telegram';
+    const isJira = nwType.value === 'jira';
     document.getElementById('nw-chatid-field').style.display = isTelegram ? 'block' : 'none';
-    document.getElementById('nw-target-label').textContent = isTelegram ? 'Bot token' : 'Webhook URL';
-    document.getElementById('nw-target').placeholder = isTelegram ? '123456:ABC-DEF...' : 'https://hooks.slack.com/services/...';
+    document.getElementById('nw-jira-fields').style.display = isJira ? 'block' : 'none';
+    document.getElementById('nw-target-label').textContent = isTelegram ? 'Bot token' : isJira ? 'Jira API token (id.atlassian.com, Security, API tokens)' : 'Webhook URL';
+    document.getElementById('nw-target').placeholder = isTelegram ? '123456:ABC-DEF...' : isJira ? 'ATATT3x...' : 'https://hooks.slack.com/services/...';
   }
   nwType.addEventListener('change', updateNwFieldVisibility);
 
@@ -1889,10 +1891,16 @@
     const type = nwType.value;
     const target = document.getElementById('nw-target').value.trim();
     const chat_id = document.getElementById('nw-chatid').value.trim();
+    const jira = type === 'jira' ? {
+      site: document.getElementById('nw-jira-site').value.trim(),
+      email: document.getElementById('nw-jira-email').value.trim(),
+      project_key: document.getElementById('nw-jira-project').value.trim(),
+      issue_type: document.getElementById('nw-jira-issuetype').value.trim() || undefined,
+    } : {};
     try {
       const res = await fetch('/api/v1/notification-webhooks', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-        body: JSON.stringify({ org_id, type, target, chat_id: chat_id || undefined }),
+        body: JSON.stringify({ org_id, type, target, chat_id: chat_id || undefined, ...jira }),
       });
       const data = await res.json();
       if (!res.ok) { nwError.textContent = data.error || 'Could not save.'; nwError.style.display = 'block'; return; }

@@ -11,7 +11,7 @@ SDK headers or MCP. The core is open source and free to self-host.
 
 Look first: [live read-only demo](https://agentraas.io/api/v1/demo/session),
 no signup. Built-in services include Stripe, Slack, GitHub, HubSpot, Resend,
-SendGrid, Notion, Zendesk, Twilio and Shopify; any other HTTP API works as a
+SendGrid, Notion, Zendesk, Jira, Twilio and Shopify; any other HTTP API works as a
 Custom Action and any MCP tool through `agentraas wrap`.
 
 ## The problem

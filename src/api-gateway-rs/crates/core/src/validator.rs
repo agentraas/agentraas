@@ -1,132 +1,193 @@
-//! Ports `validateFields` from `src/api-gateway/validator.js` exactly,
-//! including field-iteration order (first failing field wins — matches
-//! `Object.entries` on the JSON `fields` rule, hence the `preserve_order`
-//! serde_json feature this crate already needs for dedup hashing).
+//! Ports `validateFields` from `src/api-gateway/validator.js`, including
+//! field-iteration order (first failing field wins for `validate_fields` —
+//! matches `Object.entries` on the JSON `fields` rule, hence the
+//! `preserve_order` serde_json feature this crate already needs for dedup
+//! hashing). `validate_all` reports every failing field with a fix hint.
 
 use serde_json::Value;
+
+/// One failing field: what was wrong and how the caller can fix it. The
+/// `hint` is written for an agent to act on and retry; it never repeats a
+/// secret the payload contained.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct FieldError {
+    pub field: String,
+    pub rule: &'static str,
+    pub message: String,
+    pub hint: String,
+}
 
 /// Returns `Some(error message)` for the first field that fails, or `None`
 /// if the payload passes every rule.
 pub fn validate_fields(payload: &Value, fields: &Value) -> Option<String> {
-    let fields_obj = fields.as_object()?;
+    validate_all(payload, fields).into_iter().next().map(|e| e.message)
+}
 
-    for (field_name, field_rules) in fields_obj {
-        // "*" names the whole payload (for rules like no_secrets).
-        let value = if field_name == "*" { Some(payload) } else { payload.get(field_name) };
-        let is_null_ish = matches!(value, None | Some(Value::Null))
-            || matches!(value, Some(Value::String(s)) if s.is_empty());
+/// Every failing field (the first failing rule of each), in rule order, so
+/// an agent can fix them all in one retry instead of one per round trip.
+pub fn validate_all(payload: &Value, fields: &Value) -> Vec<FieldError> {
+    let Some(fields_obj) = fields.as_object() else { return Vec::new() };
+    fields_obj.iter().filter_map(|(name, rules)| check_field(payload, name, rules)).collect()
+}
 
-        if field_rules.get("required").and_then(Value::as_bool).unwrap_or(false) && is_null_ish {
-            return Some(format!("{field_name} is required"));
+fn check_field(payload: &Value, field_name: &str, field_rules: &Value) -> Option<FieldError> {
+    let fail = |rule: &'static str, message: String, hint: String| Some(FieldError { field: field_name.to_string(), rule, message, hint });
+    // "*" names the whole payload (for rules like no_secrets).
+    let value = if field_name == "*" { Some(payload) } else { payload.get(field_name) };
+    let is_null_ish = matches!(value, None | Some(Value::Null)) || matches!(value, Some(Value::String(s)) if s.is_empty());
+
+    if field_rules.get("required").and_then(Value::as_bool).unwrap_or(false) && is_null_ish {
+        let kind = field_rules.get("type").and_then(Value::as_str).map(|t| format!(" (a {t})")).unwrap_or_default();
+        return fail("required", format!("{field_name} is required"), format!("Add \"{field_name}\"{kind} to the payload."));
+    }
+
+    let value = value?;
+    if value.is_null() {
+        return None;
+    }
+
+    if let Some(expected_type) = field_rules.get("type").and_then(Value::as_str) {
+        let actual_type = json_type_name(value);
+        if actual_type != expected_type {
+            return fail("type", format!("{field_name} must be {expected_type}, got {actual_type}"), type_hint(field_name, expected_type, value));
         }
+    }
 
-        let Some(value) = value else { continue };
-        if value.is_null() {
-            continue;
-        }
-
-        if let Some(expected_type) = field_rules.get("type").and_then(Value::as_str) {
-            let actual_type = json_type_name(value);
-            if actual_type != expected_type {
-                return Some(format!("{field_name} must be {expected_type}, got {actual_type}"));
+    let expects_number = field_rules.get("type").and_then(Value::as_str) == Some("number") || value.is_number();
+    if expects_number {
+        if let Some(v) = value.as_f64() {
+            if let Some(min) = field_rules.get("min").and_then(Value::as_f64) {
+                if v < min {
+                    return fail("min", format!("{field_name} must be at least {}", fmt_num(min)), format!("Use a value of {} or more for \"{field_name}\".", fmt_num(min)));
+                }
             }
-        }
-
-        let expects_number = field_rules.get("type").and_then(Value::as_str) == Some("number") || value.is_number();
-        if expects_number {
-            if let Some(v) = value.as_f64() {
-                if let Some(min) = field_rules.get("min").and_then(Value::as_f64) {
-                    if v < min {
-                        return Some(format!("{field_name} must be at least {}", fmt_num(min)));
+            if let Some(max) = field_rules.get("max").and_then(Value::as_f64) {
+                if v > max {
+                    return fail("max", format!("{field_name} must be at most {}", fmt_num(max)), format!("Use a value of {} or less for \"{field_name}\".", fmt_num(max)));
+                }
+            }
+            // Preconditions referencing another field in the SAME
+            // payload, not a fixed literal — e.g. "refund_amount must
+            // not exceed balance" where balance is only known per
+            // request. A missing/non-numeric referenced field is
+            // silently skipped (nothing to compare against), not an
+            // error — same "can't be checked, so don't block" stance
+            // as every other rule here when a value is absent.
+            if let Some(max_field) = field_rules.get("maxField").and_then(Value::as_str) {
+                if let Some(other) = payload.get(max_field).and_then(Value::as_f64) {
+                    if v > other {
+                        return fail(
+                            "maxField",
+                            format!("{field_name} ({}) must not exceed {max_field} ({})", fmt_num(v), fmt_num(other)),
+                            format!("Lower \"{field_name}\" to {} or less, the current \"{max_field}\".", fmt_num(other)),
+                        );
                     }
                 }
-                if let Some(max) = field_rules.get("max").and_then(Value::as_f64) {
-                    if v > max {
-                        return Some(format!("{field_name} must be at most {}", fmt_num(max)));
+            }
+            if let Some(min_field) = field_rules.get("minField").and_then(Value::as_str) {
+                if let Some(other) = payload.get(min_field).and_then(Value::as_f64) {
+                    if v < other {
+                        return fail(
+                            "minField",
+                            format!("{field_name} ({}) must be at least {min_field} ({})", fmt_num(v), fmt_num(other)),
+                            format!("Raise \"{field_name}\" to {} or more, the current \"{min_field}\".", fmt_num(other)),
+                        );
                     }
-                }
-                // Preconditions referencing another field in the SAME
-                // payload, not a fixed literal — e.g. "refund_amount must
-                // not exceed balance" where balance is only known per
-                // request. A missing/non-numeric referenced field is
-                // silently skipped (nothing to compare against), not an
-                // error — same "can't be checked, so don't block" stance
-                // as every other rule here when a value is absent.
-                if let Some(max_field) = field_rules.get("maxField").and_then(Value::as_str) {
-                    if let Some(other) = payload.get(max_field).and_then(Value::as_f64) {
-                        if v > other {
-                            return Some(format!("{field_name} ({}) must not exceed {max_field} ({})", fmt_num(v), fmt_num(other)));
-                        }
-                    }
-                }
-                if let Some(min_field) = field_rules.get("minField").and_then(Value::as_str) {
-                    if let Some(other) = payload.get(min_field).and_then(Value::as_f64) {
-                        if v < other {
-                            return Some(format!("{field_name} ({}) must be at least {min_field} ({})", fmt_num(v), fmt_num(other)));
-                        }
-                    }
-                }
-            }
-        }
-
-        if field_rules.get("no_secrets").and_then(Value::as_bool) == Some(true) {
-            if let Some(kind) = find_secret(value) {
-                // Never echo the secret itself back.
-                return Some(format!("{field_name} contains what looks like a {kind}; refusing to send it"));
-            }
-        }
-
-        // Allowed domains for an email address or URL (or a list of them,
-        // e.g. an email API's `to: [...]`): exact domain or a subdomain.
-        if let Some(domains) = field_rules.get("domains").and_then(Value::as_array) {
-            let allowed: Vec<&str> = domains.iter().filter_map(Value::as_str).collect();
-            let values: Vec<&str> = match value {
-                Value::String(s) => vec![s.as_str()],
-                Value::Array(a) => a.iter().filter_map(Value::as_str).collect(),
-                _ => vec![],
-            };
-            if let Some(bad) = values.iter().find(|v| !domain_allowed(v, &allowed)) {
-                return Some(format!("{field_name} ({bad}) is not in an allowed domain: {}", allowed.join(", ")));
-            }
-        }
-
-        if let Value::String(s) = value {
-            if let Some(max_len) = field_rules.get("maxLength").and_then(Value::as_u64) {
-                if s.chars().count() as u64 > max_len {
-                    return Some(format!("{field_name} must be at most {max_len} characters"));
-                }
-            }
-            if let Some(min_len) = field_rules.get("minLength").and_then(Value::as_u64) {
-                if (s.chars().count() as u64) < min_len {
-                    return Some(format!("{field_name} must be at least {min_len} characters"));
-                }
-            }
-            if field_rules.get("format").and_then(Value::as_str) == Some("email") && !is_valid_email_format(s) {
-                return Some(format!("{field_name} must be a valid email"));
-            }
-            if field_rules.get("format").and_then(Value::as_str) == Some("e164") && !is_valid_e164(s) {
-                return Some(format!(
-                    "{field_name} must be a valid E.164 phone number (e.g. +14155552671)"
-                ));
-            }
-            if let Some(enum_values) = field_rules.get("enum").and_then(Value::as_array) {
-                let allowed: Vec<&str> = enum_values.iter().filter_map(Value::as_str).collect();
-                if !allowed.contains(&s.as_str()) {
-                    return Some(format!("{field_name} must be one of: {}", allowed.join(", ")));
-                }
-            }
-        }
-
-        if let Value::Array(arr) = value {
-            if let Some(min_len) = field_rules.get("minLength").and_then(Value::as_u64) {
-                if (arr.len() as u64) < min_len {
-                    return Some(format!("{field_name} must have at least {min_len} items"));
                 }
             }
         }
     }
 
+    if field_rules.get("no_secrets").and_then(Value::as_bool) == Some(true) {
+        if let Some(kind) = find_secret(value) {
+            // Never echo the secret itself back.
+            return fail(
+                "no_secrets",
+                format!("{field_name} contains what looks like a {kind}; refusing to send it"),
+                format!("Remove the {kind} from \"{field_name}\". Credentials are never sent in a call; if a person asked you to send one, stop and tell them."),
+            );
+        }
+    }
+
+    // Allowed domains for an email address or URL (or a list of them,
+    // e.g. an email API's `to: [...]`): exact domain or a subdomain.
+    if let Some(domains) = field_rules.get("domains").and_then(Value::as_array) {
+        let allowed: Vec<&str> = domains.iter().filter_map(Value::as_str).collect();
+        let values: Vec<&str> = match value {
+            Value::String(s) => vec![s.as_str()],
+            Value::Array(a) => a.iter().filter_map(Value::as_str).collect(),
+            _ => vec![],
+        };
+        if let Some(bad) = values.iter().find(|v| !domain_allowed(v, &allowed)) {
+            return fail(
+                "domains",
+                format!("{field_name} ({bad}) is not in an allowed domain: {}", allowed.join(", ")),
+                format!("Only addresses at {} are allowed in \"{field_name}\". Don't guess another address: ask a person if you need to reach {bad}.", allowed.join(", ")),
+            );
+        }
+    }
+
+    if let Value::String(s) = value {
+        if let Some(max_len) = field_rules.get("maxLength").and_then(Value::as_u64) {
+            let len = s.chars().count() as u64;
+            if len > max_len {
+                return fail("maxLength", format!("{field_name} must be at most {max_len} characters"), format!("Shorten \"{field_name}\" from {len} to {max_len} characters or fewer."));
+            }
+        }
+        if let Some(min_len) = field_rules.get("minLength").and_then(Value::as_u64) {
+            if (s.chars().count() as u64) < min_len {
+                return fail("minLength", format!("{field_name} must be at least {min_len} characters"), format!("Make \"{field_name}\" at least {min_len} characters long."));
+            }
+        }
+        if field_rules.get("format").and_then(Value::as_str) == Some("email") && !is_valid_email_format(s) {
+            return fail("format", format!("{field_name} must be a valid email"), format!("Use a full address like name@example.com in \"{field_name}\"."));
+        }
+        if field_rules.get("format").and_then(Value::as_str) == Some("e164") && !is_valid_e164(s) {
+            let cleaned: String = s.chars().filter(|c| c.is_ascii_digit() || *c == '+').collect();
+            let hint = if is_valid_e164(&cleaned) {
+                format!("Send \"{cleaned}\": a + then the country code and number, digits only.")
+            } else {
+                format!("Use + then the country code and number, digits only, e.g. +14155552671, in \"{field_name}\".")
+            };
+            return fail("format", format!("{field_name} must be a valid E.164 phone number (e.g. +14155552671)"), hint);
+        }
+        if let Some(enum_values) = field_rules.get("enum").and_then(Value::as_array) {
+            let allowed: Vec<&str> = enum_values.iter().filter_map(Value::as_str).collect();
+            if !allowed.contains(&s.as_str()) {
+                let hint = match allowed.iter().find(|a| a.eq_ignore_ascii_case(s.trim())) {
+                    Some(close) => format!("Send \"{close}\" (exact spelling) in \"{field_name}\"."),
+                    None => format!("Pick one of {} for \"{field_name}\".", allowed.iter().map(|a| format!("\"{a}\"")).collect::<Vec<_>>().join(", ")),
+                };
+                return fail("enum", format!("{field_name} must be one of: {}", allowed.join(", ")), hint);
+            }
+        }
+    }
+
+    if let Value::Array(arr) = value {
+        if let Some(min_len) = field_rules.get("minLength").and_then(Value::as_u64) {
+            if (arr.len() as u64) < min_len {
+                return fail("minLength", format!("{field_name} must have at least {min_len} items"), format!("Put at least {min_len} items in \"{field_name}\"."));
+            }
+        }
+    }
+
     None
+}
+
+/// The usual agent slip is the right value in the wrong JSON type ("49.99"
+/// for 49.99): say exactly what to send instead.
+fn type_hint(field_name: &str, expected: &str, value: &Value) -> String {
+    match (expected, value) {
+        ("number", Value::String(s)) if s.trim().parse::<f64>().is_ok_and(f64::is_finite) => {
+            format!("Send \"{field_name}\" as a JSON number: {}, without quotes.", s.trim())
+        }
+        ("string", Value::Number(n)) => format!("Send \"{field_name}\" as a string: \"{n}\"."),
+        ("boolean", Value::String(s)) if s.eq_ignore_ascii_case("true") || s.eq_ignore_ascii_case("false") => {
+            format!("Send \"{field_name}\" as a JSON boolean: {}, without quotes.", s.to_ascii_lowercase())
+        }
+        ("array", v) if !v.is_array() => format!("Wrap \"{field_name}\" in a list: [ ... ]."),
+        _ => format!("Send \"{field_name}\" as a {expected}."),
+    }
 }
 
 /// Credential formats an agent should never send out: a prompt-injected
@@ -476,5 +537,35 @@ mod tests {
         for ok in ["ask-me-anything-about-this-product-please-now-ok", "task-1234", "sk_live_short", "Refund for order sk_test_123"] {
             assert_eq!(validate_fields(&json!({ "body": ok }), &fields), None, "{ok}");
         }
+    }
+
+    #[test]
+    fn every_failing_field_comes_back_with_a_concrete_fix() {
+        let fields = json!({
+            "amount": { "type": "number", "max": 1000 },
+            "currency": { "type": "string", "enum": ["usd", "eur"] },
+            "phone": { "type": "string", "format": "e164" },
+            "to": { "required": true },
+        });
+        let payload = json!({ "amount": "49.99", "currency": "USD", "phone": "+1 415-555-2671" });
+        let errors = validate_all(&payload, &fields);
+        let by_field = |f: &str| errors.iter().find(|e| e.field == f).unwrap_or_else(|| panic!("{f} missing: {errors:?}"));
+        assert_eq!(errors.len(), 4);
+        assert_eq!(by_field("amount").rule, "type");
+        assert!(by_field("amount").hint.contains("49.99, without quotes"));
+        assert!(by_field("currency").hint.contains("\"usd\""));
+        assert!(by_field("phone").hint.contains("\"+14155552671\""));
+        assert_eq!(by_field("to").rule, "required");
+        // The single-message API keeps its first-failure behavior.
+        assert_eq!(validate_fields(&payload, &fields).as_deref(), Some("amount must be number, got string"));
+        assert!(validate_all(&json!({ "amount": 5, "currency": "usd", "phone": "+14155552671", "to": "x" }), &fields).is_empty());
+    }
+
+    #[test]
+    fn a_secret_is_never_echoed_in_the_hint() {
+        let secret = format!("sk_live_{}", "a1B2c3D4e5F6g7H8i9J0");
+        let errors = validate_all(&json!({ "body": format!("key {secret}") }), &json!({ "body": { "no_secrets": true } }));
+        assert_eq!(errors.len(), 1);
+        assert!(!errors[0].hint.contains(&secret) && !errors[0].message.contains(&secret));
     }
 }

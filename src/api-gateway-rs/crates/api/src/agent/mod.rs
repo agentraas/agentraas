@@ -732,10 +732,21 @@ async fn handle_request_inner(
     }
 
     if let Ok(Some(rule)) = get_effective_validation_rule(state, &org_id, &service, &action).await {
-        if let Some(validation_error) = agentraas_core::validator::validate_fields(&payload, &rule.fields) {
+        let errors = agentraas_core::validator::validate_all(&payload, &rule.fields);
+        if let Some(first) = errors.first() {
             let _ = dedup::release_dedup_slot(&mut conn, &claim.key).await;
             log_audit(&state.pg, &req_id, &api_key, &org_id, &agent_id, &service, &action, "blocked", Some("validation_failed"), start.elapsed().as_millis() as i64, Some(&dedup_hash), false, None, run_id.as_deref(), step_id.as_deref(), end_user_id.as_deref()).await;
-            return err_response(StatusCode::UNPROCESSABLE_ENTITY, &req_id, validation_error);
+            // Every failing field with its fix, so an agent (an MCP caller
+            // sees this as an error tool result) corrects all of them at once.
+            return Response::Json(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(json!({
+                    "error": first.message,
+                    "reqId": req_id,
+                    "validation_errors": errors,
+                    "next_step": "Nothing was sent. Fix every field listed in validation_errors, following each hint, and send the call again.",
+                })),
+            );
         }
     }
 
@@ -1085,6 +1096,7 @@ pub(crate) async fn settle_stale_claim(
         tracing::warn!(req_id = original_req_id, "stale in-flight claim taken over as outcome unknown");
         let message = format!("{OUTCOME_UNKNOWN_DLQ_PREFIX}the server stopped while this call was in flight");
         db::write_dead_letter_queue(state, original_req_id, org_id, agent_id, service, action, payload, &message, Some(dedup_hash)).await;
+        crate::notifications::spawn_outcome_unknown(state, org_id, service, action);
     }
 }
 
@@ -1138,6 +1150,7 @@ async fn forward_error_response(
         db::write_dead_letter_queue(state, req_id, org_id, agent_id, service, action, payload, &dlq_message, dedup_hash).await;
     }
     if err.outcome_unknown {
+        crate::notifications::spawn_outcome_unknown(state, org_id, service, action);
         return (
             StatusCode::GATEWAY_TIMEOUT,
             Json(json!({ "error": OUTCOME_UNKNOWN_MESSAGE, "outcome": "unknown", "reqId": req_id, "agentraas_note": "Not retried, to avoid running it twice." })),

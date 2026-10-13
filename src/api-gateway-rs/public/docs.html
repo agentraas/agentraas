@@ -482,12 +482,23 @@ POST /webhooks/stripe -> 200 (4ms)</code></pre>
         <tr><td><code>401</code></td><td>Missing or invalid API key.</td></tr>
         <tr><td><code>402</code></td><td>Monthly usage limit reached (Cloud only; self-hosted has no enforced limit on any tier).</td></tr>
         <tr><td><code>403</code></td><td>Authenticated, but not permitted for this org/action, or blocked by an <a href="#action-policies">action policy</a> (the message names it).</td></tr>
-        <tr><td><code>422</code></td><td>Request validation failed. Check the message for which field.</td></tr>
+        <tr><td><code>422</code></td><td>Request validation failed. Nothing was sent. <code>validation_errors</code> lists every failing field with a <code>hint</code> saying what to send instead (example below).</td></tr>
         <tr><td><code>429</code></td><td>Rate limit exceeded. See <a href="#plans">Plans &amp; limits</a>.</td></tr>
         <tr><td><code>409</code></td><td>An identical call is still in flight, or an earlier identical call has an unknown outcome (see <a href="#optional-headers">Idempotency &amp; tracing</a>).</td></tr>
         <tr><td><code>502</code>/<code>503</code></td><td>The upstream service (Stripe, Twilio, etc.) was unreachable or errored; AgentRaaS fails closed rather than silently succeeding un-deduplicated.</td></tr>
         <tr><td><code>504</code></td><td>The upstream didn't respond, so the action may or may not have run. Not retried; <code>"outcome": "unknown"</code> in the body.</td></tr>
       </table>
+      <p>A failed validation names every bad field at once, so an agent can fix them all in one retry. An MCP client gets the same body as an error tool result, which the model reads.</p>
+      <pre><code>{
+  "error": "amount must be number, got string",
+  "validation_errors": [
+    { "field": "amount", "rule": "type", "message": "amount must be number, got string",
+      "hint": "Send \"amount\" as a JSON number: 49.99, without quotes." },
+    { "field": "currency", "rule": "enum", "message": "currency must be one of: usd, eur",
+      "hint": "Send \"usd\" (exact spelling) in \"currency\"." }
+  ],
+  "next_step": "Nothing was sent. Fix every field listed in validation_errors, following each hint, and send the call again."
+}</code></pre>
     </section>
 
     <section id="sdks">
@@ -523,7 +534,13 @@ const result = await client.call("stripe", "charge.create", { amount: 5000, curr
     <section id="services">
       <h2>Supported services</h2>
       <p>Curated, pre-configured integrations, no code required:</p>
-      <p>Stripe, Twilio, HubSpot, Calendly, Shopify, Zoho, Razorpay, WhatsApp, Zapier, Make, Adyen, Mollie, Airwallex, Xendit, PayPal, Salesforce, Slack, Klarna, Paystack, GoCardless, Opn Payments, plus the built-in <code>mockpay</code> for safe testing.</p>
+      <p>Stripe, Twilio, HubSpot, Calendly, Shopify, Zoho, Razorpay, WhatsApp, Zapier, Make, Adyen, Mollie, Airwallex, Xendit, PayPal, Salesforce, Slack, Klarna, Paystack, GoCardless, Opn Payments, GitHub, Resend, SendGrid, Notion, Zendesk, Jira, plus the built-in <code>mockpay</code> for safe testing.</p>
+      <p><b>Jira</b>: connect it with your Atlassian account email and an API token (id.atlassian.com, Security, API tokens). Actions: <code>issue.create</code>, <code>issue.comment</code>, <code>issue.transition</code>, <code>issue.delete</code>. Every call names your site (the part before <code>.atlassian.net</code>); comment, transition and delete also name the <code>issueKey</code>. The body is Jira's own REST v2 shape, so <code>description</code> is plain text.</p>
+      <pre><code>client.call("jira", "issue.create", {
+    "site": "yourcompany",
+    "fields": {"project": {"key": "OPS"}, "issuetype": {"name": "Task"},
+               "summary": "Refund failed for order 1042"}})</code></pre>
+      <p>The dashboard's <b>Outage alerts</b> panel can also open Jira tickets for you: when a service stops answering, its response shape changes, or a call may have run without an answer back. At most one ticket per alert per day.</p>
       <p>Need something not on this list? See <a href="#custom-actions">Custom Actions</a> below.</p>
     </section>
 
@@ -535,7 +552,7 @@ const result = await client.call("stripe", "charge.create", { amount: 5000, curr
     <section id="undo">
       <h2>Undo log <span class="badge free">Free</span></h2>
       <p>When an agent does something it shouldn't have, undo it from the dashboard (<b>Monitor → Undo actions</b>). Every action that ran and has a known reverse is recorded for 30 days with what reversing it takes: a Stripe charge is refunded, a Slack message is deleted. Each entry can be undone once: two clicks at the same moment still run the reverse once, and it is sent with the <code>Idempotency-Key</code> <code>agentraas-undo-&lt;id&gt;</code>. If the provider doesn't answer, the entry is marked outcome unknown and not retried. Actions without a reverse (an SMS, an email) don't appear. Duplicates AgentRaaS caught and failed calls never ran, so there is nothing to undo.</p>
-      <p>Built in: <code>stripe charge.create</code> → <code>charge.refund</code>, <code>slack message.post</code> → <code>message.delete</code>, and <code>mockpay payment.create</code> → <code>payment.refund</code> for trying it. For your own endpoint, register its reverse as another custom action and name it when you register the action:</p>
+      <p>Built in: <code>stripe charge.create</code> → <code>charge.refund</code>, <code>slack message.post</code> → <code>message.delete</code>, <code>jira issue.create</code> → <code>issue.delete</code>, and <code>mockpay payment.create</code> → <code>payment.refund</code> for trying it. For your own endpoint, register its reverse as another custom action and name it when you register the action:</p>
       <pre><code>POST /api/v1/custom-actions
 { "org_id": "org_acme", "name": "create_ticket", "target_url": "https://api.example.com/tickets",
   "undo": { "action": "close_ticket",
@@ -740,7 +757,7 @@ histogram_quantile(0.95, sum by (le) (rate(agentraas_call_duration_ms_bucket[5m]
         <tr><td><code>401</code></td><td>API key missing, wrong, or revoked for this org and agent</td><td>Check the header and the org/agent IDs in the URL; connect a new agent if the key was lost.</td></tr>
         <tr><td><code>402</code></td><td>Free Cloud account's monthly limit reached</td><td>Self-host for free (no limit on any tier), or wait for the monthly reset.</td></tr>
         <tr><td><code>409</code></td><td>An identical request is still being processed, or an earlier identical call timed out with an unknown outcome</td><td>Still processing: retry shortly and you get the first call's result. "Outcome is unknown": see <a href="#ts-outcome-unknown">A call timed out</a> below; retrying won't run it.</td></tr>
-        <tr><td><code>422</code></td><td>The payload failed a validation rule</td><td>The message names the field; fix the payload or the org's rule.</td></tr>
+        <tr><td><code>422</code></td><td>The payload failed a validation rule</td><td>Each entry in <code>validation_errors</code> names a field and the fix; apply them and retry (nothing ran), or change the org's rule.</td></tr>
         <tr><td><code>429</code></td><td>This agent's per-minute rate limit</td><td>Back off and retry; raise the limit if the volume is legitimate.</td></tr>
         <tr><td><code>502</code> / <code>503</code></td><td>The upstream API is failing, or its circuit breaker is open</td><td>Check the provider's status page. AgentRaaS fails closed on purpose; the breaker tries again by itself after 30 seconds.</td></tr>
         <tr><td><code>504</code></td><td>The provider didn't answer in time, so the action may or may not have run</td><td>Not retried on purpose. See <a href="#ts-outcome-unknown">A call timed out</a> below.</td></tr>

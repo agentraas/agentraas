@@ -1,7 +1,7 @@
 //! Validation Rules + Dedup Rules dashboard CRUD
 //! (`/api/v1/validation-rules`, `/api/v1/dedup-rules`).
 
-use agentraas_core::validator::{is_valid_dedup_rule_definition, is_valid_rule_definition, validate_fields};
+use agentraas_core::validator::{is_valid_dedup_rule_definition, is_valid_rule_definition, validate_all};
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::routing::{delete, post};
@@ -167,8 +167,8 @@ async fn test_validation_rule(Json(body): Json<TestRuleBody>) -> Result<Json<Val
         return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, err));
     }
     let payload = body.payload.unwrap_or(json!({}));
-    let error = validate_fields(&payload, &body.fields);
-    Ok(Json(json!({ "valid": error.is_none(), "error": error })))
+    let errors = validate_all(&payload, &body.fields);
+    Ok(Json(json!({ "valid": errors.is_empty(), "error": errors.first().map(|e| &e.message), "validation_errors": errors })))
 }
 
 // ─── Dedup Rules ───
