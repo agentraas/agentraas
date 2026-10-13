@@ -8,7 +8,7 @@ use axum::{Json, Router};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use crate::agent::db::{check_org_write_permission, get_user_org_ids};
+use crate::agent::db::{get_user_writable_org_ids, check_org_write_permission, get_user_org_ids};
 use crate::auth::{check_dashboard_rate_limit, is_valid_identifier, AuthUser};
 use crate::state::{ApiError, SharedState};
 use crate::util::validate_target_url;
@@ -216,7 +216,7 @@ async fn list_webhooks(State(state): State<SharedState>, user: AuthUser) -> Resu
 
 async fn delete_webhook(State(state): State<SharedState>, user: AuthUser, Path(id): Path<i32>) -> Result<Json<Value>, ApiError> {
     check_dashboard_rate_limit(&state, user.sub).await?;
-    let org_ids = get_user_org_ids(&state.pg, user.sub).await?;
+    let org_ids = get_user_writable_org_ids(&state.pg, user.sub).await?;
     if org_ids.is_empty() {
         return Err(ApiError::new(StatusCode::NOT_FOUND, "Notification webhook not found."));
     }

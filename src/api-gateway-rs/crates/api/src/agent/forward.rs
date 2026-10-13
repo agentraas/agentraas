@@ -601,6 +601,7 @@ fn fill_url_placeholders(url: &str, body: &mut Value, account: Option<&str>) -> 
         if key.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_') {
             let value = if key == "ACCOUNT" { account.map(str::to_string) } else { std::env::var(key).ok() };
             match value {
+                Some(v) if key == "ACCOUNT" && !is_safe_url_part(&v) => return Err("The stored credential's account ID (username) may only contain letters, digits, '.', '_' and '-'.".to_string()),
                 Some(v) => result.push_str(&v),
                 None if key == "ACCOUNT" => return Err("The stored credential has no account ID (username) for this service.".to_string()),
                 None => {
@@ -617,14 +618,18 @@ fn fill_url_placeholders(url: &str, body: &mut Value, account: Option<&str>) -> 
             Some(Value::Number(n)) => n.to_string(),
             _ => return Err(format!("Missing field \"{key}\": this action needs it in the URL.")),
         };
-        let safe = !text.is_empty() && text.len() <= 200 && !text.contains("..") && text.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'));
-        if !safe {
+        if !is_safe_url_part(&text) {
             return Err(format!("Field \"{key}\" may only contain letters, digits, '.', '_' and '-'."));
         }
         result.push_str(&text);
     }
     result.push_str(rest);
     Ok(result)
+}
+
+/// A value that can't change the host or climb the path once in a URL.
+fn is_safe_url_part(text: &str) -> bool {
+    !text.is_empty() && text.len() <= 200 && !text.contains("..") && text.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
 }
 
 /// Form encoding the way Stripe reads it: nested objects and arrays become
@@ -871,6 +876,8 @@ mod tests {
         let url = fill_url_placeholders("https://api.twilio.com/2010-04-01/Accounts/{ACCOUNT}/Messages.json", &mut body, Some("AC123")).unwrap();
         assert_eq!(url, "https://api.twilio.com/2010-04-01/Accounts/AC123/Messages.json");
         assert!(fill_url_placeholders("https://x/{ACCOUNT}", &mut body, None).is_err());
+        assert!(fill_url_placeholders("https://x/{ACCOUNT}", &mut body, Some("AC1/../x")).is_err());
+        assert!(fill_url_placeholders("https://x/{ACCOUNT}", &mut body, Some("x@evil.example")).is_err());
     }
 
     #[test]

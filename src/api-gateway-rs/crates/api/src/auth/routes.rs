@@ -15,8 +15,8 @@ use crate::state::{ApiError, SharedState};
 
 use super::{
     check_dashboard_rate_limit, check_login_rate_limit, check_register_rate_limit,
-    clear_login_rate_limit, clear_session_cookie, hash_password, is_valid_email,
-    is_valid_identifier, is_valid_password, session_cookie, sign_session, verify_password,
+    clear_login_failures, clear_login_rate_limit, clear_session_cookie, login_failures_exceeded, record_login_failure, hash_password, is_valid_email,
+    is_valid_identifier, is_valid_password, normalize_email, session_cookie, sign_session, verify_password,
     AuthUser,
 };
 
@@ -72,7 +72,7 @@ async fn register(
         ));
     }
 
-    let email = body.email.unwrap_or_default();
+    let email = normalize_email(&body.email.unwrap_or_default());
     let password = body.password.unwrap_or_default();
 
     if !is_valid_email(&email) {
@@ -85,7 +85,7 @@ async fn register(
         ));
     }
 
-    let existing = sqlx::query_scalar::<_, i32>("SELECT id FROM users WHERE email = $1")
+    let existing = sqlx::query_scalar::<_, i32>("SELECT id FROM users WHERE lower(email) = $1")
         .bind(&email)
         .fetch_optional(&state.pg)
         .await?;
@@ -190,7 +190,7 @@ async fn login(
     jar: CookieJar,
     Json(body): Json<LoginBody>,
 ) -> Result<(CookieJar, Json<serde_json::Value>), ApiError> {
-    let email = body.email.unwrap_or_default();
+    let email = normalize_email(&body.email.unwrap_or_default());
     let password = body.password.unwrap_or_default();
     if !is_valid_email(&email) {
         return Err(ApiError::new(
@@ -206,9 +206,15 @@ async fn login(
             "Too many login attempts. Try again in 15 minutes.",
         ));
     }
+    if login_failures_exceeded(&state.redis_conn, &email).await? {
+        return Err(ApiError::new(
+            StatusCode::TOO_MANY_REQUESTS,
+            "Too many failed logins for this account. Try again in an hour, or use Forgot password to get in now.",
+        ));
+    }
 
     let user = sqlx::query_as::<_, LoginUserRow>(
-        "SELECT id, email, org_id, plan, password_hash, is_admin, is_demo, email_verified FROM users WHERE email = $1",
+        "SELECT id, email, org_id, plan, password_hash, is_admin, is_demo, email_verified FROM users WHERE lower(email) = $1",
     )
     .bind(&email)
     .fetch_optional(&state.pg)
@@ -219,6 +225,7 @@ async fn login(
     };
 
     if !verify_password(&password, &user.password_hash).await {
+        record_login_failure(&state.redis_conn, &email).await?;
         return Err(ApiError::new(StatusCode::UNAUTHORIZED, "Invalid email or password."));
     }
 
@@ -231,6 +238,7 @@ async fn login(
     }
 
     clear_login_rate_limit(&state.redis_conn, &ip, &email).await?;
+    clear_login_failures(&state.redis_conn, &email).await?;
     sqlx::query("UPDATE users SET last_login_at = NOW() WHERE id = $1")
         .bind(user.id)
         .execute(&state.pg)
@@ -374,7 +382,7 @@ async fn resend_verification(
     headers: HeaderMap,
     Json(body): Json<EmailOnlyBody>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    let Some(email) = body.email.filter(|e| is_valid_email(e)) else {
+    let Some(email) = body.email.map(|e| normalize_email(&e)).filter(|e| is_valid_email(e)) else {
         return Ok(Json(generic_resend_response()));
     };
 
@@ -384,7 +392,7 @@ async fn resend_verification(
         return Ok(Json(generic_resend_response()));
     }
 
-    let user = sqlx::query_as::<_, (i32, bool)>("SELECT id, email_verified FROM users WHERE email = $1")
+    let user = sqlx::query_as::<_, (i32, bool)>("SELECT id, email_verified FROM users WHERE lower(email) = $1")
         .bind(&email)
         .fetch_optional(&state.pg)
         .await?;
@@ -448,7 +456,7 @@ async fn forgot_password(
     headers: HeaderMap,
     Json(body): Json<EmailOnlyBody>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    let Some(email) = body.email.filter(|e| is_valid_email(e)) else {
+    let Some(email) = body.email.map(|e| normalize_email(&e)).filter(|e| is_valid_email(e)) else {
         return Ok(Json(generic_forgot_password_response()));
     };
 
@@ -458,7 +466,7 @@ async fn forgot_password(
         return Ok(Json(generic_forgot_password_response()));
     }
 
-    let user_id = sqlx::query_scalar::<_, i32>("SELECT id FROM users WHERE email = $1")
+    let user_id = sqlx::query_scalar::<_, i32>("SELECT id FROM users WHERE lower(email) = $1")
         .bind(&email)
         .fetch_optional(&state.pg)
         .await?;
@@ -528,10 +536,10 @@ async fn reset_password(
 
     let new_hash = hash_password(&new_password).await?;
     let mut tx = state.pg.begin().await?;
-    sqlx::query("UPDATE users SET password_hash = $1 WHERE id = $2")
+    let email: String = sqlx::query_scalar("UPDATE users SET password_hash = $1 WHERE id = $2 RETURNING email")
         .bind(&new_hash)
         .bind(user_id)
-        .execute(&mut *tx)
+        .fetch_one(&mut *tx)
         .await?;
     sqlx::query("UPDATE password_reset_tokens SET used_at = NOW() WHERE id = $1")
         .bind(token_id)
@@ -540,6 +548,8 @@ async fn reset_password(
     // Whoever had the old password may still hold a session: end them all.
     crate::auth::revoke_all_sessions(&mut *tx, user_id).await?;
     tx.commit().await?;
+    // The owner proved it's theirs: failed guesses by others stop counting.
+    super::clear_login_failures(&state.redis_conn, &super::normalize_email(&email)).await?;
 
     Ok(Json(json!({ "reset": true })))
 }

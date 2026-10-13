@@ -21,7 +21,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
-use crate::agent::db::{check_org_write_permission, get_user_org_ids, require_tier};
+use crate::agent::db::{get_user_writable_org_ids, check_org_write_permission, get_user_org_ids, require_tier};
 use crate::auth::{check_dashboard_rate_limit, is_valid_identifier, AuthUser};
 use crate::state::{ApiError, SharedState};
 
@@ -227,7 +227,7 @@ async fn list_tokens(State(state): State<SharedState>, user: AuthUser) -> Result
 
 async fn revoke_token(State(state): State<SharedState>, user: AuthUser, Path(id): Path<i32>) -> Result<Json<Value>, ApiError> {
     check_dashboard_rate_limit(&state, user.sub).await?;
-    let org_ids = get_user_org_ids(&state.pg, user.sub).await?;
+    let org_ids = get_user_writable_org_ids(&state.pg, user.sub).await?;
     if org_ids.is_empty() {
         return Err(ApiError::new(StatusCode::NOT_FOUND, "Agent identity token not found."));
     }

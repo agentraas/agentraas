@@ -55,6 +55,16 @@ test('duplicate registration is rejected with 409', async () => {
   assert.equal(second.status, 409);
 });
 
+test('emails are case-insensitive: one account per address', async () => {
+  const email = `Case-${RUN_ID}@Internal.Test`;
+  await registerAndVerify(email, 'validpassword123');
+  const again = await client.post('/api/v1/auth/register', { email: email.toLowerCase(), password: 'validpassword123' });
+  assert.equal(again.status, 409, 'a different spelling of the same address is the same account');
+  const login = await client.post('/api/v1/auth/login', { email: ` ${email.toUpperCase()} `, password: 'validpassword123' });
+  assert.equal(login.status, 200, JSON.stringify(login.data));
+  assert.equal(login.data.user.email, email.toLowerCase());
+});
+
 test('registration does not log the user in — login is blocked until email is verified', async () => {
   const email = `unverified-${RUN_ID}@internal.test`;
   const registerRes = await client.post('/api/v1/auth/register', { email, password: 'validpassword123' });

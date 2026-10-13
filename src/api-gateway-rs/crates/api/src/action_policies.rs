@@ -13,7 +13,7 @@ use axum::{Json, Router};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use crate::agent::db::{check_org_write_permission, get_user_org_ids, require_tier};
+use crate::agent::db::{get_user_writable_org_ids, check_org_write_permission, get_user_org_ids, require_tier};
 use crate::auth::{check_dashboard_rate_limit, is_valid_action_name, is_valid_identifier, AuthUser};
 use crate::state::{ApiError, SharedState};
 
@@ -121,7 +121,7 @@ async fn list_policies(State(state): State<SharedState>, user: AuthUser) -> Resu
 
 async fn delete_policy(State(state): State<SharedState>, user: AuthUser, Path(id): Path<i32>) -> Result<Json<Value>, ApiError> {
     check_dashboard_rate_limit(&state, user.sub).await?;
-    let org_ids = get_user_org_ids(&state.pg, user.sub).await?;
+    let org_ids = get_user_writable_org_ids(&state.pg, user.sub).await?;
     let deleted: Option<i32> = sqlx::query_scalar("DELETE FROM action_policies WHERE id = $1 AND org_id = ANY($2) RETURNING id")
         .bind(id)
         .bind(&org_ids)

@@ -59,6 +59,12 @@ pub fn is_valid_email(email: &str) -> bool {
     !before.is_empty() && !after.is_empty()
 }
 
+/// One spelling per address: `A@x.com` and `a@x.com` are the same account.
+/// Lookups also compare `lower(email)`, for rows stored before this.
+pub fn normalize_email(email: &str) -> String {
+    email.trim().to_lowercase()
+}
+
 pub fn is_valid_password(password: &str) -> bool {
     password.chars().count() >= 8
 }
@@ -132,6 +138,39 @@ pub async fn check_login_rate_limit(
             .await?;
     }
     Ok(attempts <= LOGIN_ATTEMPT_LIMIT)
+}
+
+// Failed passwords for one account from every IP together, so guesses
+// spread over many addresses still stop. Only failures count, and a
+// password reset clears it: someone locking an account out this way
+// can't keep its owner out (Forgot password gets them in at once).
+const LOGIN_FAILURE_LIMIT: i64 = 50;
+const LOGIN_FAILURE_WINDOW_SECONDS: i64 = 60 * 60;
+
+fn login_failure_key(email: &str) -> String {
+    format!("loginfail:{email}")
+}
+
+pub async fn login_failures_exceeded(redis: &redis::aio::MultiplexedConnection, email: &str) -> Result<bool, ApiError> {
+    let mut conn = redis.clone();
+    let failures: Option<i64> = redis::cmd("GET").arg(login_failure_key(email)).query_async(&mut conn).await?;
+    Ok(failures.unwrap_or(0) >= LOGIN_FAILURE_LIMIT)
+}
+
+pub async fn record_login_failure(redis: &redis::aio::MultiplexedConnection, email: &str) -> Result<(), ApiError> {
+    let mut conn = redis.clone();
+    let key = login_failure_key(email);
+    let failures: i64 = redis::cmd("INCR").arg(&key).query_async(&mut conn).await?;
+    if failures == 1 {
+        let _: () = redis::cmd("EXPIRE").arg(&key).arg(LOGIN_FAILURE_WINDOW_SECONDS).query_async(&mut conn).await?;
+    }
+    Ok(())
+}
+
+pub async fn clear_login_failures(redis: &redis::aio::MultiplexedConnection, email: &str) -> Result<(), ApiError> {
+    let mut conn = redis.clone();
+    let _: () = redis::cmd("DEL").arg(login_failure_key(email)).query_async(&mut conn).await?;
+    Ok(())
 }
 
 pub async fn clear_login_rate_limit(
@@ -279,7 +318,10 @@ where
         if claims.ro {
             // The live dedup test is the demo's point, so it stays allowed;
             // it only writes to the demo org's own audit log.
-            let read = matches!(parts.method, axum::http::Method::GET | axum::http::Method::HEAD);
+            // Two GETs aren't reads: one signs a license key for the demo
+            // org's plan, the other builds a self-host package for its user.
+            let read = matches!(parts.method, axum::http::Method::GET | axum::http::Method::HEAD)
+                && !matches!(parts.uri.path(), "/api/v1/licensing/token" | "/api/v1/download/self-host");
             if !read && parts.uri.path() != "/api/v1/demo/live-test" {
                 return Err(ApiError::new(
                     StatusCode::FORBIDDEN,

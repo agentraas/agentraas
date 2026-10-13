@@ -21,7 +21,7 @@ use serde_json::{json, Value};
 use agentraas_core::hmac_verify::timing_safe_equal_strings;
 use agentraas_core::{dedup, hmac_verify};
 
-use crate::agent::db::{check_org_write_permission, current_month_key, get_user_org_ids, log_audit, require_tier};
+use crate::agent::db::{get_user_writable_org_ids, check_org_write_permission, current_month_key, get_user_org_ids, log_audit, require_tier};
 use crate::auth::{check_dashboard_rate_limit, is_valid_identifier, AuthUser};
 use crate::state::{ApiError, SharedState};
 
@@ -705,7 +705,7 @@ async fn list_rules(State(state): State<SharedState>, user: AuthUser) -> Result<
 async fn delete_rule(State(state): State<SharedState>, user: AuthUser, Path(id): Path<i32>) -> Result<Json<Value>, ApiError> {
     check_dashboard_rate_limit(&state, user.sub).await?;
     // No tier gate — same reasoning as list_rules above.
-    let org_ids = get_user_org_ids(&state.pg, user.sub).await?;
+    let org_ids = get_user_writable_org_ids(&state.pg, user.sub).await?;
     if org_ids.is_empty() {
         return Err(ApiError::new(StatusCode::NOT_FOUND, "HITL rule not found."));
     }

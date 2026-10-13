@@ -571,6 +571,14 @@ pub async fn get_user_org_ids(pg: &PgPool, user_id: i32) -> Result<Vec<String>, 
     Ok(rows)
 }
 
+/// `get_user_org_ids` minus the orgs where this user is only an auditor:
+/// the scope for every delete/revoke/replay by row id. Plain membership
+/// isn't enough there, auditors are read-only.
+pub async fn get_user_writable_org_ids(pg: &PgPool, user_id: i32) -> Result<Vec<String>, sqlx::Error> {
+    let read_only: Vec<String> = sqlx::query_scalar("SELECT org_id FROM org_members WHERE user_id = $1 AND role = 'auditor'").bind(user_id).fetch_all(pg).await?;
+    Ok(get_user_org_ids(pg, user_id).await?.into_iter().filter(|o| !read_only.contains(o)).collect())
+}
+
 pub struct TenantCapCheck {
     pub ok: bool,
     pub limit: i64,

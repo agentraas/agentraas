@@ -243,6 +243,15 @@ test('invite flow: admin invites a new user by email, invite is accepted, member
     { headers: { Cookie: inviteeCookie } }
   );
   assert.equal(writeRes.status, 403);
+  // Deleting by id is a write too: the admin's rule must survive the auditor.
+  const ruleRes = await client.post('/api/v1/validation-rules', {
+    org_id: orgId, service: 'mockpay', action: 'payment.create', fields: { amount: { type: 'number' } },
+  }, { headers: { Cookie: adminCookie } });
+  assert.equal(ruleRes.status, 200, JSON.stringify(ruleRes.data));
+  const ruleId = (await client.get('/api/v1/validation-rules', { headers: { Cookie: adminCookie } })).data.find((r) => r.org_id === orgId).id;
+  const auditorDelete = await client.delete(`/api/v1/validation-rules/${ruleId}`, { headers: { Cookie: inviteeCookie } });
+  assert.equal(auditorDelete.status, 404, JSON.stringify(auditorDelete.data));
+  assert.equal((await client.delete(`/api/v1/validation-rules/${ruleId}`, { headers: { Cookie: adminCookie } })).status, 200);
 
   // Admin can list/change/remove members.
   const membersRes = await client.get(`/api/v1/auth/sso/${orgId}/members`, { headers: { Cookie: adminCookie } });

@@ -8,7 +8,7 @@ use rand::RngCore;
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use crate::agent::db::{check_org_write_permission, extract_upstream_error_message, get_user_org_ids, log_audit, resolve_route};
+use crate::agent::db::{get_user_writable_org_ids, check_org_write_permission, extract_upstream_error_message, get_user_org_ids, log_audit, resolve_route};
 use crate::agent::forward::forward_action;
 use crate::auth::{check_dashboard_rate_limit, AuthUser};
 use crate::state::{ApiError, SharedState};
@@ -86,7 +86,7 @@ async fn replay_dlq(
         serde_json::from_slice::<ReplayBody>(&body).ok().and_then(|b| b.payload)
     };
     check_dashboard_rate_limit(&state, user.sub).await?;
-    let org_ids = get_user_org_ids(&state.pg, user.sub).await?;
+    let org_ids = get_user_writable_org_ids(&state.pg, user.sub).await?;
 
     #[derive(sqlx::FromRow)]
     struct Row {
@@ -185,7 +185,7 @@ async fn replay_dlq(
 
 async fn dismiss_dlq(State(state): State<SharedState>, user: AuthUser, Path(id): Path<i32>) -> Result<Json<Value>, ApiError> {
     check_dashboard_rate_limit(&state, user.sub).await?;
-    let org_ids = get_user_org_ids(&state.pg, user.sub).await?;
+    let org_ids = get_user_writable_org_ids(&state.pg, user.sub).await?;
     if org_ids.is_empty() {
         return Err(ApiError::new(StatusCode::NOT_FOUND, "Dead-letter entry not found."));
     }

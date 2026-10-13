@@ -42,6 +42,10 @@ test('demo session is read-only', async (t) => {
       const r = await client[method](path, body, { headers });
       assert.equal(r.status, 403, `${method.toUpperCase()} ${path} must be refused: ${JSON.stringify(r.data)}`);
     }
+    // GETs that sign a license key or build a package aren't reads.
+    for (const path of [`/api/v1/licensing/token?org_id=org_demo_${RUN_ID}`, '/api/v1/download/self-host']) {
+      assert.equal((await client.get(path, { headers })).status, 403, `GET ${path} must be refused`);
+    }
     assert.equal((await client.post('/api/v1/demo/live-test', {}, { headers })).status, 200, 'the live dedup test stays allowed');
   } finally {
     await pg.query('UPDATE users SET is_demo = false WHERE email = $1', [`demo-${RUN_ID}@internal.test`]);

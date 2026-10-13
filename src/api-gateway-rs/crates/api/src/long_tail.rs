@@ -452,27 +452,37 @@ async fn paddle_webhook(State(state): State<SharedState>, headers: HeaderMap, ra
             let sub_id = sub.get("id").and_then(Value::as_str).unwrap_or_default();
             let customer_id = sub.get("customerId").or_else(|| sub.get("customer_id")).and_then(Value::as_str);
 
-            sqlx::query(
+            let owner_id: i32 = sqlx::query_scalar(
                 "INSERT INTO subscriptions (user_id, paddle_subscription_id, paddle_customer_id, status, current_period_end)
                  VALUES ($1, $2, $3, $4, $5)
-                 ON CONFLICT (paddle_subscription_id) DO UPDATE SET status = $4, current_period_end = $5, updated_at = NOW()",
+                 ON CONFLICT (paddle_subscription_id) DO UPDATE SET status = $4, current_period_end = $5, updated_at = NOW()
+                 RETURNING user_id",
             )
             .bind(user_id)
             .bind(sub_id)
             .bind(customer_id)
             .bind(&status)
             .bind(period_end)
-            .execute(&state.pg)
+            .fetch_one(&state.pg)
             .await?;
 
-            let plan = if ["active", "trialing"].contains(&status.as_str()) { target_plan } else { "free" };
-            sqlx::query("UPDATE users SET plan = $1 WHERE id = $2").bind(plan).bind(user_id).execute(&state.pg).await?;
+            // The row's first owner, not this event's custom_data (the
+            // buyer's browser writes that): a later event can't move a
+            // subscription onto, or downgrade, someone else's account.
+            if ["active", "trialing"].contains(&status.as_str()) {
+                sqlx::query("UPDATE users SET plan = $1 WHERE id = $2").bind(target_plan).bind(owner_id).execute(&state.pg).await?;
+            } else {
+                downgrade_if_no_live_subscription(&state.pg, owner_id).await?;
+            }
         }
     } else if event_type == "subscription.canceled" && sub.is_object() {
         let sub_id = sub.get("id").and_then(Value::as_str).unwrap_or_default();
-        sqlx::query("UPDATE subscriptions SET status = 'canceled', updated_at = NOW() WHERE paddle_subscription_id = $1").bind(sub_id).execute(&state.pg).await?;
-        if let Some(user_id) = user_id {
-            sqlx::query("UPDATE users SET plan = 'free' WHERE id = $1").bind(user_id).execute(&state.pg).await?;
+        let owner_id: Option<i32> = sqlx::query_scalar("UPDATE subscriptions SET status = 'canceled', updated_at = NOW() WHERE paddle_subscription_id = $1 RETURNING user_id")
+            .bind(sub_id)
+            .fetch_optional(&state.pg)
+            .await?;
+        if let Some(owner_id) = owner_id {
+            downgrade_if_no_live_subscription(&state.pg, owner_id).await?;
         }
     }
 
@@ -482,6 +492,15 @@ async fn paddle_webhook(State(state): State<SharedState>, headers: HeaderMap, ra
         .execute(&state.pg)
         .await?;
     Ok(Json(json!({ "received": true })))
+}
+
+/// Back to free, unless another of the user's subscriptions is still live.
+async fn downgrade_if_no_live_subscription(pg: &sqlx::PgPool, user_id: i32) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE users SET plan = 'free' WHERE id = $1 AND NOT EXISTS (SELECT 1 FROM subscriptions WHERE user_id = $1 AND status IN ('active', 'trialing'))")
+        .bind(user_id)
+        .execute(pg)
+        .await?;
+    Ok(())
 }
 
 // ─── Org branding (Enterprise-tier white-label) ───

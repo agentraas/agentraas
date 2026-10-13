@@ -558,7 +558,7 @@ async fn callback(State(state): State<SharedState>, Query(q): Query<CallbackQuer
     if email_verified == Some(false) || email.is_none() {
         return Err(ApiError::new(StatusCode::FORBIDDEN, "Your identity provider did not return a verified email address."));
     }
-    let email = email.unwrap();
+    let email = &crate::auth::normalize_email(email.unwrap());
     if !match_org_by_email_domain(email, &config.allowed_domains) {
         return Err(ApiError::new(StatusCode::FORBIDDEN, "Your email domain is not allowed to sign in to this org."));
     }
@@ -570,7 +570,7 @@ async fn callback(State(state): State<SharedState>, Query(q): Query<CallbackQuer
         email: String,
         org_id: Option<String>,
     }
-    let existing: Option<UserRow> = sqlx::query_as("SELECT id, email, org_id FROM users WHERE email = $1").bind(email).fetch_optional(&state.pg).await?;
+    let existing: Option<UserRow> = sqlx::query_as("SELECT id, email, org_id FROM users WHERE lower(email) = lower($1)").bind(email).fetch_optional(&state.pg).await?;
     let user = match existing {
         Some(u) => u,
         None => {
@@ -681,7 +681,7 @@ async fn create_invite(
     // same file keep `require_enterprise_mode`, unchanged.
     require_tier(&state, &org_id, agentraas_core::tier::Tier::Team).await?;
 
-    let email = body.email.unwrap_or_default();
+    let email = crate::auth::normalize_email(&body.email.unwrap_or_default());
     if !is_valid_email(&email) {
         return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "Enter a valid email address."));
     }
@@ -827,7 +827,7 @@ async fn accept_invite(State(state): State<SharedState>, jar: CookieJar, Json(bo
         email: String,
         org_id: Option<String>,
     }
-    let existing: Option<UserRow> = sqlx::query_as("SELECT id, email, org_id FROM users WHERE email = $1").bind(&invite.email).fetch_optional(&state.pg).await?;
+    let existing: Option<UserRow> = sqlx::query_as("SELECT id, email, org_id FROM users WHERE lower(email) = lower($1)").bind(&invite.email).fetch_optional(&state.pg).await?;
     let user = match existing {
         Some(u) => u,
         None => {
