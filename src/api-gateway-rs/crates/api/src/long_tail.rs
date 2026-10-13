@@ -448,7 +448,9 @@ async fn paddle_webhook(State(state): State<SharedState>, headers: HeaderMap, ra
                 .get("currentBillingPeriod")
                 .or_else(|| sub.get("current_billing_period"))
                 .and_then(|p| p.get("endsAt").or_else(|| p.get("ends_at")))
-                .and_then(Value::as_str);
+                .and_then(Value::as_str)
+                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                .map(|dt| dt.with_timezone(&chrono::Utc));
             let sub_id = sub.get("id").and_then(Value::as_str).unwrap_or_default();
             let customer_id = sub.get("customerId").or_else(|| sub.get("customer_id")).and_then(Value::as_str);
 
