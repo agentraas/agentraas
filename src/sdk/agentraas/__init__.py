@@ -33,18 +33,26 @@ retry logic (or your agent framework's) is safe to use as-is.
 
 import requests
 
-__version__ = "0.8.0"
+__version__ = "0.11.0"
 
 DEFAULT_BASE_URL = "http://localhost:13000"
 
 
 class AgentRaaSError(Exception):
-    """Raised for any non-2xx response from AgentRaaS itself."""
+    """Raised for any non-2xx response from AgentRaaS itself.
 
-    def __init__(self, message, status_code=None, req_id=None):
+    On a failed validation (422), ``validation_errors`` lists every failing
+    field as ``{"field", "rule", "message", "hint"}``, and ``str(err)``
+    includes each hint, so an agent that is shown the error can fix every
+    field in one retry. Nothing was sent when that happens.
+    """
+
+    def __init__(self, message, status_code=None, req_id=None, validation_errors=None, next_step=None):
         super().__init__(message)
         self.status_code = status_code
         self.req_id = req_id
+        self.validation_errors = validation_errors or []
+        self.next_step = next_step
 
     def __str__(self):
         base = super().__str__()
@@ -52,6 +60,9 @@ class AgentRaaSError(Exception):
             base = f"[{self.status_code}] {base}"
         if self.req_id:
             base = f"{base} (reqId={self.req_id})"
+        lines = [f"- {e.get('field')}: {e.get('hint') or e.get('message')}" for e in self.validation_errors]
+        if lines:
+            base = "\n".join([base, *lines] + ([self.next_step] if self.next_step else []))
         return base
 
 
@@ -173,6 +184,8 @@ class Client:
                 error_data.get("error", f"HTTP {response.status_code}"),
                 status_code=response.status_code,
                 req_id=error_data.get("reqId"),
+                validation_errors=error_data.get("validation_errors"),
+                next_step=error_data.get("next_step"),
             )
 
         return response.json()

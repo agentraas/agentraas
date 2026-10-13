@@ -58,15 +58,30 @@ export interface CallOptions {
   idempotencyKey?: string;
 }
 
+/** One failing field of a 422: what was wrong and how to fix it. */
+export interface ValidationError {
+  field: string;
+  rule: string;
+  message: string;
+  hint: string;
+}
+
 export class AgentRaaSError extends Error {
   statusCode?: number;
   reqId?: string;
+  /** Every failing field on a 422 (nothing was sent); the message includes each hint. */
+  validationErrors: ValidationError[];
+  nextStep?: string;
 
-  constructor(message: string, statusCode?: number, reqId?: string) {
-    super(reqId ? `${message} (reqId=${reqId})` : message);
+  constructor(message: string, statusCode?: number, reqId?: string, validationErrors: ValidationError[] = [], nextStep?: string) {
+    const head = reqId ? `${message} (reqId=${reqId})` : message;
+    const lines = validationErrors.map((e) => `- ${e.field}: ${e.hint || e.message}`);
+    super(lines.length ? [head, ...lines, ...(nextStep ? [nextStep] : [])].join('\n') : head);
     this.name = 'AgentRaaSError';
     this.statusCode = statusCode;
     this.reqId = reqId;
+    this.validationErrors = validationErrors;
+    this.nextStep = nextStep;
   }
 }
 
@@ -144,7 +159,7 @@ export class Client {
 
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new AgentRaaSError(data.error || `HTTP ${response.status}`, response.status, data.reqId);
+      throw new AgentRaaSError(data.error || `HTTP ${response.status}`, response.status, data.reqId, data.validation_errors || [], data.next_step);
     }
     return data as T;
   }

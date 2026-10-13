@@ -168,6 +168,11 @@ try {
 }
 ```
 
+A payload that fails a validation rule throws a 422 with every failing
+field in `err.validationErrors` (`field`, `rule`, `message`, `hint`).
+Nothing was sent, and `err.message` lists each hint, so an agent shown the
+error can fix them all in one retry.
+
 ## License
 
 MIT — see [LICENSE](./LICENSE). (The AgentRaaS server is AGPL-3.0, its

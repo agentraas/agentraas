@@ -325,6 +325,18 @@ except AgentRaaSError as err:
         pass  # outcome unknown: don't retry blindly, resolve it first
 ```
 
+A payload that fails a validation rule raises a 422 with every failing
+field in `err.validation_errors` (`field`, `rule`, `message`, `hint`).
+Nothing was sent, and `str(err)` lists each hint, so an agent shown the
+error can fix them all in one retry:
+
+```text
+[422] amount must be number, got string (reqId=...)
+- amount: Send "amount" as a JSON number: 49.99, without quotes.
+- currency: Send "usd" (exact spelling) in "currency".
+Nothing was sent. Fix every field listed in validation_errors, following each hint, and send the call again.
+```
+
 ## License
 
 MIT — see [LICENSE](./LICENSE). (The AgentRaaS server is AGPL-3.0, its
