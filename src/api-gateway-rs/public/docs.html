@@ -554,7 +554,7 @@ const result = await client.call("stripe", "charge.create", { amount: 5000, curr
     <section id="services">
       <h2>Supported services</h2>
       <p>Curated, pre-configured integrations, no code required:</p>
-      <p>Stripe, Twilio, HubSpot, Calendly, Shopify, Zoho, Razorpay, WhatsApp, Zapier, Make, Adyen, Mollie, Airwallex, Xendit, PayPal, Salesforce, Slack, Klarna, Paystack, GoCardless, Opn Payments, GitHub, Resend, SendGrid, Notion, Zendesk, Jira, Alpaca (<a href="/trading">trading</a>, paper and live), plus the built-in <code>mockpay</code> for safe testing.</p>
+      <p>Stripe, Twilio, HubSpot, Calendly, Shopify, Zoho, Razorpay, WhatsApp, Zapier, Make, Adyen, Mollie, Airwallex, Xendit, PayPal, Salesforce, Slack, Klarna, Paystack, GoCardless, Opn Payments, GitHub, Resend, SendGrid, Notion, Zendesk, Jira, Alpaca (<a href="/trading">trading</a>, paper and live), Upstox and Dhan (<a href="/trading#india">India, NSE/BSE</a>), plus the built-in <code>mockpay</code> for safe testing.</p>
       <p><b>Jira</b>: connect it with your Atlassian account email and an API token (id.atlassian.com, Security, API tokens). Actions: <code>issue.create</code>, <code>issue.comment</code>, <code>issue.transition</code>, <code>issue.delete</code>. Every call names your site (the part before <code>.atlassian.net</code>); comment, transition and delete also name the <code>issueKey</code>. The body is Jira's own REST v2 shape, so <code>description</code> is plain text.</p>
       <pre><code>client.call("jira", "issue.create", {
     "site": "yourcompany",

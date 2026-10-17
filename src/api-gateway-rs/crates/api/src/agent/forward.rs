@@ -856,6 +856,10 @@ mod tests {
         let key = Credential { api_key: Some("sk_test_1".into()), username: None, password: None };
         assert_eq!(headers("bearer", Some("Authorization"), &key)["authorization"], "Bearer sk_test_1");
         assert_eq!(headers("bearer", Some("X-API-Key"), &key)["x-api-key"], "sk_test_1");
+        // Dhan: the raw token in its own header, no "Bearer".
+        let dhan = headers("custom-header", Some("access-token"), &key);
+        assert_eq!(dhan["access-token"], "sk_test_1");
+        assert!(dhan.get("authorization").is_none());
         assert!(headers("basic", None, &pair)["authorization"].to_str().unwrap().starts_with("Basic "));
     }
 

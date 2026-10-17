@@ -36,6 +36,7 @@
   .kicker { font-size: 13px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 14px; }
   h1 { font-size: 40px; line-height: 1.12; letter-spacing: -0.035em; margin-bottom: 16px; text-wrap: balance; }
   h2 { font-size: 24px; letter-spacing: -0.02em; margin: 52px 0 12px; }
+  h3 { font-size: 18px; margin: 32px 0 10px; }
   p { margin-bottom: 14px; }
   .lead { font-size: 18px; color: var(--muted); max-width: 680px; margin-bottom: 28px; }
   code { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 0.88em; background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; }
@@ -198,6 +199,52 @@ spec: {agentId: trader, service: alpaca_paper, action: order.create, window: day
        maxCalls: 20, amountField: notional, maxAmount: 10000, onExceed: block}</code></pre>
   <p>Then add the approval step (Team plan) in the dashboard under <b>Rules → Approval rules</b>: service <code>alpaca_paper</code>, action <code>order.create</code>, field <code>notional</code> greater than <code>1000</code>.</p>
   <p class="note">Together: the same order inside a minute runs once; orders above $5,000, more than 10 shares, or off the list are blocked; orders outside 09:30 to 16:00 New York time on weekdays are blocked; orders above $1,000 that pass those wait for approval; after 20 orders or $10,000 in a New York day, the rest are blocked. Limits hold whether the agent sends <code>"notional": 500</code> or <code>"notional": "500"</code>. The daily total needs <code>notional</code> on every order: an order by <code>qty</code> alone is refused by that cap, so have your agent size orders in dollars.</p>
+
+  <h2 id="india">India (NSE/BSE)</h2>
+  <p>Two Indian brokers are built in: <code>upstox</code> (Upstox API, order endpoints v3) and <code>dhan</code> (DhanHQ API v2). Each has <code>order.place</code>, <code>order.modify</code> and <code>order.cancel</code>, and undo on <code>order.place</code> cancels the order if it has not filled yet.</p>
+  <table>
+    <tr><th>Action</th><th>Upstox call</th><th>Dhan call</th></tr>
+    <tr><td><code>order.place</code></td><td><code>POST /v3/order/place</code></td><td><code>POST /v2/orders</code></td></tr>
+    <tr><td><code>order.modify</code></td><td><code>PUT /v3/order/modify</code></td><td><code>PUT /v2/orders/{order_id}</code></td></tr>
+    <tr><td><code>order.cancel</code></td><td><code>DELETE /v3/order/cancel?order_id=...</code></td><td><code>DELETE /v2/orders/{order_id}</code></td></tr>
+  </table>
+  <p class="note">Field names are the broker's own: Upstox takes <code>instrument_token</code> (for example <code>NSE_EQ|INE002A01018</code>), <code>transaction_type</code>, <code>product</code> (<code>D</code> is delivery), <code>order_type</code>, <code>validity</code>, <code>quantity</code>, <code>price</code> and a <code>tag</code> of up to 40 characters. Dhan takes <code>dhanClientId</code>, <code>transactionType</code>, <code>exchangeSegment</code>, <code>productType</code> (<code>CNC</code> is delivery), <code>orderType</code>, <code>validity</code>, <code>securityId</code>, <code>quantity</code>, <code>price</code> and a <code>correlationId</code> of up to 30 characters. Dhan's <code>order.modify</code> takes the order id twice: <code>order_id</code> for the URL and <code>orderId</code> for the body. Undo on an Upstox order cancels the first order id it returns, so don't use Upstox's <code>slice</code> with undo.</p>
+
+  <p>SEBI's framework for retail algo trading (in effect since April 1, 2026, per the brokers' notices) changes how an API order reaches the exchange:</p>
+  <ul>
+    <li>Orders must come from a static IP that you have registered with the broker.</li>
+    <li>You log in every trading day: the access token is good for one day (Upstox: until 3:30 AM the next day; Dhan: 24 hours).</li>
+    <li>Exchange algo IDs are handled by the broker, not by AgentRaaS.</li>
+  </ul>
+  <p>So live Indian orders need <a href="/self-host">self-hosted AgentRaaS</a> on a server with a static IP, registered with your broker. AgentRaaS Cloud has no fixed outbound IP, so the broker would refuse its orders.</p>
+
+  <h3>Save the new token every morning</h3>
+  <p>Get the day's token from your broker (Dhan can issue one from your client ID, PIN and TOTP; Upstox through its login flow), then save it to AgentRaaS. Saving a credential for a service replaces the one stored before it, so a scheduled script like this before 09:15 is enough:</p>
+<pre><code><span class="c"># AGENTRAAS_URL is your self-hosted AgentRaaS, BROKER_TOKEN the day's token</span>
+curl -s -c /tmp/ar.jar -X POST "$AGENTRAAS_URL/api/v1/auth/login" \
+  -H "Content-Type: application/json" \
+  -d "{\"email\": \"$AGENTRAAS_EMAIL\", \"password\": \"$AGENTRAAS_PASSWORD\"}"
+curl -s -b /tmp/ar.jar -X POST "$AGENTRAAS_URL/api/v1/credentials" \
+  -H "Content-Type: application/json" \
+  -d "{\"org_id\": \"org_acme\", \"service\": \"dhan\", \"credentials\": {\"api_key\": \"$BROKER_TOKEN\"}}"</code></pre>
+
+  <h3>Guardrails for NSE cash equity</h3>
+<pre><code><span class="c"># india.yaml</span>
+apiVersion: agentraas.io/v1alpha1
+kind: ActionPolicy
+metadata: {name: nse-delivery-only, org: org_acme}
+spec: {agentId: trader, service: dhan, action: order.place, effect: require,
+       fields: {exchangeSegment: {enum: [NSE_EQ]}, productType: {enum: [CNC]}, orderType: {enum: [LIMIT]},
+                securityId: {enum: ["11536"]}, price: {required: true, max: 5000}},
+       hours: {tz: Asia/Kolkata, days: [mon, tue, wed, thu, fri], from: "09:15", to: "15:30"}}
+---
+apiVersion: agentraas.io/v1alpha1
+kind: SpendCap
+metadata: {name: daily-size, org: org_acme}
+spec: {agentId: trader, service: dhan, action: order.place, window: day, timezone: Asia/Kolkata,
+       maxCalls: 20, amountField: quantity, maxAmount: 40, onExceed: block}</code></pre>
+  <p class="note">Together: only delivery (<code>CNC</code>) limit orders in NSE cash for the listed securities, so F&amp;O segments (<code>NSE_FNO</code>, <code>BSE_FNO</code>) and intraday are blocked; only from 09:15 to 15:30 India time on weekdays (exchange holidays are not known to AgentRaaS); at most 20 orders and 40 shares a day, India time. An Indian order has no order-value field, so the daily rupee limit comes from the two: 40 shares at a price of at most ₹5,000 is at most ₹2,00,000 a day. For Upstox the same rules use <code>instrument_token</code> (list the <code>NSE_EQ|...</code> keys you allow, which also keeps out F&amp;O), <code>product: {enum: [D]}</code> and <code>order_type: {enum: [LIMIT]}</code>.</p>
+  <p class="note">This is not investment or legal advice. SEBI's and your broker's rules change: check the current ones before you trade live.</p>
 
   <h2>Before you go live</h2>
   <ul>

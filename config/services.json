@@ -1422,5 +1422,309 @@
         }
       }
     }
+  },
+  "upstox": {
+    "baseUrl": "https://api-hft.upstox.com/v3",
+    "authHeader": "Authorization",
+    "contentType": "application/json",
+    "extraHeaders": {
+      "Accept": "application/json"
+    },
+    "actions": {
+      "order.place": {
+        "method": "POST",
+        "path": "/order/place",
+        "validation": {
+          "instrument_token": {
+            "type": "string",
+            "required": true
+          },
+          "transaction_type": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "BUY",
+              "SELL"
+            ]
+          },
+          "product": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "I",
+              "D",
+              "MTF"
+            ]
+          },
+          "order_type": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "MARKET",
+              "LIMIT",
+              "SL",
+              "SL-M"
+            ]
+          },
+          "validity": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "DAY",
+              "IOC"
+            ]
+          },
+          "quantity": {
+            "type": "number",
+            "required": true,
+            "min": 1
+          },
+          "price": {
+            "type": "number",
+            "required": true
+          },
+          "trigger_price": {
+            "type": "number",
+            "required": true
+          },
+          "disclosed_quantity": {
+            "type": "number",
+            "required": true
+          },
+          "tag": {
+            "type": "string",
+            "maxLength": 40
+          }
+        },
+        "undo": {
+          "action": "order.cancel",
+          "with": {
+            "order_id": "response.data.order_ids.0"
+          }
+        }
+      },
+      "order.modify": {
+        "method": "PUT",
+        "path": "/order/modify",
+        "validation": {
+          "order_id": {
+            "type": "string",
+            "required": true
+          },
+          "order_type": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "MARKET",
+              "LIMIT",
+              "SL",
+              "SL-M"
+            ]
+          },
+          "validity": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "DAY",
+              "IOC"
+            ]
+          },
+          "price": {
+            "type": "number",
+            "required": true
+          },
+          "trigger_price": {
+            "type": "number",
+            "required": true
+          }
+        }
+      },
+      "order.cancel": {
+        "method": "DELETE",
+        "path": "/order/cancel?order_id={order_id}",
+        "validation": {
+          "order_id": {
+            "type": "string",
+            "required": true
+          }
+        }
+      }
+    },
+    "setup": {
+      "label": "Upstox",
+      "category": "Trading",
+      "key": "Access token",
+      "keyHint": "Expires at 3:30 AM the next day: save a new one every trading day. Orders must come from the static IP registered on your Upstox app.",
+      "keyUrl": "https://account.upstox.com/developer/apps",
+      "example": {
+        "action": "order.place",
+        "payload": {
+          "instrument_token": "NSE_EQ|INE002A01018",
+          "transaction_type": "BUY",
+          "product": "D",
+          "order_type": "LIMIT",
+          "validity": "DAY",
+          "quantity": 1,
+          "price": 1400,
+          "trigger_price": 0,
+          "disclosed_quantity": 0,
+          "tag": "run-42-buy"
+        }
+      }
+    }
+  },
+  "dhan": {
+    "baseUrl": "https://api.dhan.co/v2",
+    "authHeader": "access-token",
+    "authType": "custom-header",
+    "contentType": "application/json",
+    "actions": {
+      "order.place": {
+        "method": "POST",
+        "path": "/orders",
+        "validation": {
+          "dhanClientId": {
+            "type": "string",
+            "required": true
+          },
+          "transactionType": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "BUY",
+              "SELL"
+            ]
+          },
+          "exchangeSegment": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "NSE_EQ",
+              "NSE_FNO",
+              "NSE_CURRENCY",
+              "BSE_EQ",
+              "BSE_FNO",
+              "BSE_CURRENCY",
+              "MCX_COMM",
+              "IDX_I"
+            ]
+          },
+          "productType": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "CNC",
+              "INTRADAY",
+              "MARGIN",
+              "MTF",
+              "CO",
+              "BO"
+            ]
+          },
+          "orderType": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "LIMIT",
+              "MARKET",
+              "STOP_LOSS",
+              "STOP_LOSS_MARKET"
+            ]
+          },
+          "validity": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "DAY",
+              "IOC"
+            ]
+          },
+          "securityId": {
+            "required": true
+          },
+          "quantity": {
+            "required": true
+          },
+          "correlationId": {
+            "type": "string",
+            "maxLength": 30
+          }
+        },
+        "undo": {
+          "action": "order.cancel",
+          "with": {
+            "order_id": "response.orderId"
+          }
+        }
+      },
+      "order.modify": {
+        "method": "PUT",
+        "path": "/orders/{order_id}",
+        "validation": {
+          "order_id": {
+            "type": "string",
+            "required": true
+          },
+          "dhanClientId": {
+            "type": "string",
+            "required": true
+          },
+          "orderId": {
+            "type": "string",
+            "required": true
+          },
+          "orderType": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "LIMIT",
+              "MARKET",
+              "STOP_LOSS",
+              "STOP_LOSS_MARKET"
+            ]
+          },
+          "validity": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "DAY",
+              "IOC"
+            ]
+          }
+        }
+      },
+      "order.cancel": {
+        "method": "DELETE",
+        "path": "/orders/{order_id}",
+        "validation": {
+          "order_id": {
+            "type": "string",
+            "required": true
+          }
+        }
+      }
+    },
+    "setup": {
+      "label": "Dhan",
+      "category": "Trading",
+      "key": "Access token",
+      "keyHint": "Valid for 24 hours: save a new one every trading day. Every order also sends your dhanClientId. Orders must come from the static IP set on your Dhan account.",
+      "keyUrl": "https://web.dhan.co",
+      "example": {
+        "action": "order.place",
+        "payload": {
+          "dhanClientId": "1000000003",
+          "correlationId": "run-42-buy",
+          "transactionType": "BUY",
+          "exchangeSegment": "NSE_EQ",
+          "productType": "CNC",
+          "orderType": "LIMIT",
+          "validity": "DAY",
+          "securityId": "11536",
+          "quantity": 1,
+          "price": 3500
+        }
+      }
+    }
   }
 }
