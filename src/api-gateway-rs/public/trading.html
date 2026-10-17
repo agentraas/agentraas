@@ -132,10 +132,10 @@
 <!-- site-nav:end -->
 
 <main class="wrap">
-  <div class="kicker">Trading agents</div>
+  <div class="kicker">If your agent already trades</div>
   <h1>Guardrails for AI agents that place orders</h1>
-  <p class="lead">An agent whose order request times out will often send it again, and buy twice. AgentRaaS sits between your agent and your broker: each order runs once, limits and allowed symbols are checked before the broker sees the order, large orders wait for a person, and every order is in the audit trail. It starts with Alpaca, paper trading first.</p>
-  <a class="btn p" href="/dashboard?signup=1">Try it with paper trading</a><a class="btn s" href="/self-host">Self-host it</a>
+  <p class="lead">AgentRaaS doesn't recommend trading, pick trades or trade for anyone. It is for people who already use an agent to place orders and want it kept in bounds. An agent whose order request times out will often send it again, and buy twice. AgentRaaS sits between your agent and your broker: each order runs once, limits and allowed symbols are checked before the broker sees the order, large orders wait for a person, and every order is in the audit trail.</p>
+  <a class="btn p" href="#connect">Set up the guardrails</a><a class="btn s" href="/self-host">Self-host it</a>
 
   <h2>What it stops</h2>
   <table>
@@ -150,7 +150,7 @@
     <tr><td>You need to know what happened</td><td>Every order, sent or refused, is in the audit trail with the reason.</td></tr>
   </table>
 
-  <h2>Connect Alpaca</h2>
+  <h2 id="connect">Connect Alpaca</h2>
   <p>In the dashboard, <b>Connect a service</b>, pick <b>Alpaca (paper trading)</b> and paste the paper account's API key ID and secret. Your agent then sends orders to AgentRaaS instead of to Alpaca:</p>
 <pre><code>curl -X POST https://agentraas.io/v1/webhook/org_acme/trader \
   -H "Authorization: Bearer ar_live_..." \
