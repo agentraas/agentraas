@@ -178,6 +178,12 @@ agentraas scan -- npx -y @modelcontextprotocol/server-github</code></pre>
   <p><code>--fail-on high</code> exits with 1 when a high-risk tool shows up, so a new server or a server update that adds one fails the build until someone has looked. <code>--json</code> prints the result for other tools.</p>
 <pre><code>pip install agentraas
 agentraas scan --config .mcp.json --fail-on high</code></pre>
+  <p>Or the GitHub Action, which also writes the result to the job summary:</p>
+<pre><code>- uses: actions/setup-python@v5
+  with: { python-version: "3.12" }
+- uses: sumedhchatse/agentraas/src/scan-action@main
+  with:
+    config: .mcp.json            # optional: command, fail-on (high, medium, none), timeout</code></pre>
   <p class="note">The scan starts each server with the command and environment from your config, the same way your MCP client does. Scanning a config means running the commands in it, so only scan configs you trust.</p>
 
   <div class="cta">

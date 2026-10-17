@@ -347,6 +347,7 @@ const result = await generateText({ model, tools, prompt });</code></pre>
       <pre><code>agentraas scan                                    # every config found
 agentraas scan --config .mcp.json --fail-on high  # CI: exit 1 on a high-risk tool
 agentraas scan -- npx -y @modelcontextprotocol/server-github</code></pre>
+      <p>In GitHub Actions: <code>uses: sumedhchatse/agentraas/src/scan-action@main</code> with <code>config</code> (default <code>.mcp.json</code>) or <code>command</code>, and <code>fail-on</code> (<code>high</code>, <code>medium</code> or <code>none</code>). The result goes to the job summary.</p>
       <table>
         <tr><th>Flag</th><th>What it does</th></tr>
         <tr><td><code>--config PATH</code></td><td>Scan the servers in this config file (<code>mcpServers</code>). Repeatable. Without it: Claude Desktop, <code>~/.cursor/mcp.json</code>, <code>~/.claude.json</code>, <code>./.mcp.json</code>.</td></tr>

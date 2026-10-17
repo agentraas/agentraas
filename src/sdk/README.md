@@ -157,6 +157,14 @@ runs code, sends (high), writes (medium), reads (low), from their
 Only scan configs you trust: it runs their commands. `--json` for
 machine-readable output. https://agentraas.io/mcp-scan
 
+GitHub Actions:
+
+```yaml
+- uses: sumedhchatse/agentraas/src/scan-action@main
+  with:
+    config: .mcp.json   # or command: "npx -y @modelcontextprotocol/server-github"; fail-on: high | medium | none
+```
+
 ## Chaos tester: find the calls your agent would run twice
 
 `agentraas-chaos` sits between your code and an API. The first time each
