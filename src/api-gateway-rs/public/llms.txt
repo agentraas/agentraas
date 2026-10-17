@@ -45,6 +45,7 @@ Measured overhead: 2.1 to 2.4 ms added per call at the median (one machine, Inte
 - [Documentation](https://agentraas.io/docs): API, SDKs, MCP, self-hosting, troubleshooting
 - [Self-hosting](https://agentraas.io/self-host): editions, install, license keys
 - [Cloud](https://agentraas.io/cloud): hosted trial and plans
+- [Trading agents](https://agentraas.io/trading): Alpaca orders that run once, with limits and approvals
 - [Community](https://agentraas.io/community): questions and answers in GitHub Discussions
 - [Getting started guide](https://agentraas.io/guide)
 - [Source code (GitHub)](https://github.com/sumedhchatse/agentraas)

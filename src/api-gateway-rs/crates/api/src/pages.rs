@@ -35,6 +35,7 @@ pub fn router() -> Router<SharedState> {
         .route("/mcp-scan", get(mcp_scan_page))
         .route("/approve", get(approve_page))
         .route("/community", get(community_page))
+        .route("/trading", get(trading_page))
         .route("/cloud", get(cloud_page))
         .route("/self-host", get(self_host_page))
         .route("/status", get(status_page))
@@ -106,6 +107,10 @@ async fn chaos_page() -> axum::response::Response {
 
 async fn mcp_scan_page() -> axum::response::Response {
     serve_html_file(public_file("mcp-scan.html"), "Page not found").await
+}
+
+async fn trading_page() -> axum::response::Response {
+    serve_html_file(public_file("trading.html"), "Page not found").await
 }
 
 async fn community_page() -> axum::response::Response {
@@ -226,7 +231,7 @@ async fn robots_txt(axum::extract::State(state): axum::extract::State<SharedStat
     ([(header::CONTENT_TYPE, "text/plain")], body)
 }
 
-const SITEMAP_ROUTES: &[&str] = &["/", "/pricing", "/about", "/vs-temporal", "/vs-composio", "/vs-arcade", "/guide", "/docs", "/webhook-audit", "/chaos", "/mcp-scan", "/cloud", "/self-host", "/community", "/status", "/postmortem-2026-09", "/license", "/privacy", "/terms", "/security", "/readme"];
+const SITEMAP_ROUTES: &[&str] = &["/", "/pricing", "/about", "/vs-temporal", "/vs-composio", "/vs-arcade", "/guide", "/docs", "/webhook-audit", "/chaos", "/mcp-scan", "/cloud", "/self-host", "/community", "/trading", "/status", "/postmortem-2026-09", "/license", "/privacy", "/terms", "/security", "/readme"];
 
 async fn sitemap_xml(axum::extract::State(state): axum::extract::State<SharedState>) -> impl IntoResponse {
     let urls: String = SITEMAP_ROUTES.iter().map(|route| format!("  <url><loc>{}{route}</loc></url>", state.public_url)).collect::<Vec<_>>().join("\n");
