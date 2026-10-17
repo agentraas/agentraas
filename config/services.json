@@ -1178,5 +1178,249 @@
         }
       }
     }
+  },
+  "alpaca_paper": {
+    "baseUrl": "https://paper-api.alpaca.markets/v2",
+    "authHeader": "APCA-API-KEY-ID, APCA-API-SECRET-KEY",
+    "authType": "header-pair",
+    "contentType": "application/json",
+    "actions": {
+      "order.create": {
+        "method": "POST",
+        "path": "/orders",
+        "validation": {
+          "symbol": {
+            "type": "string",
+            "required": true
+          },
+          "side": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "buy",
+              "sell"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "market",
+              "limit",
+              "stop",
+              "stop_limit",
+              "trailing_stop"
+            ]
+          },
+          "time_in_force": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "day",
+              "gtc",
+              "opg",
+              "cls",
+              "ioc",
+              "fok"
+            ]
+          },
+          "client_order_id": {
+            "type": "string",
+            "maxLength": 128
+          }
+        },
+        "undo": {
+          "action": "order.cancel",
+          "with": {
+            "order_id": "response.id"
+          }
+        }
+      },
+      "order.replace": {
+        "method": "PATCH",
+        "path": "/orders/{order_id}",
+        "validation": {
+          "order_id": {
+            "type": "string",
+            "required": true
+          },
+          "client_order_id": {
+            "type": "string",
+            "maxLength": 128
+          }
+        }
+      },
+      "order.cancel": {
+        "method": "DELETE",
+        "path": "/orders/{order_id}",
+        "validation": {
+          "order_id": {
+            "type": "string",
+            "required": true
+          }
+        }
+      },
+      "orders.cancel_all": {
+        "method": "DELETE",
+        "path": "/orders",
+        "validation": {}
+      },
+      "position.close": {
+        "method": "DELETE",
+        "path": "/positions/{symbol}",
+        "validation": {
+          "symbol": {
+            "type": "string",
+            "required": true
+          }
+        }
+      },
+      "positions.close_all": {
+        "method": "DELETE",
+        "path": "/positions",
+        "validation": {}
+      }
+    },
+    "setup": {
+      "label": "Alpaca (paper trading)",
+      "category": "Trading",
+      "username": "API key ID",
+      "usernameHint": "From the Paper Trading account in the Alpaca dashboard. Paper keys only work here.",
+      "password": "Secret key",
+      "keyUrl": "https://app.alpaca.markets",
+      "example": {
+        "action": "order.create",
+        "payload": {
+          "symbol": "AAPL",
+          "qty": "1",
+          "side": "buy",
+          "type": "market",
+          "time_in_force": "day",
+          "client_order_id": "run-42-buy-aapl"
+        }
+      }
+    }
+  },
+  "alpaca": {
+    "baseUrl": "https://api.alpaca.markets/v2",
+    "authHeader": "APCA-API-KEY-ID, APCA-API-SECRET-KEY",
+    "authType": "header-pair",
+    "contentType": "application/json",
+    "actions": {
+      "order.create": {
+        "method": "POST",
+        "path": "/orders",
+        "validation": {
+          "symbol": {
+            "type": "string",
+            "required": true
+          },
+          "side": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "buy",
+              "sell"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "market",
+              "limit",
+              "stop",
+              "stop_limit",
+              "trailing_stop"
+            ]
+          },
+          "time_in_force": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "day",
+              "gtc",
+              "opg",
+              "cls",
+              "ioc",
+              "fok"
+            ]
+          },
+          "client_order_id": {
+            "type": "string",
+            "maxLength": 128
+          }
+        },
+        "undo": {
+          "action": "order.cancel",
+          "with": {
+            "order_id": "response.id"
+          }
+        }
+      },
+      "order.replace": {
+        "method": "PATCH",
+        "path": "/orders/{order_id}",
+        "validation": {
+          "order_id": {
+            "type": "string",
+            "required": true
+          },
+          "client_order_id": {
+            "type": "string",
+            "maxLength": 128
+          }
+        }
+      },
+      "order.cancel": {
+        "method": "DELETE",
+        "path": "/orders/{order_id}",
+        "validation": {
+          "order_id": {
+            "type": "string",
+            "required": true
+          }
+        }
+      },
+      "orders.cancel_all": {
+        "method": "DELETE",
+        "path": "/orders",
+        "validation": {}
+      },
+      "position.close": {
+        "method": "DELETE",
+        "path": "/positions/{symbol}",
+        "validation": {
+          "symbol": {
+            "type": "string",
+            "required": true
+          }
+        }
+      },
+      "positions.close_all": {
+        "method": "DELETE",
+        "path": "/positions",
+        "validation": {}
+      }
+    },
+    "setup": {
+      "label": "Alpaca (live trading)",
+      "category": "Trading",
+      "username": "API key ID",
+      "usernameHint": "From the Live account. Real money: try alpaca_paper first and add approval rules.",
+      "password": "Secret key",
+      "keyUrl": "https://app.alpaca.markets",
+      "example": {
+        "action": "order.create",
+        "payload": {
+          "symbol": "AAPL",
+          "qty": "1",
+          "side": "buy",
+          "type": "market",
+          "time_in_force": "day",
+          "client_order_id": "run-42-buy-aapl"
+        }
+      }
+    }
   }
 }

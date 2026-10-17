@@ -916,7 +916,7 @@
     const s = selectedService();
     if (!s) return;
     const setup = s.catalog.setup;
-    const basic = s.catalog.auth === 'basic';
+    const basic = s.catalog.auth === 'basic' || s.catalog.auth === 'header-pair';  // two-part keys
     document.getElementById('svc-key-field').style.display = basic ? 'none' : 'block';
     document.getElementById('svc-user-field').style.display = basic ? 'block' : 'none';
     document.getElementById('svc-pass-field').style.display = basic ? 'block' : 'none';
@@ -946,7 +946,7 @@
     const s = selectedService();
     const fail = (msg) => { errorBox.textContent = msg; errorBox.style.display = 'block'; };
     try {
-      const credentials = s.catalog.auth === 'basic'
+      const credentials = (s.catalog.auth === 'basic' || s.catalog.auth === 'header-pair')
         ? { username: document.getElementById('svc-user').value.trim(), password: document.getElementById('svc-pass').value.trim() }
         : { api_key: document.getElementById('svc-key').value.trim() };
       const credRes = await fetch('/api/v1/credentials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ org_id: currentUserOrgId, service: s.name, credentials }) });

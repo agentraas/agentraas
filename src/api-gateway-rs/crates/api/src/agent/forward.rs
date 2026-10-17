@@ -170,30 +170,7 @@ async fn build_request(
     }
 
     if let Some(cred) = &credential {
-        match route.auth_type.as_str() {
-            "basic" => {
-                let username = cred.username.clone().or_else(|| cred.api_key.clone()).unwrap_or_default();
-                let password = cred.password.clone().unwrap_or_default();
-                builder = builder.basic_auth(username, Some(password));
-            }
-            "custom-header" => {
-                if let Some(header_name) = &route.auth_header {
-                    let key = cred.api_key.clone().or_else(|| cred.username.clone()).unwrap_or_default();
-                    builder = builder.header(header_name, key);
-                }
-            }
-            _ => {
-                if let Some(header_name) = &route.auth_header {
-                    let key = cred.api_key.clone().or_else(|| cred.username.clone()).unwrap_or_default();
-                    let value = if header_name == "Authorization" {
-                        format!("Bearer {key}")
-                    } else {
-                        key
-                    };
-                    builder = builder.header(header_name, value);
-                }
-            }
-        }
+        builder = apply_auth(builder, &route.auth_type, route.auth_header.as_deref(), cred);
     }
 
     let builder = if route.content_type == "application/x-www-form-urlencoded" {
@@ -369,26 +346,7 @@ pub async fn forward_mcp_tool_call(
         .timeout(Duration::from_secs(state.proxy_timeout_seconds));
 
     if let Some(cred) = &credential {
-        match route.auth_type.as_str() {
-            "basic" => {
-                let username = cred.username.clone().or_else(|| cred.api_key.clone()).unwrap_or_default();
-                let password = cred.password.clone().unwrap_or_default();
-                builder = builder.basic_auth(username, Some(password));
-            }
-            "custom-header" => {
-                if let Some(header_name) = &route.auth_header {
-                    let key = cred.api_key.clone().or_else(|| cred.username.clone()).unwrap_or_default();
-                    builder = builder.header(header_name, key);
-                }
-            }
-            _ => {
-                if let Some(header_name) = &route.auth_header {
-                    let key = cred.api_key.clone().or_else(|| cred.username.clone()).unwrap_or_default();
-                    let value = if header_name == "Authorization" { format!("Bearer {key}") } else { key };
-                    builder = builder.header(header_name, value);
-                }
-            }
-        }
+        builder = apply_auth(builder, &route.auth_type, route.auth_header.as_deref(), cred);
     }
 
     let rpc_request = json!({
@@ -572,6 +530,36 @@ pub async fn forward_with_retry_streaming(
 
     Err(last_error.expect("loop always sets last_error before exiting without returning Ok"))
 }
+/// Puts the stored credential on the outbound request the way the service
+/// expects it. Shared by tool forwards and MCP calls.
+fn apply_auth(builder: reqwest::RequestBuilder, auth_type: &str, auth_header: Option<&str>, cred: &super::db::Credential) -> reqwest::RequestBuilder {
+    let key = || cred.api_key.clone().or_else(|| cred.username.clone()).unwrap_or_default();
+    match auth_type {
+        "basic" => {
+            let username = cred.username.clone().or_else(|| cred.api_key.clone()).unwrap_or_default();
+            builder.basic_auth(username, Some(cred.password.clone().unwrap_or_default()))
+        }
+        // A key id and a secret in two headers (Alpaca): authHeader names
+        // both, "<id header>, <secret header>".
+        "header-pair" => match auth_header.and_then(|h| h.split_once(',')) {
+            Some((id_header, secret_header)) => {
+                let id = cred.username.clone().or_else(|| cred.api_key.clone()).unwrap_or_default();
+                builder.header(id_header.trim(), id).header(secret_header.trim(), cred.password.clone().unwrap_or_default())
+            }
+            None => builder,
+        },
+        "custom-header" => match auth_header {
+            Some(name) => builder.header(name, key()),
+            None => builder,
+        },
+        _ => match auth_header {
+            Some("Authorization") => builder.header("Authorization", format!("Bearer {}", key())),
+            Some(name) => builder.header(name, key()),
+            None => builder,
+        },
+    }
+}
+
 
 /// Fills `{name}` placeholders in a curated route's URL. A lowercase or
 /// camelCase name comes from the call's own field of that name, which is
@@ -851,6 +839,25 @@ pub async fn log_circuit_transition(state: &SharedState, transition: circuit_bre
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn credentials_land_in_the_headers_each_service_expects() {
+        use super::super::db::Credential;
+        let headers = |auth_type: &str, auth_header: Option<&str>, cred: &Credential| {
+            let builder = reqwest::Client::new().post("http://example.test/x");
+            super::apply_auth(builder, auth_type, auth_header, cred).build().unwrap().headers().clone()
+        };
+        let pair = Credential { api_key: None, username: Some("PKID".into()), password: Some("SECRET".into()) };
+        let h = headers("header-pair", Some("APCA-API-KEY-ID, APCA-API-SECRET-KEY"), &pair);
+        assert_eq!(h["apca-api-key-id"], "PKID");
+        assert_eq!(h["apca-api-secret-key"], "SECRET");
+        assert!(h.get("authorization").is_none());
+
+        let key = Credential { api_key: Some("sk_test_1".into()), username: None, password: None };
+        assert_eq!(headers("bearer", Some("Authorization"), &key)["authorization"], "Bearer sk_test_1");
+        assert_eq!(headers("bearer", Some("X-API-Key"), &key)["x-api-key"], "sk_test_1");
+        assert!(headers("basic", None, &pair)["authorization"].to_str().unwrap().starts_with("Basic "));
+    }
 
     #[test]
     fn url_placeholders_come_from_the_call_and_leave_the_body() {
