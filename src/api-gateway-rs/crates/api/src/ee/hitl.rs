@@ -64,7 +64,9 @@ pub async fn match_rule(pg: &sqlx::PgPool, org_id: &str, service: &str, action: 
         let (Some(field), Some(operator), Some(threshold)) = (&row.field, &row.operator, row.threshold) else {
             return Ok(Some(MatchedRule));
         };
-        let Some(value) = payload.get(field).and_then(Value::as_f64) else {
+        // A quoted number ("2000", how Alpaca sends notional) is compared
+        // too, or quoting it would skip the approval.
+        let Some(value) = payload.get(field).and_then(|v| v.as_f64().or_else(|| v.as_str().and_then(|s| s.trim().parse::<f64>().ok()))).filter(|v| v.is_finite()) else {
             continue;
         };
         let matched = match operator.as_str() {

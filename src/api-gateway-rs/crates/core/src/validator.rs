@@ -53,9 +53,14 @@ fn check_field(payload: &Value, field_name: &str, field_rules: &Value) -> Option
         }
     }
 
-    let expects_number = field_rules.get("type").and_then(Value::as_str) == Some("number") || value.is_number();
+    // A numeric string ("5000", how Stripe form fields and Alpaca's qty and
+    // notional arrive) is held to min/max too: otherwise quoting a number
+    // walks straight past a policy's limit.
+    let has_bounds = field_rules.get("min").is_some_and(|v| !v.is_null()) || field_rules.get("max").is_some_and(|v| !v.is_null());
+    let numeric = value.as_f64().or_else(|| value.as_str().filter(|_| has_bounds).and_then(|s| s.trim().parse::<f64>().ok()).filter(|v| v.is_finite()));
+    let expects_number = field_rules.get("type").and_then(Value::as_str) == Some("number") || numeric.is_some();
     if expects_number {
-        if let Some(v) = value.as_f64() {
+        if let Some(v) = numeric {
             if let Some(min) = field_rules.get("min").and_then(Value::as_f64) {
                 if v < min {
                     return fail("min", format!("{field_name} must be at least {}", fmt_num(min)), format!("Use a value of {} or more for \"{field_name}\".", fmt_num(min)));
@@ -430,6 +435,18 @@ fn is_valid_e164(s: &str) -> bool {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn a_quoted_number_cannot_skip_a_limit() {
+        let rule = json!({ "notional": { "max": 1000 } });
+        assert!(validate_fields(&json!({ "notional": "5000" }), &rule).is_some());
+        assert!(validate_fields(&json!({ "notional": " 5000.5 " }), &rule).is_some());
+        assert!(validate_fields(&json!({ "notional": 5000 }), &rule).is_some());
+        assert_eq!(validate_fields(&json!({ "notional": "999.99" }), &rule), None);
+        assert_eq!(validate_fields(&json!({ "notional": 10 }), &rule), None);
+        // A string field without bounds is still just a string.
+        assert_eq!(validate_fields(&json!({ "symbol": "1234" }), &json!({ "symbol": { "enum": ["1234"] } })), None);
+    }
 
     #[test]
     fn empty_fields_is_valid_ttl_only_rule() {
