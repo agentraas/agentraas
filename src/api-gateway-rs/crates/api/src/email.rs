@@ -116,6 +116,17 @@ impl Mailer {
         }
     }
 
+    /// An alert or an approval request for an org's "email" alert channel.
+    pub async fn send_notification_email(&self, to_email: &str, subject: &str, message: &str, cta_text: &str, cta_url: &str, expiry_note: Option<&str>) {
+        if !self.is_configured() {
+            tracing::warn!(to_email, subject, cta_url, "SMTP not configured — notification email");
+            return;
+        }
+        let text = format!("{message}\n\n{cta_text}: {cta_url}");
+        let html = build_email_html(EmailTemplate { heading: &escape_html(subject), body_html: &escape_html(message).replace('\n', "<br>"), cta_text, cta_url, expiry_note });
+        self.send(to_email, subject, &text, &html).await;
+    }
+
     pub async fn send_verification_email(&self, to_email: &str, verify_url: &str) {
         if !self.is_configured() {
             tracing::warn!(to_email, verify_url, "SMTP not configured — email verification link");

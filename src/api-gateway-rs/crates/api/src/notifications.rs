@@ -1,6 +1,7 @@
 //! Notification Webhooks (`/api/v1/notification-webhooks`): instant outage,
 //! schema-drift and outcome-unknown notifications to Slack, Discord,
-//! Telegram, or as Jira tickets.
+//! Telegram, Teams, email, or as Jira tickets; approval links for held calls
+//! go to the same channels (not Jira).
 
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
@@ -164,6 +165,17 @@ fn jira_settings_error(site: &str, email: &str, token: &str, project: &str, issu
 }
 
 pub async fn send_outage_notification(state: &SharedState, org_id: &str, message: &str) {
+    send_to_channels(state, org_id, message, None).await;
+}
+
+/// An approval request: the message plus a one-time approval link, to every
+/// channel except Jira (a ticket can't hold a decision that has to happen
+/// now, and it would outlive the link).
+pub async fn send_approval_request(state: &SharedState, org_id: &str, message: &str, link: &str) {
+    send_to_channels(state, org_id, message, Some(link)).await;
+}
+
+async fn send_to_channels(state: &SharedState, org_id: &str, message: &str, approval_link: Option<&str>) {
     #[derive(sqlx::FromRow)]
     struct Row {
         r#type: String,
@@ -184,6 +196,12 @@ pub async fn send_outage_notification(state: &SharedState, org_id: &str, message
         }
     };
 
+    // Plain-text channels get the link on its own line; Telegram and Discord
+    // turn it into a link themselves, Slack needs its <url|label> syntax.
+    let plain = match approval_link {
+        Some(link) => format!("{message}\nReview and approve or deny: {link}"),
+        None => message.to_string(),
+    };
     for row in rows {
         let target = match state.cipher.decrypt(&row.encrypted_target) {
             Ok(t) => t,
@@ -192,25 +210,56 @@ pub async fn send_outage_notification(state: &SharedState, org_id: &str, message
                 continue;
             }
         };
+        let timeout = std::time::Duration::from_secs(5);
         let result = match row.r#type.as_str() {
-            "slack" => state.http_client.post(&target).json(&json!({ "text": message })).timeout(std::time::Duration::from_secs(5)).send().await,
-            "discord" => state.http_client.post(&target).json(&json!({ "content": message })).timeout(std::time::Duration::from_secs(5)).send().await,
+            "slack" => {
+                let text = match approval_link {
+                    Some(link) => format!("{message}\n<{link}|Review and approve or deny>"),
+                    None => message.to_string(),
+                };
+                state.http_client.post(&target).json(&json!({ "text": text })).timeout(timeout).send().await
+            }
+            "discord" => state.http_client.post(&target).json(&json!({ "content": plain })).timeout(timeout).send().await,
             "telegram" => {
                 let url = format!("https://api.telegram.org/bot{target}/sendMessage");
-                state.http_client.post(&url).json(&json!({ "chat_id": row.extra, "text": message })).timeout(std::time::Duration::from_secs(5)).send().await
+                state.http_client.post(&url).json(&json!({ "chat_id": row.extra, "text": plain })).timeout(timeout).send().await
+            }
+            "teams" => state.http_client.post(&target).json(&teams_card(message, approval_link)).timeout(timeout).send().await,
+            "email" => {
+                let (subject, cta_text, cta_url, expiry) = match approval_link {
+                    Some(link) => ("AgentRaaS: approval needed", "Review the request", link.to_string(), Some("The link works once and expires in 7 days.")),
+                    None => ("AgentRaaS alert", "Open the dashboard", format!("{}/dashboard", state.public_url), None),
+                };
+                state.mailer.send_notification_email(&target, subject, message, cta_text, &cta_url, expiry).await;
+                continue;
             }
             "jira" => {
-                if let Err(err) = create_jira_ticket(state, org_id, &target, row.extra.as_deref(), message).await {
-                    tracing::warn!(org_id, error = %err, "Jira ticket creation failed");
+                if approval_link.is_none() {
+                    if let Err(err) = create_jira_ticket(state, org_id, &target, row.extra.as_deref(), message).await {
+                        tracing::warn!(org_id, error = %err, "Jira ticket creation failed");
+                    }
                 }
                 continue;
             }
             _ => continue,
         };
         if let Err(err) = result {
-            tracing::warn!(org_id, r#type = %row.r#type, error = %err, "outage notification failed");
+            tracing::warn!(org_id, r#type = %row.r#type, error = %err, "notification failed");
         }
     }
+}
+
+/// An Adaptive Card, the format both Teams Workflows webhooks and the older
+/// incoming-webhook connectors accept.
+fn teams_card(message: &str, approval_link: Option<&str>) -> Value {
+    let mut card = json!({
+        "type": "AdaptiveCard", "version": "1.4", "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+        "body": [{ "type": "TextBlock", "text": message, "wrap": true }],
+    });
+    if let Some(link) = approval_link {
+        card["actions"] = json!([{ "type": "Action.OpenUrl", "title": "Review and approve or deny", "url": link }]);
+    }
+    json!({ "type": "message", "attachments": [{ "contentType": "application/vnd.microsoft.card.adaptive", "content": card }] })
 }
 
 #[derive(Deserialize)]
@@ -237,8 +286,8 @@ async fn create_webhook(
         return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "org_id must be 1-100 characters, letters/numbers/underscore/hyphen only."));
     }
     let webhook_type = body.r#type.unwrap_or_default();
-    if !["slack", "discord", "telegram", "jira"].contains(&webhook_type.as_str()) {
-        return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "type must be one of: slack, discord, telegram, jira."));
+    if !["slack", "discord", "telegram", "jira", "teams", "email"].contains(&webhook_type.as_str()) {
+        return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "type must be one of: slack, discord, telegram, jira, teams, email."));
     }
     if !check_org_write_permission(&state.pg, user.sub, &org_id).await? {
         return Err(ApiError::new(StatusCode::FORBIDDEN, "Auditors have read-only access to this org."));
@@ -248,11 +297,15 @@ async fn create_webhook(
         let msg = match webhook_type.as_str() {
             "telegram" => "target (bot token) is required.",
             "jira" => "target (the Jira API token) is required.",
+            "email" => "target (an email address) is required.",
             _ => "target (webhook URL) is required.",
         };
         return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, msg));
     }
-    if webhook_type == "slack" || webhook_type == "discord" {
+    if webhook_type == "email" && !crate::auth::is_valid_email(&target) {
+        return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "target must be an email address for type \"email\"."));
+    }
+    if ["slack", "discord", "teams"].contains(&webhook_type.as_str()) {
         if let Some(err) = validate_target_url(&target).await {
             return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, err));
         }
@@ -275,6 +328,7 @@ async fn create_webhook(
             let settings = serde_json::to_string(&JiraTarget { site, email, token: target }).map_err(|_| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "An internal error occurred."))?;
             (settings, Some(format!("{project}|{issue_type}")))
         }
+        "email" => (crate::auth::normalize_email(&target), None),
         _ => (target, None),
     };
     let encrypted_target = state.cipher.encrypt(&stored_target);

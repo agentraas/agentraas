@@ -1870,8 +1870,10 @@
     const isJira = nwType.value === 'jira';
     document.getElementById('nw-chatid-field').style.display = isTelegram ? 'block' : 'none';
     document.getElementById('nw-jira-fields').style.display = isJira ? 'block' : 'none';
-    document.getElementById('nw-target-label').textContent = isTelegram ? 'Bot token' : isJira ? 'Jira API token (id.atlassian.com, Security, API tokens)' : 'Webhook URL';
-    document.getElementById('nw-target').placeholder = isTelegram ? '123456:ABC-DEF...' : isJira ? 'ATATT3x...' : 'https://hooks.slack.com/services/...';
+    const t = nwType.value;
+    document.getElementById('nw-target-label').textContent = isTelegram ? 'Bot token' : isJira ? 'Jira API token (id.atlassian.com, Security, API tokens)' : t === 'email' ? 'Email address' : 'Webhook URL';
+    document.getElementById('nw-target').placeholder = isTelegram ? '123456:ABC-DEF...' : isJira ? 'ATATT3x...' : t === 'email' ? 'oncall@company.com'
+      : t === 'teams' ? 'https://prod-00.westus.logic.azure.com/workflows/...' : t === 'discord' ? 'https://discord.com/api/webhooks/...' : 'https://hooks.slack.com/services/...';
   }
   nwType.addEventListener('change', updateNwFieldVisibility);
 

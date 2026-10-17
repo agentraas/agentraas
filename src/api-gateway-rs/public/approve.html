@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Served by pages.rs at /approve. The one-time token is in the URL fragment (#...), read by js/approve.js. -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<title>Approve an agent action | AgentRaaS</title>
+<meta name="robots" content="noindex">
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #F6F7F9; color: #0E1116; font-family: Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  main { max-width: 640px; margin: 0 auto; padding: 56px 16px 40px; }
+  .brand { font: 700 15px Inter, system-ui, sans-serif; color: #4A5260; margin-bottom: 20px; }
+  .card { background: #FFFFFF; border: 1px solid #E4E7EB; border-radius: 10px; padding: 24px; }
+  h1 { font-size: 24px; line-height: 1.2; letter-spacing: -0.02em; margin-bottom: 8px; }
+  p { color: #4A5260; font-size: 15px; line-height: 1.5; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 18px 0; font-size: 14px; }
+  dt { color: #6B7380; } dd { font-family: 'JetBrains Mono', ui-monospace, monospace; word-break: break-all; }
+  pre { background: #0F1216; color: #E6E8EB; border-radius: 8px; padding: 14px; font: 13px/1.5 'JetBrains Mono', ui-monospace, monospace; overflow-x: auto; max-height: 360px; margin-bottom: 20px; }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  button { font: 600 15px Inter, system-ui, sans-serif; padding: 11px 20px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; }
+  button:disabled { opacity: .55; cursor: default; }
+  .approve { background: #1F6B45; color: #FFFFFF; }
+  .deny { background: #FFFFFF; color: #A12A24; border-color: #D9A29E; }
+  .msg { margin-top: 16px; font-weight: 600; }
+  .ok { color: #1F6B45; } .bad { color: #A12A24; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <div class="brand">AgentRaaS</div>
+  <div class="card">
+    <h1 id="title">Loading the request</h1>
+    <p id="intro">An agent asked to run an action that needs a person's approval.</p>
+    <div id="details" hidden>
+      <dl>
+        <dt>Action</dt><dd id="d-action"></dd>
+        <dt>Org</dt><dd id="d-org"></dd>
+        <dt>Requested</dt><dd id="d-time"></dd>
+        <dt>Status</dt><dd id="d-status"></dd>
+      </dl>
+      <pre id="d-payload"></pre>
+      <div class="actions" id="buttons" hidden>
+        <button class="approve" id="approve-btn" type="button">Approve and run</button>
+        <button class="deny" id="deny-btn" type="button">Deny</button>
+      </div>
+    </div>
+    <p class="msg" id="msg" role="status"></p>
+  </div>
+</main>
+<script src="/js/approve.js"></script>
+</body>
+</html>

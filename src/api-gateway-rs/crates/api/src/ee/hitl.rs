@@ -35,6 +35,8 @@ pub fn router() -> Router<SharedState> {
         .route("/api/v1/hitl-escalation-config", post(put_escalation_config).get(get_escalation_config))
         .route("/v1/hitl/:req_id", get(get_status))
         .route("/v1/hitl/interactions/:org_id", post(interaction))
+        .route("/v1/hitl/link", post(link_view))
+        .route("/v1/hitl/link/decide", post(link_decide))
 }
 
 // ─── rule matching (called from handle_request) ───
@@ -161,6 +163,7 @@ pub async fn freeze_and_notify(
         let _ = dedup::hold_for_approval(&mut conn, &format!("dedup:{dedup_hash}")).await;
     }
     post_slack_card(state, org_id, req_id, service, action, payload, run_id).await;
+    send_approval_link(state, org_id, req_id, service, action, payload).await;
 
     log_audit(&state.pg, req_id, api_key, org_id, agent_id, service, action, "pending_approval", None, 0, Some(dedup_hash), state.enterprise_mode, None, run_id, step_id, None).await;
     (
@@ -363,6 +366,103 @@ pub fn spawn_hitl_escalation_loop(state: SharedState) {
             run_hitl_escalation_check(&state).await;
         }
     });
+}
+
+// ─── approval links (email, Teams, Telegram, Discord, Slack webhooks) ───
+
+/// A link stays usable this long; after that the request can still be
+/// approved from Slack or the dashboard.
+const LINK_DAYS: i64 = 7;
+
+fn token_hash(token: &str) -> String {
+    use sha2::{Digest, Sha256};
+    hex::encode(Sha256::digest(token.as_bytes()))
+}
+
+/// Stores the hash of a fresh one-time token on the held request and sends
+/// the link to every alert channel the org has. The token sits after `#`
+/// so it never reaches a server log or a Referer header.
+async fn send_approval_link(state: &SharedState, org_id: &str, req_id: &str, service: &str, action: &str, payload: &Value) {
+    let token = hex::encode(rand::random::<[u8; 32]>());
+    let saved = sqlx::query("UPDATE hitl_requests SET approval_token_hash = $1 WHERE req_id = $2")
+        .bind(token_hash(&token))
+        .bind(req_id)
+        .execute(&state.pg)
+        .await;
+    if saved.is_err() {
+        tracing::error!(req_id, "hitl: could not store the approval link token");
+        return;
+    }
+    let link = format!("{}/approve#{token}", state.public_url);
+    let body = serde_json::to_string_pretty(payload).unwrap_or_default();
+    let body: String = if body.chars().count() > 1500 { format!("{}...", body.chars().take(1500).collect::<String>()) } else { body };
+    let message = format!("AgentRaaS approval needed: {service}.{action} for org {org_id}\n{body}");
+    crate::notifications::send_approval_request(state, org_id, &message, &link).await;
+}
+
+#[derive(Deserialize)]
+struct LinkBody {
+    token: String,
+    decision: Option<String>,
+}
+
+#[derive(sqlx::FromRow)]
+struct LinkRow {
+    req_id: String,
+    org_id: String,
+    service: String,
+    action: String,
+    payload: Value,
+    status: String,
+    created_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// One lookup for both endpoints. A token that is unknown and one that has
+/// expired answer the same, so the answer says nothing about which tokens
+/// exist.
+async fn find_link(state: &SharedState, token: &str) -> Result<LinkRow, ApiError> {
+    let not_found = || ApiError::new(StatusCode::NOT_FOUND, "This approval link is not valid or has expired.");
+    if token.len() != 64 || !token.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(not_found());
+    }
+    let row: Option<LinkRow> = sqlx::query_as(
+        "SELECT req_id, org_id, service, action, payload, status, created_at FROM hitl_requests WHERE approval_token_hash = $1",
+    )
+    .bind(token_hash(token))
+    .fetch_optional(&state.pg)
+    .await?;
+    match row {
+        Some(r) if chrono::Utc::now() - r.created_at <= chrono::Duration::days(LINK_DAYS) => Ok(r),
+        _ => Err(not_found()),
+    }
+}
+
+/// What the approval page shows. POST, not GET: link previews in chat apps
+/// and mail scanners fetch GET URLs on their own.
+async fn link_view(State(state): State<SharedState>, Json(body): Json<LinkBody>) -> Result<Json<Value>, ApiError> {
+    let r = find_link(&state, &body.token).await?;
+    Ok(Json(json!({ "reqId": r.req_id, "org_id": r.org_id, "service": r.service, "action": r.action, "payload": r.payload, "status": r.status, "created_at": r.created_at })))
+}
+
+/// The decision. `claim_pending` inside approve/deny lets only one click
+/// win, so a link used twice (or racing a Slack click) runs the action once.
+async fn link_decide(State(state): State<SharedState>, Json(body): Json<LinkBody>) -> Result<Json<Value>, ApiError> {
+    let r = find_link(&state, &body.token).await?;
+    if r.status != "pending" {
+        return Err(ApiError::new(StatusCode::CONFLICT, format!("This request was already {}.", r.status)));
+    }
+    let resolved_by = "approval link".to_string();
+    match body.decision.as_deref() {
+        Some("approve") => {
+            approve(&state, &r.req_id, &r.org_id, resolved_by, None).await;
+        }
+        Some("deny") => {
+            deny(&state, &r.req_id, &r.org_id, resolved_by, None).await;
+        }
+        _ => return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "decision must be \"approve\" or \"deny\".")),
+    }
+    let status: String = sqlx::query_scalar("SELECT status FROM hitl_requests WHERE req_id = $1").bind(&r.req_id).fetch_one(&state.pg).await?;
+    Ok(Json(json!({ "reqId": r.req_id, "status": status })))
 }
 
 // ─── status poll ───
