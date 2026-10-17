@@ -285,7 +285,7 @@ stripe = client.service("stripe")
 result = stripe.charge.create({"amount": 5000, "currency": "usd"})
 ```
 
-Calling a [Custom Action](https://github.com/sumedhchatse/agentraas#supported-services)
+Calling a [Custom Action](https://agentraas.io/docs#custom-actions)
 you've registered:
 
 ```python

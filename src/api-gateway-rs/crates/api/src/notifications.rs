@@ -243,8 +243,14 @@ async fn send_to_channels(state: &SharedState, org_id: &str, message: &str, appr
             }
             _ => continue,
         };
-        if let Err(err) = result {
-            tracing::warn!(org_id, r#type = %row.r#type, error = %err, "notification failed");
+        // A rejected webhook (wrong URL, revoked bot) answers with an error
+        // status, not a transport error: log both, or the message just vanishes.
+        match result {
+            Err(err) => tracing::warn!(org_id, r#type = %row.r#type, error = %err, "notification failed"),
+            Ok(resp) if !resp.status().is_success() => {
+                tracing::warn!(org_id, r#type = %row.r#type, status = resp.status().as_u16(), "notification rejected by the channel")
+            }
+            Ok(_) => {}
         }
     }
 }

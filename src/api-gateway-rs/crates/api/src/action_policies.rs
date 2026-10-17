@@ -76,7 +76,7 @@ async fn create_policy(State(state): State<SharedState>, user: AuthUser, Json(bo
             }
             Some(f.clone())
         }
-        ("require", None | Some(Value::Null)) if hours.is_some() => None,
+        ("require", None) if hours.is_some() => None,
         ("require", None) => return Err(unprocessable("A require policy needs fields or hours.")),
         _ => return Err(unprocessable("effect must be \"deny\" or \"require\".")),
     };
@@ -200,8 +200,8 @@ pub struct Policy {
 }
 
 pub struct Violation {
-    /// "policy_denied", "policy_violation" or "policy_new_destination",
-    /// the audit log's reason.
+    /// "policy_denied", "policy_violation", "policy_new_destination" or
+    /// "policy_outside_hours", the audit log's reason.
     pub reason: &'static str,
     pub hitl: bool,
     pub message: String,
