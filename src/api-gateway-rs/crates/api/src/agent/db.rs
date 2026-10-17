@@ -298,6 +298,8 @@ pub async fn get_credential(state: &SharedState, service: &str, org_id: &str, en
 
 pub struct ApiKeyVerification {
     pub ok: bool,
+    /// `None`: every service. `Some(list)`: only these (per-key switches).
+    pub allowed_services: Option<Vec<String>>,
 }
 
 /// Backward-compatible by design: if nobody has ever run "Connect Agent"
@@ -363,11 +365,11 @@ pub async fn verify_api_key(
             .fetch_optional(pg)
             .await?;
         if keys_exist.is_none() {
-            return Ok(ApiKeyVerification { ok: true });
+            return Ok(ApiKeyVerification { ok: true, allowed_services: None });
         }
     }
     if provided_key.is_empty() || provided_key == "anonymous" {
-        return Ok(ApiKeyVerification { ok: false });
+        return Ok(ApiKeyVerification { ok: false, allowed_services: None });
     }
 
     let prefix: String = provided_key.chars().take(16).collect();
@@ -378,8 +380,8 @@ pub async fn verify_api_key(
         hex::encode(hasher.finalize())
     };
 
-    let id: Option<i32> = sqlx::query_scalar(
-        "SELECT id FROM api_keys WHERE key_prefix=$1 AND key_hash=$2 AND org_id=$3 AND agent_id=$4 AND revoked_at IS NULL",
+    let row: Option<(i32, Option<Vec<String>>)> = sqlx::query_as(
+        "SELECT id, allowed_services FROM api_keys WHERE key_prefix=$1 AND key_hash=$2 AND org_id=$3 AND agent_id=$4 AND revoked_at IS NULL",
     )
     .bind(&prefix)
     .bind(&hash)
@@ -388,14 +390,14 @@ pub async fn verify_api_key(
     .fetch_optional(pg)
     .await?;
 
-    let Some(id) = id else {
-        return Ok(ApiKeyVerification { ok: false });
+    let Some((id, allowed_services)) = row else {
+        return Ok(ApiKeyVerification { ok: false, allowed_services: None });
     };
     let _ = sqlx::query("UPDATE api_keys SET last_used_at = NOW() WHERE id=$1")
         .bind(id)
         .execute(pg)
         .await;
-    Ok(ApiKeyVerification { ok: true })
+    Ok(ApiKeyVerification { ok: true, allowed_services })
 }
 
 /// Highest paid tier found among any user row tied to this org. An org's

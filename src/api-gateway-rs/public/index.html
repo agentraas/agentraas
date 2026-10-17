@@ -384,6 +384,8 @@
   }
   .cred-row button.revoke:hover { background: rgba(226,88,74,0.12); border-color: var(--alert); }
   .cred-row.clickable:hover { background: rgba(14,17,22,0.03); }
+  .link-btn { background: none; border: 0; padding: 0; color: var(--signal); font: inherit; text-decoration: underline; cursor: pointer; }
+  .scope-edit { margin-top: 8px; font-size: 12.5px; }
 
   /* Session / error states */
   #session-banner {
@@ -758,7 +760,7 @@
     </div>
     <div id="svc-step-done" style="display:none;">
       <h3 id="svc-done-title">Connected</h3>
-      <p class="sub">Give your agent these two. The AgentRaaS key is shown once: copy it now.</p>
+      <p class="sub" id="svc-done-sub">Give your agent these two. The AgentRaaS key is shown once: copy it now.</p>
       <div class="endpoint-block"><label>AgentRaaS URL</label><div class="row"><code id="svc-done-url"></code><button class="copy" data-target="svc-done-url">Copy</button></div></div>
       <div class="endpoint-block"><label>AgentRaaS key</label><div class="row"><code id="svc-done-key"></code><button class="copy" data-target="svc-done-key">Copy</button></div></div>
       <div class="endpoint-block"><label id="svc-done-example-label">Try it</label><div class="row"><code id="svc-done-curl"></code><button class="copy" data-target="svc-done-curl">Copy</button></div></div>

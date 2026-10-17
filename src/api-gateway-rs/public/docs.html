@@ -412,6 +412,7 @@ POST /webhooks/stripe -> 200 (4ms)</code></pre>
         <tr><td>SDK-style REST</td><td><code>x-agentraas-key: &lt;key&gt;</code> header</td></tr>
         <tr><td>MCP</td><td><code>x-agentraas-key: &lt;key&gt;</code> header</td></tr>
       </table>
+      <p><b>One key, every service.</b> Your services' own keys (Stripe, Slack, Alpaca and the rest) are stored once per org. An agent's AgentRaaS key works for every service the org has connected: only <code>service</code> in the call changes. To limit a key, open <b>Connect agent</b>, find the key and use <b>Change</b> next to "Works with" to switch services on or off for it, or <code>PUT /api/v1/agents/keys/:id/services</code> with <code>{"services": ["stripe", "slack"]}</code> (<code>null</code> for every service). A call to a service that is off gets <code>403</code>. Regenerating a key keeps its switches. Free on every edition.</p>
       <div class="callout"><p>Lost a key? Connect a new agent and revoke the old one from the <b>Credentials</b> panel; there's no way to have a lost key re-displayed.</p></div>
     </section>
 

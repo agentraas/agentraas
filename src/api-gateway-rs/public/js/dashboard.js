@@ -724,6 +724,7 @@
     try {
       const res = await fetch('/api/v1/agents/keys', { credentials: 'include' });
       const keys = (await res.json()).filter(k => !k.revoked_at);
+      agentKeysById = Object.fromEntries(keys.map((k) => [String(k.id), k]));
       countEl.textContent = keys.length === 0 ? 'No agents connected yet.' : `${keys.length} agent${keys.length === 1 ? '' : 's'} connected`;
       for (const k of keys) {
         const row = document.createElement('div');
@@ -733,6 +734,9 @@
           <div class="info">
             <div class="svc">${escapeHtml(k.org_id)} / ${escapeHtml(k.agent_id)} ${k.label ? `<span style="color:var(--muted);font-weight:400;">(${escapeHtml(k.label)})</span>` : ''}</div>
             <div class="meta">Key ${escapeHtml(k.key_prefix)}... · last used ${lastUsed}</div>
+            <div class="meta">Works with: ${escapeHtml(k.allowed_services ? (k.allowed_services.length ? k.allowed_services.map(serviceName).join(', ') : 'nothing (every service off)') : 'every connected service')}
+              <button type="button" class="link-btn" data-scope-id="${k.id}" style="margin-left:6px;">Change</button></div>
+            <div class="scope-edit" data-scope-for="${k.id}" hidden></div>
           </div>
           <button type="button" class="btn" data-regen-id="${k.id}" style="margin-right:6px;">Regenerate</button>
           <button class="revoke" data-revoke-id="${k.id}">Revoke</button>`;
@@ -753,7 +757,50 @@
     loadConnectedAgentsList();
   });
 
+  // Per-key service switches: "every connected service" (no list) or a
+  // chosen set. Checkboxes come from the org's connected services.
+  let agentKeysById = {};
+  async function openScopeEditor(id) {
+    const key = agentKeysById[id];
+    const box = document.querySelector(`[data-scope-for="${id}"]`);
+    if (!key || !box) return;
+    if (!box.hidden) { box.hidden = true; return; }
+    const res = await fetch('/api/v1/credentials', { credentials: 'include' });
+    const creds = res.ok ? await res.json() : [];
+    const names = [...new Set([...creds.filter((c) => c.org_id === key.org_id && !c.end_user_id).map((c) => c.service), ...(key.allowed_services || [])])].sort();
+    box.replaceChildren();
+    const all = document.createElement('label');
+    const allBox = Object.assign(document.createElement('input'), { type: 'checkbox', checked: !key.allowed_services });
+    all.append(allBox, ' Every connected service, including ones added later');
+    box.append(all);
+    const list = document.createElement('div');
+    list.style.margin = '6px 0 6px 18px';
+    for (const n of names) {
+      const l = document.createElement('label');
+      l.style.display = 'block';
+      const cb = Object.assign(document.createElement('input'), { type: 'checkbox', value: n, checked: !key.allowed_services || key.allowed_services.includes(n) });
+      l.append(cb, ' ' + serviceName(n));
+      list.append(l);
+    }
+    if (!names.length) list.textContent = 'No services connected for this org yet.';
+    const sync = () => { list.querySelectorAll('input').forEach((cb) => { cb.disabled = allBox.checked; }); };
+    allBox.addEventListener('change', sync); sync();
+    const save = Object.assign(document.createElement('button'), { type: 'button', className: 'btn', textContent: 'Save' });
+    const msg = document.createElement('span');
+    msg.style.marginLeft = '8px';
+    save.addEventListener('click', async () => {
+      const services = allBox.checked ? null : [...list.querySelectorAll('input:checked')].map((cb) => cb.value);
+      save.disabled = true;
+      const r = await fetch(`/api/v1/agents/keys/${id}/services`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ services }) });
+      if (r.ok) loadConnectedAgentsList();
+      else { msg.textContent = 'Could not save.'; save.disabled = false; }
+    });
+    box.append(list, save, msg);
+    box.hidden = false;
+  }
+
   document.getElementById('connected-agents-list').addEventListener('click', async (e) => {
+    if (e.target.dataset.scopeId) return openScopeEditor(e.target.dataset.scopeId);
     const revokeId = e.target.dataset.revokeId;
     const regenId = e.target.dataset.regenId;
     if (revokeId) {
@@ -910,6 +957,7 @@
     updateServiceFields();
   }
 
+  const ONE_AGENT_ID = 'my-agent';
   function selectedService() { return serviceCatalog.find((s) => s.name === document.getElementById('svc-pick').value); }
 
   function updateServiceFields() {
@@ -952,9 +1000,23 @@
       const credRes = await fetch('/api/v1/credentials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ org_id: currentUserOrgId, service: s.name, credentials }) });
       const credData = await credRes.json();
       if (!credRes.ok) return fail(credData.error || 'Could not save the key.');
-      const agentRes = await fetch('/api/v1/agents/connect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ org_id: currentUserOrgId, agent_id: `${s.name}-agent`, label: `${s.catalog.setup.label} (Connect a service)` }) });
-      const agent = await agentRes.json();
-      if (!agentRes.ok) return fail(agent.error || 'Saved the key, but could not create the agent key.');
+      // One AgentRaaS key for every connected service: reuse my-agent's key
+      // if it exists (turning this service on for it when the key is
+      // limited), otherwise create it once.
+      const keysRes = await fetch('/api/v1/agents/keys', { credentials: 'include' });
+      const keys = keysRes.ok ? await keysRes.json() : [];
+      const existing = keys.find((k) => !k.revoked_at && k.org_id === currentUserOrgId && k.agent_id === ONE_AGENT_ID);
+      let agent;
+      if (existing) {
+        if (existing.allowed_services && !existing.allowed_services.includes(s.name)) {
+          await fetch(`/api/v1/agents/keys/${existing.id}/services`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ services: [...existing.allowed_services, s.name] }) });
+        }
+        agent = { reused: true, key_prefix: existing.key_prefix, org_id: existing.org_id, agent_id: ONE_AGENT_ID, webhook_url: `${location.origin}/v1/webhook/${encodeURIComponent(existing.org_id)}/${ONE_AGENT_ID}` };
+      } else {
+        const agentRes = await fetch('/api/v1/agents/connect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ org_id: currentUserOrgId, agent_id: ONE_AGENT_ID, label: 'My agent' }) });
+        agent = await agentRes.json();
+        if (!agentRes.ok) return fail(agent.error || 'Saved the key, but could not create the agent key.');
+      }
       showServiceDone(s, agent);
       window.dataLayer = window.dataLayer || [];
       window.dataLayer.push({ event: 'service_connected', service: s.name });
@@ -966,13 +1028,17 @@
 
   function showServiceDone(s, agent) {
     const setup = s.catalog.setup;
+    const keyText = agent.reused ? `${agent.key_prefix}... (your existing key)` : agent.api_key;
+    document.getElementById('svc-done-sub').textContent = agent.reused
+      ? `Your agent's existing AgentRaaS key now works for ${setup.label} too. Same URL, same key: only "service" in the call changes.`
+      : 'Give your agent these two. The AgentRaaS key is shown once: copy it now. It works for every service you connect.';
     const ex = setup.example || { action: s.catalog.actions[0]?.name, payload: {} };
     const body = JSON.stringify({ service: s.name, action: ex.action, payload: ex.payload });
     document.getElementById('svc-done-title').textContent = `${setup.label} is connected`;
     document.getElementById('svc-done-url').textContent = agent.webhook_url;
-    document.getElementById('svc-done-key').textContent = agent.api_key;
+    document.getElementById('svc-done-key').textContent = keyText;
     document.getElementById('svc-done-example-label').textContent = `Try it: ${ex.action}${setup.example ? ' (edit the values to yours first)' : ''}`;
-    document.getElementById('svc-done-curl').textContent = `curl -X POST ${agent.webhook_url} \\\n  -H "Authorization: Bearer ${agent.api_key}" \\\n  -H "Content-Type: application/json" \\\n  -d '${body}'`;
+    document.getElementById('svc-done-curl').textContent = `curl -X POST ${agent.webhook_url} \\\n  -H "Authorization: Bearer ${agent.reused ? '$AGENTRAAS_KEY' : agent.api_key}" \\\n  -H "Content-Type: application/json" \\\n  -d '${body}'`;
     const list = document.getElementById('svc-done-actions');
     list.replaceChildren(...s.catalog.actions.map((a) => {
       const div = document.createElement('div');

@@ -31,6 +31,7 @@ pub fn router() -> Router<SharedState> {
         .route("/api/v1/agents/keys", get(list_keys))
         .route("/api/v1/agents/keys/:id", delete(revoke_key))
         .route("/api/v1/agents/keys/:id/regenerate", post(regenerate_key))
+        .route("/api/v1/agents/keys/:id/services", axum::routing::put(set_key_services))
         .route("/api/v1/runs/:run_id", get(get_run_status))
         .route("/api/v1/demo/live-test", post(demo_live_test))
         .route("/internal/mockpay", post(internal_mockpay))
@@ -463,6 +464,13 @@ async fn handle_request_inner(
                     StatusCode::UNAUTHORIZED,
                     &req_id,
                     "Invalid or missing API key for this agent. Generate one from the dashboard's Connect Agent panel.",
+                )
+            }
+            Ok(v) if !key_allows_service(v.allowed_services.as_deref(), &service) => {
+                return err_response(
+                    StatusCode::FORBIDDEN,
+                    &req_id,
+                    &format!("This API key isn't enabled for \"{service}\". Turn it on for this key in the dashboard (Connect Agent, the key's services)."),
                 )
             }
             Err(err) => {
@@ -1257,9 +1265,10 @@ async fn list_keys(State(state): State<SharedState>, user: AuthUser) -> Result<J
         created_at: chrono::DateTime<chrono::Utc>,
         last_used_at: Option<chrono::DateTime<chrono::Utc>>,
         revoked_at: Option<chrono::DateTime<chrono::Utc>>,
+        allowed_services: Option<Vec<String>>,
     }
     let rows = sqlx::query_as::<_, Row>(
-        "SELECT id, org_id, agent_id, label, key_prefix, created_at, last_used_at, revoked_at
+        "SELECT id, org_id, agent_id, label, key_prefix, created_at, last_used_at, revoked_at, allowed_services
          FROM api_keys WHERE user_id = $1 ORDER BY created_at DESC",
     )
     .bind(user.sub)
@@ -1272,7 +1281,7 @@ async fn list_keys(State(state): State<SharedState>, user: AuthUser) -> Result<J
                 json!({
                     "id": r.id, "org_id": r.org_id, "agent_id": r.agent_id, "label": r.label,
                     "key_prefix": r.key_prefix, "created_at": r.created_at, "last_used_at": r.last_used_at,
-                    "revoked_at": r.revoked_at,
+                    "revoked_at": r.revoked_at, "allowed_services": r.allowed_services,
                 })
             })
             .collect(),
@@ -1304,14 +1313,14 @@ async fn regenerate_key(
     Path(id): Path<i32>,
 ) -> Result<Json<Value>, ApiError> {
     check_dashboard_rate_limit(&state, user.sub).await?;
-    let existing: Option<(String, String, Option<String>)> = sqlx::query_as(
-        "SELECT org_id, agent_id, label FROM api_keys WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL",
+    let existing: Option<(String, String, Option<String>, Option<Vec<String>>)> = sqlx::query_as(
+        "SELECT org_id, agent_id, label, allowed_services FROM api_keys WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL",
     )
     .bind(id)
     .bind(user.sub)
     .fetch_optional(&state.pg)
     .await?;
-    let Some((org_id, agent_id, label)) = existing else {
+    let Some((org_id, agent_id, label, allowed_services)) = existing else {
         return Err(ApiError::new(StatusCode::NOT_FOUND, "Key not found."));
     };
 
@@ -1321,13 +1330,15 @@ async fn regenerate_key(
         .await?;
 
     let (raw_key, key_hash, key_prefix) = generate_api_key();
-    sqlx::query("INSERT INTO api_keys (user_id, org_id, agent_id, label, key_hash, key_prefix) VALUES ($1,$2,$3,$4,$5,$6)")
+    // The new key keeps the old one's service switches.
+    sqlx::query("INSERT INTO api_keys (user_id, org_id, agent_id, label, key_hash, key_prefix, allowed_services) VALUES ($1,$2,$3,$4,$5,$6,$7)")
         .bind(user.sub)
         .bind(&org_id)
         .bind(&agent_id)
         .bind(&label)
         .bind(&key_hash)
         .bind(&key_prefix)
+        .bind(&allowed_services)
         .execute(&state.pg)
         .await?;
 
@@ -1505,4 +1516,58 @@ async fn get_run_status(State(state): State<SharedState>, headers: HeaderMap, Pa
             "status": r.status, "error_type": r.error_type, "created_at": r.created_at,
         })).collect::<Vec<_>>(),
     })))
+}
+
+/// `None` = every service; otherwise the call's service must be listed.
+fn key_allows_service(allowed: Option<&[String]>, service: &str) -> bool {
+    allowed.is_none_or(|list| list.iter().any(|s| s == service))
+}
+
+#[derive(Deserialize)]
+struct KeyServicesBody {
+    /// `null` turns the limit off (every service); a list limits the key.
+    services: Option<Vec<String>>,
+}
+
+/// Per-key service switches. Free on every edition: it only narrows what
+/// a key can do.
+async fn set_key_services(
+    State(state): State<SharedState>,
+    user: AuthUser,
+    Path(id): Path<i32>,
+    Json(body): Json<KeyServicesBody>,
+) -> Result<Json<Value>, ApiError> {
+    check_dashboard_rate_limit(&state, user.sub).await?;
+    let mut services = body.services;
+    if let Some(list) = services.as_mut() {
+        list.sort();
+        list.dedup();
+        if list.len() > 200 || list.iter().any(|s| !crate::auth::is_valid_identifier(s)) {
+            return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "services must be a list of service names (letters, numbers, underscore, hyphen), at most 200."));
+        }
+    }
+    let updated: Option<i32> = sqlx::query_scalar(
+        "UPDATE api_keys SET allowed_services = $1 WHERE id = $2 AND user_id = $3 AND revoked_at IS NULL RETURNING id",
+    )
+    .bind(&services)
+    .bind(id)
+    .bind(user.sub)
+    .fetch_optional(&state.pg)
+    .await?;
+    if updated.is_none() {
+        return Err(ApiError::new(StatusCode::NOT_FOUND, "Key not found."));
+    }
+    Ok(Json(json!({ "id": id, "allowed_services": services })))
+}
+
+#[cfg(test)]
+mod key_service_tests {
+    #[test]
+    fn a_key_with_a_list_only_reaches_listed_services() {
+        let list = vec!["stripe".to_string(), "slack".to_string()];
+        assert!(super::key_allows_service(None, "alpaca"));
+        assert!(super::key_allows_service(Some(&list), "stripe"));
+        assert!(!super::key_allows_service(Some(&list), "alpaca"));
+        assert!(!super::key_allows_service(Some(&[]), "stripe"), "an empty list allows nothing");
+    }
 }
