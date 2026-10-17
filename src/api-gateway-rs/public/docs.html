@@ -172,7 +172,7 @@
 <header class="sn">
   <div class="sn-in">
     <a href="/" class="sn-brand" aria-label="AgentRaaS home"><span class="sn-mark"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="8.5" cy="12" r="5.6" fill="none" stroke="#ECEFF3" stroke-width="2"/><circle cx="15.5" cy="12" r="5.6" fill="#F2B544"/></svg></span>AgentRaaS</a>
-    <nav class="sn-links" aria-label="Main"><a href="/#features">Platform</a><a href="/#open-source">Open source</a><a href="/#pricing">Pricing</a><a href="/docs" aria-current="page">Docs</a><a href="/guide">Guide</a><a href="/status">Status</a></nav>
+    <nav class="sn-links" aria-label="Main"><a href="/#features">Platform</a><a href="/#open-source">Open source</a><a href="/#pricing">Pricing</a><a href="/docs" aria-current="page">Docs</a><a href="/guide">Guide</a><a href="/community">Community</a><a href="/status">Status</a></nav>
     <div class="sn-right">
       <a href="https://github.com/sumedhchatse/agentraas" target="_blank" rel="noopener" class="sn-gh" aria-label="AgentRaaS on GitHub"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.5 0-.24-.01-.87-.01-1.71-2.78.62-3.37-1.37-3.37-1.37-.46-1.2-1.11-1.52-1.11-1.52-.91-.64.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05a9.3 9.3 0 0 1 2.5-.35c.85 0 1.71.12 2.5.35 1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.46.1 2.72.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.79-4.57 5.05.36.32.68.95.68 1.92 0 1.39-.01 2.51-.01 2.85 0 .28.18.61.69.5A10.26 10.26 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg></a>
       <a href="/dashboard" class="sn-btn s">Log in</a>
@@ -180,7 +180,7 @@
       <button class="sn-menu" type="button" aria-label="Menu" aria-expanded="false" aria-controls="sn-panel"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     </div>
   </div>
-  <nav class="sn-panel" id="sn-panel" aria-label="Main"><a href="/#features">Platform</a><a href="/#open-source">Open source</a><a href="/#pricing">Pricing</a><a href="/docs" aria-current="page">Docs</a><a href="/guide">Guide</a><a href="/status">Status</a><a href="https://github.com/sumedhchatse/agentraas" target="_blank" rel="noopener">GitHub</a><a href="/dashboard">Log in</a></nav>
+  <nav class="sn-panel" id="sn-panel" aria-label="Main"><a href="/#features">Platform</a><a href="/#open-source">Open source</a><a href="/#pricing">Pricing</a><a href="/docs" aria-current="page">Docs</a><a href="/guide">Guide</a><a href="/community">Community</a><a href="/status">Status</a><a href="https://github.com/sumedhchatse/agentraas" target="_blank" rel="noopener">GitHub</a><a href="/dashboard">Log in</a></nav>
 </header>
 <script src="/js/site-nav.js"></script>
 <!-- site-nav:end -->
@@ -219,6 +219,7 @@
       <a href="#custom-actions">Custom Actions</a>
       <a href="#undo">Undo log</a>
       <a href="#record-replay">Record and replay</a>
+      <a href="#approvals">Human approval</a>
       <a href="#action-policies">Action policies</a>
       <a href="#apply">Rules as code</a>
       <a href="#inbound-webhooks">Inbound webhooks</a>
@@ -591,6 +592,17 @@ const result = await client.call("stripe", "charge.create", { amount: 5000, curr
       <p>Answers are played back in order: the second <code>stripe charge.create</code> of a replay gets the second one recorded. <code>payload_matches</code> is <code>false</code> when the agent now sends something different, and a call the recording doesn't have gets a <code>404</code>, so a test can fail on either. The position is kept per agent and <code>X-AgentRaaS-Run-Id</code> for an hour: send a new run id to start from the top. From the SDKs: <code>Client(..., record="refund-flow")</code> or <code>replay="refund-flow", run_id=...</code> in Python (0.10.0), <code>record</code> / <code>replay</code> / <code>runId</code> in the JS <code>Client</code> options (0.4.0). Only successful, non-streaming calls are recorded. MCP calls record and replay the same way: set the headers on the MCP connection (<code>X-AgentRaaS-Run-Id</code>, or a <code>run_id</code> tool argument). In the dashboard: <b>Monitor → Recordings</b> lists them, shows each call and deletes one. API: <code>GET /api/v1/recordings?org_id=</code> lists recordings, <code>GET /api/v1/recordings/&lt;name&gt;?org_id=</code> shows each call with its payload and response, <code>DELETE</code> on the same URL removes it.</p>
     </section>
 
+    <section id="approvals">
+      <h2>Human approval <span class="badge team">Team</span></h2>
+      <p>An approval rule (dashboard: <b>Rules → Approval rules</b>, or <code>/api/v1/hitl-rules</code>) holds a matching call instead of running it: always, or when a payload field passes a threshold (<code>amount &gt; 50000</code>). The caller gets <code>202</code> with a <code>status_url</code> to poll; the call runs only after a person approves it, and a retry of the same call while it waits gets <code>409</code>, never a second hold.</p>
+      <p>Where the request reaches people:</p>
+      <ul>
+        <li><b>Slack app:</b> an Approve/Deny card in a channel (bot token and signing secret).</li>
+        <li><b>Any alert channel:</b> Slack or Discord webhooks, Telegram, Microsoft Teams (a Workflows webhook URL) and email get the request with a one-time approval link. Add them in the dashboard's <b>Outage alerts</b> panel. Jira is the exception: it gets alerts, not approval requests.</li>
+      </ul>
+      <p>An approval link opens a page with the action and its payload. Opening it decides nothing, so link previews in chat apps and mail scanners can't approve a call; only the Approve or Deny button does. The first decision wins, from any channel, and the call runs once. A link expires after 7 days. Anyone holding the link can decide, so send approval requests only to channels the right people read.</p>
+    </section>
+
     <section id="action-policies">
       <h2>Action policies <span class="badge free">Free</span></h2>
       <p>Decide what each agent is allowed to do: the support agent may refund up to 50, may never delete a customer, may only email your customers' domains. Set them in the dashboard (Rules, Action policies) or through the API. Every matching policy applies, and a refused call gets a <code>403</code> naming the policy and is recorded in the audit log.</p>
@@ -877,11 +889,11 @@ redis-cli --scan --pattern 'dedup:local:*' | xargs -r redis-cli del</code></pre>
         <p>Stops AI agents from running the same API call twice, holds risky calls for human approval, and records every action.</p>
         <a href="https://github.com/sumedhchatse/agentraas" target="_blank" rel="noopener" class="sn-btn s"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.5 0-.24-.01-.87-.01-1.71-2.78.62-3.37-1.37-3.37-1.37-.46-1.2-1.11-1.52-1.11-1.52-.91-.64.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05a9.3 9.3 0 0 1 2.5-.35c.85 0 1.71.12 2.5.35 1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.46.1 2.72.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.79-4.57 5.05.36.32.68.95.68 1.92 0 1.39-.01 2.51-.01 2.85 0 .28.18.61.69.5A10.26 10.26 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>&nbsp;Star on GitHub</a>
       </div>
-      <div class="sf-col"><h4>Product</h4><a href="/#features">Platform</a><a href="/#open-source">Open source</a><a href="/#pricing">Pricing</a><a href="/dashboard">Dashboard</a><a href="/status">Status</a><a href="/postmortem-2026-09">Postmortems</a></div>
+      <div class="sf-col"><h4>Product</h4><a href="/#features">Platform</a><a href="/#open-source">Open source</a><a href="/#pricing">Pricing</a><a href="/self-host">Self-host</a><a href="/cloud">Cloud</a><a href="/dashboard">Dashboard</a><a href="/status">Status</a><a href="/postmortem-2026-09">Postmortems</a></div>
       <div class="sf-col"><h4>Docs</h4><a href="/guide">Getting started</a><a href="/docs">Documentation</a><a href="/webhook-audit">Free webhook audit</a><a href="/chaos">Chaos tester</a><a href="/mcp-scan">MCP safety scan</a><a href="https://github.com/sumedhchatse/agentraas" target="_blank" rel="noopener">GitHub</a></div>
       <div class="sf-col"><h4>Compare</h4><a href="/vs-temporal">vs Temporal</a><a href="/vs-composio">vs Composio</a><a href="/vs-arcade">vs Arcade.dev</a></div>
       <div class="sf-col"><h4>Legal</h4><a href="/license">License</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/terms#refunds">Refunds</a><a href="/security">Security</a></div>
-      <div class="sf-col"><h4>Company</h4><a href="/about">About</a><a href="mailto:hello@agentraas.io">hello@agentraas.io</a></div>
+      <div class="sf-col"><h4>Company</h4><a href="/about">About</a><a href="/community">Community</a><a href="mailto:hello@agentraas.io">hello@agentraas.io</a></div>
     </div>
     <div class="sf-bottom"><span>&copy; 2026 AgentRaaS</span><span>Built with Rust, Redis, PostgreSQL, Podman, and the fear of double-charging a customer at 2 AM.</span></div>
   </div>
