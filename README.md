@@ -62,6 +62,9 @@ def charge(customer, amount, idempotency_key=None):
   Vercel AI SDK (`npm install agentraas`).
 - `agentraas wrap -- <mcp server>` gives any MCP server exactly-once write
   tools and a log. In the [official MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.sumedhchatse/agentraas).
+- `agentraas scan` lists which tools in your MCP servers can move money,
+  delete data, run code or send messages, without calling any of them
+  ([GitHub Action](src/scan-action/action.yml) for pull requests).
 - The chaos tester exits non-zero, so it can fail CI ([GitHub Action](src/chaos-action/action.yml)).
 
 Details: [`src/sdk/README.md`](src/sdk/README.md), [`src/sdk-js`](src/sdk-js).
@@ -87,9 +90,14 @@ by hand, recreate (`podman-compose down && up -d`) rather than `restart`.
 - **Runs once:** dedup across retries and machines, near-duplicate matching,
   step checkpoints, a cross-agent resource lock.
 - **Policies:** what each agent may call and where it may send data,
-  validation rules, spend and loop limits.
-- **Human approval:** risky calls wait for approve or deny in Slack, with
-  escalation.
+  allowed hours in any time zone, validation rules, call and money caps per
+  hour or day, loop limits. Quoted numbers (`"5000"`) are held to the same
+  limits.
+- **One key per agent:** works for every service you connect; switch
+  services off per key.
+- **Human approval:** risky calls wait for approve or deny from the
+  dashboard, Slack, or a one-time link sent to Teams, Telegram, Discord or
+  email, with escalation.
 - **Resilience:** circuit breaker, rate limits, dead-letter queue with replay.
 - **Undo:** an action that ran can be reversed from the dashboard for 30 days
   (Stripe charge refunded, Slack message deleted, or your own reverse action),
@@ -100,8 +108,10 @@ by hand, recreate (`podman-compose down && up -d`) rather than `restart`.
   schema drift alerts.
 - **Teams:** OIDC SSO, roles, client tenants with white-label branding.
 
-Curated services (Stripe, Twilio, HubSpot, Shopify, Slack, PayPal and more in
-`config/services.json`), or register any URL as a Custom Action, SSRF-guarded.
+Curated services (Stripe, Twilio, HubSpot, Shopify, Slack, PayPal, Alpaca
+paper and live trading and more in `config/services.json`), or register any
+URL as a Custom Action, SSRF-guarded. Guardrails for trading agents:
+[agentraas.io/trading](https://agentraas.io/trading).
 
 ## Why not just idempotency keys?
 
@@ -155,14 +165,15 @@ through the built-in `mockpay` service, so no real API keys are needed.
 
 [agentraas.io/docs](https://agentraas.io/docs) has the API, the
 [troubleshooting guide](https://agentraas.io/docs#troubleshooting) and
-self-hosting details.
+self-hosting details. Questions: [agentraas.io/community](https://agentraas.io/community)
+(GitHub Discussions).
 
-The server is AGPL-3.0; its advanced features (SSO, approvals, DLP:
-`crates/api/src/ee/`, `crates/core/src/{dlp,hmac_verify}.rs`,
-`compose.ee.yaml`) are under the
-Functional Source License, free for any use except a competing hosted service
-and Apache-2.0 two years after each release. The SDKs are MIT/Apache-2.0.
-See [LICENSE.md](./LICENSE.md).
+The server is AGPL-3.0. The Team and Enterprise features
+(`crates/api/src/ee/`, `crates/core/src/{semantic_dedup,hmac_verify}.rs`,
+`compose.ee.yaml`) are source-available under the AgentRaaS Enterprise
+License from 0.16.0: free to read and try, production use needs a license
+key (releases 0.10.0 to 0.15.1 stay under the Functional Source License).
+The SDKs are MIT/Apache-2.0. See [LICENSE.md](./LICENSE.md).
 
 [CONTRIBUTING.md](./CONTRIBUTING.md) · [SECURITY.md](./SECURITY.md) (report
 vulnerabilities privately, not as issues) · [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)
