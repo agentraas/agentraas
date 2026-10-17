@@ -1,0 +1,26 @@
+name: Scan action
+on:
+  push:
+    paths: ["src/scan-action/**", "src/sdk/agentraas/mcp_scan.py", ".github/workflows/scan-action.yml"]
+  workflow_dispatch:
+jobs:
+  scan-action:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Fake MCP server with high-risk tools
+        run: |
+          pip install --quiet requests   # agentraas/__init__ imports it
+          cd src/sdk && python -c "import test_mcp_scan as t; open('/tmp/server.py', 'w').write(t.FAKE_SERVER)"
+          echo '{"mcpServers": {"fake": {"command": "python", "args": ["/tmp/server.py"]}}}' > /tmp/mcp.json
+      - name: Report only passes
+        uses: ./src/scan-action
+        with: { config: /tmp/mcp.json, fail-on: none }
+      - name: fail-on high fails
+        id: high
+        continue-on-error: true
+        uses: ./src/scan-action
+        with: { command: python /tmp/server.py }
+      - run: test "${{ steps.high.outcome }}" = failure
