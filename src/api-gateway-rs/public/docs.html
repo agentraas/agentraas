@@ -200,6 +200,7 @@
       <a href="#crewai">CrewAI</a>
       <a href="#ai-sdk">Vercel AI SDK</a>
       <a href="#mcp-wrap">MCP wrap</a>
+      <a href="#mcp-scan">MCP safety scan</a>
       <a href="#chaos-tester">Chaos tester</a>
       <a href="#tunnel">Local tunnel</a>
     </div>
@@ -338,6 +339,22 @@ const result = await generateText({ model, tools, prompt });</code></pre>
         <tr><td><code>--log</code></td><td><code>~/.agentraas/mcp-audit.jsonl</code></td><td>JSON-lines audit log of every tool call; <code>''</code> disables it.</td></tr>
       </table>
       <div class="callout"><p>Read-only tools always run, so lookups stay fresh: the server's <code>readOnlyHint</code> annotation decides, falling back to names like <code>get_*</code>, <code>list_*</code> and <code>search_*</code>. A failed call (JSON-RPC error or <code>isError: true</code>) is not cached, so a retry runs for real. A deduplicated result carries <code>_meta: {"agentraas/deduplicated": true}</code>.</p></div>
+    </section>
+
+    <section id="mcp-scan">
+      <h2>MCP safety scan <span class="badge free">Free</span></h2>
+      <p><code>agentraas scan</code> starts each stdio MCP server in your Claude Desktop, Cursor or Claude Code config, asks it for its tools, and sorts them: moves money, deletes, runs code, sends (high risk), writes (medium), reads (low). It sends only <code>initialize</code> and <code>tools/list</code>; no tool is called. The sorting uses the tools' <code>readOnlyHint</code> and <code>destructiveHint</code> annotations and the words in their names, so check the list rather than trusting it blindly. More on the <a href="/mcp-scan">MCP safety scan page</a>.</p>
+      <pre><code>agentraas scan                                    # every config found
+agentraas scan --config .mcp.json --fail-on high  # CI: exit 1 on a high-risk tool
+agentraas scan -- npx -y @modelcontextprotocol/server-github</code></pre>
+      <table>
+        <tr><th>Flag</th><th>What it does</th></tr>
+        <tr><td><code>--config PATH</code></td><td>Scan the servers in this config file (<code>mcpServers</code>). Repeatable. Without it: Claude Desktop, <code>~/.cursor/mcp.json</code>, <code>~/.claude.json</code>, <code>./.mcp.json</code>.</td></tr>
+        <tr><td><code>--fail-on</code></td><td><code>high</code> or <code>medium</code>: exit 1 when a tool at that level or above is found.</td></tr>
+        <tr><td><code>--json</code></td><td>Print the result as JSON.</td></tr>
+        <tr><td><code>--timeout</code></td><td>Seconds to wait for each server, default 60.</td></tr>
+      </table>
+      <div class="callout"><p>Scanning runs the commands in the config, with their environment, as your MCP client would: only scan configs you trust. Remote (URL) servers are listed but not scanned.</p></div>
     </section>
 
     <section id="chaos-tester">
@@ -860,7 +877,7 @@ redis-cli --scan --pattern 'dedup:local:*' | xargs -r redis-cli del</code></pre>
         <a href="https://github.com/sumedhchatse/agentraas" target="_blank" rel="noopener" class="sn-btn s"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.5 0-.24-.01-.87-.01-1.71-2.78.62-3.37-1.37-3.37-1.37-.46-1.2-1.11-1.52-1.11-1.52-.91-.64.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05a9.3 9.3 0 0 1 2.5-.35c.85 0 1.71.12 2.5.35 1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.46.1 2.72.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.79-4.57 5.05.36.32.68.95.68 1.92 0 1.39-.01 2.51-.01 2.85 0 .28.18.61.69.5A10.26 10.26 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>&nbsp;Star on GitHub</a>
       </div>
       <div class="sf-col"><h4>Product</h4><a href="/#features">Platform</a><a href="/#open-source">Open source</a><a href="/#pricing">Pricing</a><a href="/dashboard">Dashboard</a><a href="/status">Status</a><a href="/postmortem-2026-09">Postmortems</a></div>
-      <div class="sf-col"><h4>Docs</h4><a href="/guide">Getting started</a><a href="/docs">Documentation</a><a href="/webhook-audit">Free webhook audit</a><a href="https://github.com/sumedhchatse/agentraas" target="_blank" rel="noopener">GitHub</a></div>
+      <div class="sf-col"><h4>Docs</h4><a href="/guide">Getting started</a><a href="/docs">Documentation</a><a href="/webhook-audit">Free webhook audit</a><a href="/chaos">Chaos tester</a><a href="/mcp-scan">MCP safety scan</a><a href="https://github.com/sumedhchatse/agentraas" target="_blank" rel="noopener">GitHub</a></div>
       <div class="sf-col"><h4>Compare</h4><a href="/vs-temporal">vs Temporal</a><a href="/vs-composio">vs Composio</a><a href="/vs-arcade">vs Arcade.dev</a></div>
       <div class="sf-col"><h4>Legal</h4><a href="/license">License</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/terms#refunds">Refunds</a><a href="/security">Security</a></div>
       <div class="sf-col"><h4>Company</h4><a href="/about">About</a><a href="mailto:hello@agentraas.io">hello@agentraas.io</a></div>

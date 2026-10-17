@@ -11,6 +11,8 @@ recorded. This package brings that to your code:
   yours, your framework's or a flaky network's, never becomes a duplicate
   charge or message. No server needed.
 - `agentraas wrap`: the same for any MCP server's write tools.
+- `agentraas scan`: lists which tools in your MCP servers can move money,
+  delete data, run code or send messages, without calling any of them.
 - `agentraas chaos`: finds the calls in your agent that would double up
   under retries, before production does.
 - `Client`: points your calls at an AgentRaaS server for action policies,
@@ -139,6 +141,21 @@ Claude Desktop / Cursor config:
   `~/.agentraas/mcp-dedup.db`, the log in `~/.agentraas/mcp-audit.jsonl`
   (`--db`, `--log`).
 - A deduplicated result carries `_meta: {"agentraas/deduplicated": true}`.
+
+## MCP safety scan: which tools can act on the real world
+
+```bash
+agentraas scan                                    # every server in your Claude Desktop, Cursor, Claude Code configs
+agentraas scan -- npx -y @modelcontextprotocol/server-github
+agentraas scan --config .mcp.json --fail-on high  # CI: exit 1 on a high-risk tool
+```
+
+Starts each stdio server the way your client does, sends only
+`initialize` and `tools/list`, and sorts the tools: moves money, deletes,
+runs code, sends (high), writes (medium), reads (low), from their
+`readOnlyHint`/`destructiveHint` annotations and the words in their names.
+Only scan configs you trust: it runs their commands. `--json` for
+machine-readable output. https://agentraas.io/mcp-scan
 
 ## Chaos tester: find the calls your agent would run twice
 

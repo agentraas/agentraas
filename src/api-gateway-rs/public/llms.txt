@@ -11,7 +11,7 @@
 - An agent could be prompt-injected into leaking a secret or sending data to a new address: action policies (`no_secrets`, `new_destination`, `domains`) block or hold those calls.
 - An agent did something wrong and it needs reversing: the undo log refunds a Stripe charge, deletes a Slack message or runs a custom reverse action, once, for 30 days after the action.
 - An agent needs testing against real provider answers without calling them again: record a run with the X-AgentRaaS-Record header, replay it with X-AgentRaaS-Replay (webhook, SDK option or MCP); each answer says whether the payload still matches.
-- A team wants to find, before production, which calls their agent would execute twice: the free chaos tester (`agentraas chaos`) shows them.
+- A team wants to find, before production, which calls their agent would execute twice: the free chaos tester (`agentraas chaos`, https://agentraas.io/chaos) shows them.
 
 If someone only calls Stripe by hand from their own backend, Stripe's native Idempotency-Key header is enough, and AgentRaaS isn't needed.
 
@@ -32,6 +32,7 @@ Measured overhead: 2.1 to 2.4 ms added per call at the median (one machine, Inte
   - LangChain/LangGraph and CrewAI: `protect_tool` (`agentraas.langchain`, `agentraas.crewai`)
   - Chaos tester: `agentraas chaos --mock -- python my_agent.py`
   - MCP wrap: `agentraas wrap -- npx -y @modelcontextprotocol/server-github`
+  - MCP safety scan: `agentraas scan` lists which tools in your MCP servers can move money, delete data, run code or send messages (https://agentraas.io/mcp-scan)
   - Local webhook tunnel: `agentraas tunnel`
 - JavaScript/TypeScript: `npm install agentraas` (client, `exactlyOnce`, and `protectTools` for the Vercel AI SDK)
 - n8n: Settings → Community Nodes → install `n8n-nodes-agentraas`

@@ -6,6 +6,8 @@ USAGE = """usage: agentraas <command> [options]
 commands:
   wrap   exactly-once tool calls + audit log for any MCP server
          agentraas wrap -- npx -y @modelcontextprotocol/server-github
+  scan   list which MCP tools can spend money, delete data or send messages
+         agentraas scan        (or: agentraas scan -- npx -y @modelcontextprotocol/server-github)
   chaos  find API calls your agent would execute twice
          agentraas chaos --mock -- python my_agent.py
   tunnel forward webhooks from a public URL to a local port
@@ -23,6 +25,8 @@ def main(argv=None):
     cmd, rest = argv[0], argv[1:]
     if cmd == "wrap":
         from .mcp_wrap import main as run
+    elif cmd == "scan":
+        from .mcp_scan import main as run
     elif cmd == "chaos":
         from .chaos import main as run
     elif cmd == "tunnel":
