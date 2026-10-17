@@ -1714,12 +1714,15 @@
     const service = document.getElementById('spendcap-service').value.trim();
     const action = document.getElementById('spendcap-action').value.trim();
     const capWindow = document.getElementById('spendcap-window').value;
-    const max_calls = Number(document.getElementById('spendcap-max').value);
+    const max_calls = document.getElementById('spendcap-max').value ? Number(document.getElementById('spendcap-max').value) : null;
+    const amount_field = document.getElementById('spendcap-amount-field').value.trim() || null;
+    const max_amount = document.getElementById('spendcap-amount-max').value ? Number(document.getElementById('spendcap-amount-max').value) : null;
+    const timezone = document.getElementById('spendcap-tz').value.trim() || null;
     const on_exceed = document.getElementById('spendcap-exceed').value;
     try {
       const res = await fetch('/api/v1/spend-cap-rules', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-        body: JSON.stringify({ org_id, agent_id, service, action, window: capWindow, max_calls, on_exceed }),
+        body: JSON.stringify({ org_id, agent_id, service, action, window: capWindow, max_calls, amount_field, max_amount, timezone, on_exceed }),
       });
       const data = await res.json();
       if (!res.ok) { spendcapError.textContent = data.error || 'Could not save rule.'; spendcapError.style.display = 'block'; return; }
@@ -1742,7 +1745,7 @@
         const exceedLabel = row.on_exceed === 'hitl' ? 'route to approval' : 'block';
         const div = document.createElement('div');
         div.className = 'rule-summary-row';
-        div.innerHTML = `<div class="info"><div class="svc">${escapeHtml(row.service)}.${escapeHtml(row.action)} — ${escapeHtml(row.org_id)}</div><div class="meta">${row.max_calls}/${escapeHtml(row.window)} for ${scope}, then ${exceedLabel}</div></div><button class="revoke delete-spendcap-rule" data-id="${row.id}">Delete</button>`;
+        div.innerHTML = `<div class="info"><div class="svc">${escapeHtml(row.service)}.${escapeHtml(row.action)} — ${escapeHtml(row.org_id)}</div><div class="meta">${escapeHtml([row.max_calls ? `${row.max_calls} calls` : '', row.max_amount ? `${row.max_amount} total ${row.amount_field}` : ''].filter(Boolean).join(' and '))} per ${escapeHtml(row.window)}${row.timezone ? ` (${escapeHtml(row.timezone)})` : ''} for ${scope}, then ${exceedLabel}</div></div><button class="revoke delete-spendcap-rule" data-id="${row.id}">Delete</button>`;
         list.appendChild(div);
       }
       list.querySelectorAll('.delete-spendcap-rule').forEach((btn) => {
@@ -1774,9 +1777,16 @@
     e.preventDefault(); policyError.style.display = 'none';
     const effect = policyEffect.value;
     let fields = null;
-    if (effect === 'require') {
-      try { fields = JSON.parse(document.getElementById('policy-fields').value); }
-      catch (err) { showPolicyError('Limits must be valid JSON, like {"amount": {"max": 50}}.'); return; }
+    let hours = null;
+    const tz = document.getElementById('policy-hours-tz').value.trim();
+    if (effect === 'require' && tz) {
+      const days = document.getElementById('policy-hours-days').value.split(',').map((d) => d.trim().toLowerCase()).filter(Boolean);
+      hours = { tz, from: document.getElementById('policy-hours-from').value, to: document.getElementById('policy-hours-to').value, ...(days.length ? { days } : {}) };
+    }
+    const rawFields = document.getElementById('policy-fields').value.trim();
+    if (effect === 'require' && (rawFields || !hours)) {
+      try { fields = JSON.parse(rawFields); }
+      catch (err) { showPolicyError('Limits must be valid JSON, like {"amount": {"max": 50}}, or set allowed hours.'); return; }
     }
     policySubmit.disabled = true;
     const restoreText = withLoadingText(policySubmit, 'Saving…');
@@ -1788,7 +1798,7 @@
           agent_id: document.getElementById('policy-agent').value.trim() || null,
           service: document.getElementById('policy-service').value.trim(),
           action: document.getElementById('policy-action').value.trim(),
-          effect, fields,
+          effect, fields, hours,
           on_violation: document.getElementById('policy-violation').value,
         }),
       });
@@ -1809,11 +1819,12 @@
       list.innerHTML = '';
       for (const row of rows) {
         const scope = row.agent_id ? `agent ${escapeHtml(row.agent_id)}` : 'every agent';
-        const rule = row.effect === 'deny' ? 'never allowed' : `only when ${escapeHtml(JSON.stringify(row.fields))}`;
+        const hoursText = row.hours ? `${row.fields ? ' and ' : ''}${(row.hours.days || ['every day']).join(', ')} ${row.hours.from} to ${row.hours.to} ${row.hours.tz}` : '';
+        const rule = row.effect === 'deny' ? 'never allowed' : `only ${row.fields ? `when ${JSON.stringify(row.fields)}` : ''}${hoursText}`;
         const then = row.on_violation === 'hitl' ? 'route to approval' : 'block';
         const div = document.createElement('div');
         div.className = 'rule-summary-row';
-        div.innerHTML = `<div class="info"><div class="svc">${escapeHtml(row.service)}.${escapeHtml(row.action)} (${escapeHtml(row.org_id)})</div><div class="meta">${scope}: ${rule}; otherwise ${then}</div></div><button class="revoke delete-policy" data-id="${Number(row.id)}">Delete</button>`;
+        div.innerHTML = `<div class="info"><div class="svc">${escapeHtml(row.service)}.${escapeHtml(row.action)} (${escapeHtml(row.org_id)})</div><div class="meta">${scope}: ${escapeHtml(rule)}; otherwise ${then}</div></div><button class="revoke delete-policy" data-id="${Number(row.id)}">Delete</button>`;
         list.appendChild(div);
       }
       list.querySelectorAll('.delete-policy').forEach((btn) => {

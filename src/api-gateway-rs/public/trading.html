@@ -143,7 +143,8 @@
     <tr><td>The agent sizes an order wrong</td><td>An action policy caps <code>qty</code> and <code>notional</code>, and blocks the order before it is sent.</td></tr>
     <tr><td>It trades something it shouldn't</td><td>A policy lists the symbols and order types it may use.</td></tr>
     <tr><td>A large order needs a second look</td><td>Above a limit, the order waits for a person to approve it in Slack, Teams, Telegram or email (Team plan).</td></tr>
-    <tr><td>It loops</td><td>A spend cap limits orders per day.</td></tr>
+    <tr><td>It loops, or trades too much in a day</td><td>A spend cap limits orders per day and the total <code>notional</code> per day.</td></tr>
+    <tr><td>It trades when the market is closed</td><td>A policy's hours allow orders only during market hours, in the market's own time zone.</td></tr>
     <tr><td>It closes everything at once</td><td>A policy denies <code>positions.close_all</code> for that agent.</td></tr>
     <tr><td>You need to know what happened</td><td>Every order, sent or refused, is in the audit trail with the reason.</td></tr>
   </table>
@@ -182,7 +183,8 @@ apiVersion: agentraas.io/v1alpha1
 kind: ActionPolicy
 metadata: {name: hard-limits, org: org_acme}
 spec: {agentId: trader, service: alpaca_paper, action: order.create, effect: require,
-       fields: {symbol: {enum: [AAPL, MSFT, SPY]}, type: {enum: [market, limit]}, qty: {max: 10}, notional: {max: 5000}}}
+       fields: {symbol: {enum: [AAPL, MSFT, SPY]}, type: {enum: [market, limit]}, qty: {max: 10}, notional: {max: 5000}},
+       hours: {tz: America/New_York, days: [mon, tue, wed, thu, fri], from: "09:30", to: "16:00"}}
 ---
 apiVersion: agentraas.io/v1alpha1
 kind: ActionPolicy
@@ -191,10 +193,11 @@ spec: {agentId: trader, service: alpaca_paper, action: positions.close_all, effe
 ---
 apiVersion: agentraas.io/v1alpha1
 kind: SpendCap
-metadata: {name: orders-per-day, org: org_acme}
-spec: {agentId: trader, service: alpaca_paper, action: order.create, window: day, maxCalls: 20, onExceed: block}</code></pre>
+metadata: {name: daily-limits, org: org_acme}
+spec: {agentId: trader, service: alpaca_paper, action: order.create, window: day, timezone: America/New_York,
+       maxCalls: 20, amountField: notional, maxAmount: 10000, onExceed: block}</code></pre>
   <p>Then add the approval step (Team plan) in the dashboard under <b>Rules → Approval rules</b>: service <code>alpaca_paper</code>, action <code>order.create</code>, field <code>notional</code> greater than <code>1000</code>.</p>
-  <p class="note">Together: the same order inside a minute runs once; orders above $5,000, more than 10 shares, or off the list are blocked; orders above $1,000 that pass those wait for approval; more than 20 orders a day are blocked. Limits hold whether the agent sends <code>"notional": 500</code> or <code>"notional": "500"</code>.</p>
+  <p class="note">Together: the same order inside a minute runs once; orders above $5,000, more than 10 shares, or off the list are blocked; orders outside 09:30 to 16:00 New York time on weekdays are blocked; orders above $1,000 that pass those wait for approval; after 20 orders or $10,000 in a New York day, the rest are blocked. Limits hold whether the agent sends <code>"notional": 500</code> or <code>"notional": "500"</code>. The daily total needs <code>notional</code> on every order: an order by <code>qty</code> alone is refused by that cap, so have your agent size orders in dollars.</p>
 
   <h2>Before you go live</h2>
   <ul>

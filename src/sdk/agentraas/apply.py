@@ -46,14 +46,14 @@ KINDS = {
 DEFAULTS = {
     "DedupRule": {"ttl_seconds": None, "normalize": False, "semantic_enabled": False, "semantic_threshold": 0.85},
     "ValidationRule": {},
-    "ActionPolicy": {"agent_id": None, "fields": None, "on_violation": "block"},
-    "SpendCap": {"agent_id": None},
+    "ActionPolicy": {"agent_id": None, "fields": None, "on_violation": "block", "hours": None},
+    "SpendCap": {"agent_id": None, "max_calls": None, "amount_field": None, "max_amount": None, "timezone": None},
 }
 COMPARED = {
     "DedupRule": ("service", "action", "fields", "ttl_seconds", "normalize", "semantic_enabled", "semantic_threshold"),
     "ValidationRule": ("service", "action", "fields"),
-    "ActionPolicy": ("agent_id", "service", "action", "effect", "fields", "on_violation"),
-    "SpendCap": ("agent_id", "service", "action", "window", "max_calls", "on_exceed"),
+    "ActionPolicy": ("agent_id", "service", "action", "effect", "fields", "on_violation", "hours"),
+    "SpendCap": ("agent_id", "service", "action", "window", "max_calls", "on_exceed", "amount_field", "max_amount", "timezone"),
 }
 
 

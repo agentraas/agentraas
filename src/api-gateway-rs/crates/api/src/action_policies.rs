@@ -32,6 +32,9 @@ struct CreatePolicyBody {
     effect: String,
     fields: Option<Value>,
     on_violation: Option<String>,
+    /// Allowed hours, e.g. {"tz": "America/New_York", "days": ["mon", "tue",
+    /// "wed", "thu", "fri"], "from": "09:30", "to": "16:00"}.
+    hours: Option<Value>,
 }
 
 fn unprocessable(msg: &str) -> ApiError {
@@ -55,6 +58,15 @@ async fn create_policy(State(state): State<SharedState>, user: AuthUser, Json(bo
     if body.action != "*" && !is_valid_action_name(&body.action) {
         return Err(unprocessable("action must be \"*\" or 1-100 characters, letters/numbers/dots/underscore/hyphen only."));
     }
+    let hours = body.hours.filter(|h| !h.is_null());
+    if let Some(h) = &hours {
+        if body.effect != "require" {
+            return Err(unprocessable("hours go on a require policy: calls are allowed only inside them."));
+        }
+        if let Err(err) = parse_hours(h) {
+            return Err(unprocessable(&err));
+        }
+    }
     let fields = match (body.effect.as_str(), &body.fields) {
         ("deny", None | Some(Value::Null)) => None,
         ("deny", Some(_)) => return Err(unprocessable("A deny policy has no fields; use effect \"require\" to limit what a call may contain.")),
@@ -64,7 +76,8 @@ async fn create_policy(State(state): State<SharedState>, user: AuthUser, Json(bo
             }
             Some(f.clone())
         }
-        ("require", None) => return Err(unprocessable("A require policy needs fields.")),
+        ("require", None | Some(Value::Null)) if hours.is_some() => None,
+        ("require", None) => return Err(unprocessable("A require policy needs fields or hours.")),
         _ => return Err(unprocessable("effect must be \"deny\" or \"require\".")),
     };
     let on_violation = body.on_violation.unwrap_or_else(|| "block".to_string());
@@ -86,8 +99,8 @@ async fn create_policy(State(state): State<SharedState>, user: AuthUser, Json(bo
     }
 
     let id: i32 = sqlx::query_scalar(
-        "INSERT INTO action_policies (org_id, agent_id, service, action, effect, fields, on_violation, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id",
+        "INSERT INTO action_policies (org_id, agent_id, service, action, effect, fields, on_violation, created_by, hours)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id",
     )
     .bind(&body.org_id)
     .bind(&body.agent_id)
@@ -97,6 +110,7 @@ async fn create_policy(State(state): State<SharedState>, user: AuthUser, Json(bo
     .bind(&fields)
     .bind(&on_violation)
     .bind(user.sub)
+    .bind(&hours)
     .fetch_one(&state.pg)
     .await?;
     Ok(Json(json!({ "id": id })))
@@ -110,7 +124,7 @@ async fn list_policies(State(state): State<SharedState>, user: AuthUser) -> Resu
     }
     let rows: Vec<Value> = sqlx::query_scalar(
         "SELECT jsonb_build_object('id', id, 'org_id', org_id, 'agent_id', agent_id, 'service', service,
-                'action', action, 'effect', effect, 'fields', fields, 'on_violation', on_violation)
+                'action', action, 'effect', effect, 'fields', fields, 'on_violation', on_violation, 'hours', hours)
          FROM action_policies WHERE org_id = ANY($1) ORDER BY created_at DESC",
     )
     .bind(&org_ids)
@@ -133,6 +147,47 @@ async fn delete_policy(State(state): State<SharedState>, user: AuthUser, Path(id
     Ok(Json(json!({ "deleted": true })))
 }
 
+// ─── allowed hours ───
+
+const DAYS: [&str; 7] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+
+/// (timezone, allowed weekdays as 0=Mon..6=Sun, from, to). `days` defaults
+/// to every day; `from` must be before `to` (no overnight windows).
+fn parse_hours(h: &Value) -> Result<(chrono_tz::Tz, Vec<usize>, chrono::NaiveTime, chrono::NaiveTime), String> {
+    let tz: chrono_tz::Tz = h.get("tz").and_then(Value::as_str).ok_or("hours needs \"tz\", an IANA time zone such as \"America/New_York\" or \"Asia/Kolkata\".")?
+        .parse().map_err(|_| "hours.tz is not a known time zone (use an IANA name such as \"America/New_York\" or \"Asia/Kolkata\").".to_string())?;
+    let time = |k: &str| {
+        h.get(k).and_then(Value::as_str).and_then(|t| chrono::NaiveTime::parse_from_str(t, "%H:%M").ok())
+            .ok_or(format!("hours.{k} must be a time like \"09:30\" (24-hour)."))
+    };
+    let (from, to) = (time("from")?, time("to")?);
+    if from >= to {
+        return Err("hours.from must be before hours.to.".into());
+    }
+    let days = match h.get("days") {
+        None | Some(Value::Null) => (0..7).collect(),
+        Some(Value::Array(a)) if !a.is_empty() => a.iter().map(|d| d.as_str().and_then(|d| DAYS.iter().position(|x| *x == d.to_ascii_lowercase()))
+            .ok_or("hours.days takes mon, tue, wed, thu, fri, sat, sun.".to_string())).collect::<Result<_, _>>()?,
+        _ => return Err("hours.days must be a list such as [\"mon\", \"tue\", \"wed\", \"thu\", \"fri\"].".into()),
+    };
+    Ok((tz, days, from, to))
+}
+
+/// A malformed stored value fails closed: no hours are "inside".
+fn within_hours(h: &Value, now: chrono::DateTime<chrono::Utc>) -> bool {
+    use chrono::{Datelike, Timelike};
+    let Ok((tz, days, from, to)) = parse_hours(h) else { return false };
+    let local = now.with_timezone(&tz);
+    let t = chrono::NaiveTime::from_hms_opt(local.hour(), local.minute(), local.second()).unwrap_or_default();
+    days.contains(&(local.weekday().num_days_from_monday() as usize)) && t >= from && t < to
+}
+
+fn describe_hours(h: &Value) -> String {
+    let Ok((tz, days, from, to)) = parse_hours(h) else { return "inside its configured hours".into() };
+    let days: Vec<&str> = days.iter().map(|d| DAYS[*d]).collect();
+    format!("on {} from {} to {} ({tz})", days.join(", "), from.format("%H:%M"), to.format("%H:%M"))
+}
+
 // ─── enforcement (called from agent::mod::handle_request) ───
 
 #[derive(sqlx::FromRow)]
@@ -141,6 +196,7 @@ pub struct Policy {
     pub effect: String,
     pub fields: Option<Value>,
     pub on_violation: String,
+    pub hours: Option<Value>,
 }
 
 pub struct Violation {
@@ -183,11 +239,13 @@ fn policy_destinations(p: &Policy, payload: &Value) -> Vec<(String, String)> {
 /// First violation that should win: any block beats any approval, so an
 /// approver can never wave through a call another policy forbids.
 /// `unknown` = destinations (field, value) this org has never approved.
-pub fn evaluate(policies: &[Policy], service: &str, action: &str, payload: &Value, unknown: &[(String, String)]) -> Option<Violation> {
+pub fn evaluate(policies: &[Policy], service: &str, action: &str, payload: &Value, unknown: &[(String, String)], now: chrono::DateTime<chrono::Utc>) -> Option<Violation> {
     let mut hitl = None;
     for p in policies {
         let (reason, message) = if p.effect == "deny" {
             ("policy_denied", format!("This agent may not call {service}.{action} (action policy #{})", p.id))
+        } else if let Some(h) = p.hours.as_ref().filter(|h| !within_hours(h, now)) {
+            ("policy_outside_hours", format!("{service}.{action} is only allowed {} (action policy #{})", describe_hours(h), p.id))
         } else if let Some(err) = p.fields.as_ref().and_then(|f| validate_fields(payload, f)) {
             ("policy_violation", format!("{err} (action policy #{})", p.id))
         } else if let Some((field, value)) = policy_destinations(p, payload).into_iter().find(|d| unknown.contains(d)) {
@@ -207,7 +265,7 @@ pub fn evaluate(policies: &[Policy], service: &str, action: &str, payload: &Valu
 async fn matching_policies(state: &SharedState, org_id: &str, agent_id: Option<&str>, service: &str, action: &str) -> Result<Vec<Policy>, sqlx::Error> {
     // agent_id None = every agent's policies (used when remembering).
     sqlx::query_as(
-        "SELECT id, effect, fields, on_violation FROM action_policies
+        "SELECT id, effect, fields, on_violation, hours FROM action_policies
          WHERE org_id = $1 AND service = $2 AND (action = $3 OR action = '*')
            AND ($4::text IS NULL OR agent_id = $4 OR agent_id IS NULL)
          ORDER BY id",
@@ -237,7 +295,7 @@ pub async fn check(state: &SharedState, org_id: &str, agent_id: &str, service: &
         .await?;
         unknown = wanted.into_iter().filter(|d| !known.contains(d)).collect();
     }
-    Ok(evaluate(&policies, service, action, payload, &unknown))
+    Ok(evaluate(&policies, service, action, payload, &unknown, chrono::Utc::now()))
 }
 
 /// Called once a human approved a call: its destinations become known, so
@@ -271,35 +329,35 @@ mod tests {
     use super::*;
 
     fn p(id: i32, effect: &str, fields: Option<Value>, on_violation: &str) -> Policy {
-        Policy { id, effect: effect.into(), fields, on_violation: on_violation.into() }
+        Policy { id, effect: effect.into(), fields, on_violation: on_violation.into(), hours: None }
     }
 
     #[test]
     fn no_policies_or_passing_payload_is_allowed() {
-        assert!(evaluate(&[], "stripe", "refunds.create", &json!({}), &[]).is_none());
+        assert!(evaluate(&[], "stripe", "refunds.create", &json!({}), &[], chrono::Utc::now()).is_none());
         let ps = [p(1, "require", Some(json!({ "amount": { "max": 50 } })), "block")];
-        assert!(evaluate(&ps, "stripe", "refunds.create", &json!({ "amount": 20 }), &[]).is_none());
+        assert!(evaluate(&ps, "stripe", "refunds.create", &json!({ "amount": 20 }), &[], chrono::Utc::now()).is_none());
     }
 
     #[test]
     fn require_violation_and_deny_block() {
         let ps = [p(1, "require", Some(json!({ "amount": { "max": 50 } })), "block")];
-        let v = evaluate(&ps, "stripe", "refunds.create", &json!({ "amount": 80 }), &[]).unwrap();
+        let v = evaluate(&ps, "stripe", "refunds.create", &json!({ "amount": 80 }), &[], chrono::Utc::now()).unwrap();
         assert_eq!((v.reason, v.hitl), ("policy_violation", false));
         assert!(v.message.ends_with("(action policy #1)"));
         assert!(v.message.contains("amount must be at most 50"));
 
-        let v = evaluate(&[p(2, "deny", None, "block")], "hubspot", "contacts.delete", &json!({}), &[]).unwrap();
+        let v = evaluate(&[p(2, "deny", None, "block")], "hubspot", "contacts.delete", &json!({}), &[], chrono::Utc::now()).unwrap();
         assert_eq!(v.reason, "policy_denied");
     }
 
     #[test]
     fn a_block_beats_an_approval_whatever_the_order() {
         let ps = [p(1, "require", Some(json!({ "amount": { "max": 50 } })), "hitl"), p(2, "deny", None, "block")];
-        let v = evaluate(&ps, "stripe", "refunds.create", &json!({ "amount": 80 }), &[]).unwrap();
+        let v = evaluate(&ps, "stripe", "refunds.create", &json!({ "amount": 80 }), &[], chrono::Utc::now()).unwrap();
         assert!(!v.hitl && v.message.contains("#2"));
 
-        let v = evaluate(&ps[..1], "stripe", "refunds.create", &json!({ "amount": 80 }), &[]).unwrap();
+        let v = evaluate(&ps[..1], "stripe", "refunds.create", &json!({ "amount": 80 }), &[], chrono::Utc::now()).unwrap();
         assert!(v.hitl);
     }
 
@@ -310,10 +368,45 @@ mod tests {
         let wanted = policy_destinations(&ps[0], &payload);
         assert_eq!(wanted, vec![("to".to_string(), "boss@acme.com".to_string()), ("to".to_string(), "x@evil.io".to_string())]);
 
-        assert!(evaluate(&ps, "resend", "emails.send", &payload, &[]).is_none(), "all known");
-        let v = evaluate(&ps, "resend", "emails.send", &payload, &wanted[1..]).unwrap();
+        assert!(evaluate(&ps, "resend", "emails.send", &payload, &[], chrono::Utc::now()).is_none(), "all known");
+        let v = evaluate(&ps, "resend", "emails.send", &payload, &wanted[1..], chrono::Utc::now()).unwrap();
         assert_eq!((v.reason, v.hitl), ("policy_new_destination", true));
         assert!(v.message.contains("x@evil.io"));
         assert_eq!(normalize_destination("https://Hooks.Example.com/a?b"), "hooks.example.com");
+    }
+
+    #[test]
+    fn hours_follow_the_market_clock_including_daylight_saving() {
+        use chrono::TimeZone;
+        let nyse = json!({ "tz": "America/New_York", "days": ["mon", "tue", "wed", "thu", "fri"], "from": "09:30", "to": "16:00" });
+        let at = |y, m, d, h, min| chrono::Utc.with_ymd_and_hms(y, m, d, h, min, 0).unwrap();
+        // Winter (EST, UTC-5): 14:29 UTC is 09:29, closed; 14:30 is the open.
+        assert!(!within_hours(&nyse, at(2026, 1, 13, 14, 29)));
+        assert!(within_hours(&nyse, at(2026, 1, 13, 14, 30)));
+        // Summer (EDT, UTC-4): the open moves to 13:30 UTC.
+        assert!(within_hours(&nyse, at(2026, 7, 14, 13, 30)));
+        assert!(!within_hours(&nyse, at(2026, 7, 14, 20, 0)), "16:00 New York is the close");
+        assert!(!within_hours(&nyse, at(2026, 7, 18, 15, 0)), "Saturday");
+        // NSE: 09:15 to 15:30 in Asia/Kolkata (UTC+5:30) is 03:45 to 10:00 UTC.
+        let nse = json!({ "tz": "Asia/Kolkata", "days": ["mon", "tue", "wed", "thu", "fri"], "from": "09:15", "to": "15:30" });
+        assert!(within_hours(&nse, at(2026, 10, 19, 3, 45)));
+        assert!(!within_hours(&nse, at(2026, 10, 19, 10, 0)));
+
+        let mut ps = [p(1, "require", None, "block")];
+        ps[0].hours = Some(nyse);
+        let v = evaluate(&ps, "alpaca", "order.create", &json!({}), &[], at(2026, 7, 18, 15, 0)).unwrap();
+        assert_eq!(v.reason, "policy_outside_hours");
+        assert!(v.message.contains("from 09:30 to 16:00 (America/New_York)"), "{}", v.message);
+        assert!(evaluate(&ps, "alpaca", "order.create", &json!({}), &[], at(2026, 7, 14, 15, 0)).is_none());
+    }
+
+    #[test]
+    fn bad_hours_are_refused_and_fail_closed() {
+        for bad in [json!({ "from": "09:00", "to": "17:00" }), json!({ "tz": "Mars/Base", "from": "09:00", "to": "17:00" }),
+                    json!({ "tz": "UTC", "from": "17:00", "to": "09:00" }), json!({ "tz": "UTC", "from": "9am", "to": "17:00" }),
+                    json!({ "tz": "UTC", "days": ["funday"], "from": "09:00", "to": "17:00" })] {
+            assert!(parse_hours(&bad).is_err(), "{bad}");
+            assert!(!within_hours(&bad, chrono::Utc::now()));
+        }
     }
 }

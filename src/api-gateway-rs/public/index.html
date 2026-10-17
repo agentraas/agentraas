@@ -999,12 +999,19 @@
       <div class="field"><label for="policy-action">Action</label><input type="text" id="policy-action" placeholder="refunds.create, or * for all" required></div>
       <div class="field"><label for="policy-effect">Policy</label>
         <select id="policy-effect">
-          <option value="require">Only allow when the payload passes these limits</option>
+          <option value="require">Only allow when the payload passes these limits, or inside these hours</option>
           <option value="deny">Never allow</option>
         </select>
       </div>
       <div class="field" id="policy-fields-wrap"><label for="policy-fields">Limits (JSON)</label>
         <textarea id="policy-fields" rows="3" placeholder='{"amount": {"max": 50}, "to": {"domains": ["acme.com"]}}' style="width:100%;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-family:ui-monospace,monospace;font-size:12.5px;resize:vertical;"></textarea>
+        <label style="margin-top:10px;">Allowed hours (optional)</label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <input type="text" id="policy-hours-tz" placeholder="Time zone, e.g. America/New_York" style="flex:2 1 180px;">
+          <input type="time" id="policy-hours-from" aria-label="From" style="flex:1 1 90px;">
+          <input type="time" id="policy-hours-to" aria-label="To" style="flex:1 1 90px;">
+          <input type="text" id="policy-hours-days" placeholder="mon,tue,wed,thu,fri (blank: every day)" style="flex:2 1 180px;">
+        </div>
       </div>
       <div class="field"><label for="policy-violation">When broken</label>
         <select id="policy-violation">
@@ -1037,7 +1044,10 @@
           <option value="day">Per day</option>
         </select>
       </div>
-      <div class="field"><label for="spendcap-max">Max calls</label><input type="number" min="1" step="1" id="spendcap-max" placeholder="100" required></div>
+      <div class="field"><label for="spendcap-max">Max calls (optional)</label><input type="number" min="1" step="1" id="spendcap-max" placeholder="100"></div>
+      <div class="field"><label for="spendcap-amount-field">Add up this payload field (optional)</label><input type="text" id="spendcap-amount-field" placeholder="amount, notional"></div>
+      <div class="field"><label for="spendcap-amount-max">Max total of that field</label><input type="number" min="0" step="any" id="spendcap-amount-max" placeholder="10000"></div>
+      <div class="field"><label for="spendcap-tz">Time zone for the window (optional)</label><input type="text" id="spendcap-tz" placeholder="UTC, America/New_York, Asia/Kolkata"></div>
       <div class="field"><label for="spendcap-exceed">When exceeded</label>
         <select id="spendcap-exceed">
           <option value="block">Block the call</option>

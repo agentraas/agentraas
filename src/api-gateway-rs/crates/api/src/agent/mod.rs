@@ -840,7 +840,7 @@ async fn handle_request_inner(
     // checked for every request regardless of tier/build (block-only caps
     // work on Community too; see spend_caps.rs's module doc for why this
     // isn't under ee/ the way HITL is).
-    match crate::spend_caps::check_and_increment(state, &org_id, &agent_id, &service, &action).await {
+    match crate::spend_caps::check_and_increment(state, &org_id, &agent_id, &service, &action, &payload).await {
         Ok(check) if !check.allowed => {
             let rule = check.rule.expect("allowed=false implies a matched rule");
             if rule.on_exceed == "hitl" && !mcp && cfg!(feature = "enterprise") {
@@ -862,7 +862,7 @@ async fn handle_request_inner(
             return err_response(
                 StatusCode::TOO_MANY_REQUESTS,
                 &req_id,
-                format!("Spend cap exceeded for {service}.{action}: {}/{} calls this {} (rule #{}).", check.count, rule.max_calls, rule.window, rule.id),
+                check.message,
             );
         }
         Ok(_) => {}

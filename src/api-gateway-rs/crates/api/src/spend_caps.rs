@@ -1,7 +1,8 @@
-//! Per-agent action spend/call caps. Call-count
-//! based, not dollar-based — v1 deliberately reuses the exact windowed
-//! Redis INCR+EXPIRE shape `increment_monthly_usage` (agent/db.rs) already
-//! uses, just parameterized by hour/day instead of hardcoded month.
+//! Per-agent action spend/call caps: a number of calls, a total of a
+//! payload field (money: "no more than 10,000 in notional a day"), or
+//! both, per hour or day. Windowed Redis counters (INCR / INCRBYFLOAT +
+//! EXPIRE), the same shape as `increment_monthly_usage` (agent/db.rs). A
+//! rule's timezone sets where its day starts (default UTC).
 //!
 //! Deliberately NOT under `ee/`, unlike HITL: block-only rules must work
 //! on the Community/public build too (this is a safety control on the
@@ -37,7 +38,12 @@ struct CreateRuleBody {
     service: String,
     action: String,
     window: String,
-    max_calls: i32,
+    max_calls: Option<i32>,
+    /// Payload field whose values are summed per window (e.g. "notional").
+    amount_field: Option<String>,
+    max_amount: Option<f64>,
+    /// IANA zone where the window starts, e.g. "Asia/Kolkata". Default UTC.
+    timezone: Option<String>,
     on_exceed: String,
 }
 
@@ -60,8 +66,23 @@ async fn create_rule(State(state): State<SharedState>, user: AuthUser, Json(body
     if !matches!(body.window.as_str(), "hour" | "day") {
         return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "window must be \"hour\" or \"day\"."));
     }
-    if body.max_calls <= 0 {
+    if body.max_calls.is_some_and(|m| m <= 0) {
         return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "max_calls must be a positive number."));
+    }
+    if body.amount_field.is_some() != body.max_amount.is_some() {
+        return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "amount_field and max_amount go together: which payload field to add up, and the most it may add up to."));
+    }
+    if body.max_calls.is_none() && body.max_amount.is_none() {
+        return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "Set max_calls, max_amount with amount_field, or both."));
+    }
+    if body.max_amount.is_some_and(|m| !(m.is_finite() && m > 0.0)) {
+        return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "max_amount must be a positive number."));
+    }
+    if body.amount_field.as_deref().is_some_and(|f| f.is_empty() || f.len() > 100 || !f.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')) {
+        return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "amount_field must be a payload field name (letters, numbers, underscore)."));
+    }
+    if body.timezone.as_deref().is_some_and(|tz| tz.parse::<chrono_tz::Tz>().is_err()) {
+        return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "timezone must be an IANA time zone such as \"America/New_York\" or \"Asia/Kolkata\"."));
     }
     match body.on_exceed.as_str() {
         "block" => {}
@@ -78,8 +99,8 @@ async fn create_rule(State(state): State<SharedState>, user: AuthUser, Json(body
     }
 
     let id: i32 = sqlx::query_scalar(
-        "INSERT INTO spend_cap_rules (org_id, agent_id, service, action, time_window, max_calls, on_exceed, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id",
+        "INSERT INTO spend_cap_rules (org_id, agent_id, service, action, time_window, max_calls, on_exceed, created_by, amount_field, max_amount, timezone)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id",
     )
     .bind(&body.org_id)
     .bind(&body.agent_id)
@@ -89,6 +110,9 @@ async fn create_rule(State(state): State<SharedState>, user: AuthUser, Json(body
     .bind(body.max_calls)
     .bind(&body.on_exceed)
     .bind(user.sub)
+    .bind(&body.amount_field)
+    .bind(body.max_amount)
+    .bind(&body.timezone)
     .fetch_one(&state.pg)
     .await?;
     Ok(Json(json!({ "id": id })))
@@ -106,7 +130,8 @@ async fn list_rules(State(state): State<SharedState>, user: AuthUser) -> Result<
     }
     let rows: Vec<Value> = sqlx::query_scalar(
         "SELECT jsonb_build_object('id', id, 'org_id', org_id, 'agent_id', agent_id, 'service', service,
-                'action', action, 'window', time_window, 'max_calls', max_calls, 'on_exceed', on_exceed)
+                'action', action, 'window', time_window, 'max_calls', max_calls, 'on_exceed', on_exceed,
+                'amount_field', amount_field, 'max_amount', max_amount, 'timezone', timezone)
          FROM spend_cap_rules WHERE org_id = ANY($1) ORDER BY created_at DESC",
     )
     .bind(&org_ids)
@@ -137,43 +162,57 @@ async fn delete_rule(State(state): State<SharedState>, user: AuthUser, Path(id):
 #[derive(sqlx::FromRow, Clone)]
 pub struct MatchedSpendCapRule {
     pub id: i32,
-    pub max_calls: i32,
+    pub max_calls: Option<i32>,
     pub window: String,
     pub on_exceed: String,
+    pub amount_field: Option<String>,
+    pub max_amount: Option<f64>,
+    pub timezone: Option<String>,
 }
 
 pub struct SpendCapCheck {
     pub allowed: bool,
     pub rule: Option<MatchedSpendCapRule>,
-    pub count: i64,
+    /// Why the call was refused, for the caller.
+    pub message: String,
 }
 
-fn window_bucket(window: &str) -> String {
-    let now = chrono::Utc::now();
-    if window == "hour" {
-        now.format("%Y-%m-%dT%H").to_string()
-    } else {
-        now.format("%Y-%m-%d").to_string()
-    }
+/// The current window's label in the rule's zone ("2026-10-17" or
+/// "2026-10-17T14"), so a day starts at local midnight.
+fn window_bucket(window: &str, timezone: Option<&str>, now: chrono::DateTime<chrono::Utc>) -> String {
+    let tz: chrono_tz::Tz = timezone.and_then(|t| t.parse().ok()).unwrap_or(chrono_tz::UTC);
+    let local = now.with_timezone(&tz);
+    if window == "hour" { local.format("%Y-%m-%dT%H").to_string() } else { local.format("%Y-%m-%d").to_string() }
 }
 
 fn window_ttl_seconds(window: &str) -> i64 {
     // A little slack past the window boundary so a key never expires
     // mid-check due to clock/Redis timing skew - matches
     // increment_monthly_usage's own "longer than the window" TTL choice.
-    if window == "hour" { 3600 + 300 } else { 86400 + 300 }
+    // A day with a daylight-saving change can be 25 hours, hence 26.
+    if window == "hour" { 3600 + 300 } else { 26 * 3600 }
+}
+
+/// A payload number, or a number sent as text ("2500.50").
+fn amount_of(payload: &serde_json::Value, field: &str) -> Option<f64> {
+    let v = payload.get(field)?;
+    v.as_f64().or_else(|| v.as_str().and_then(|s| s.trim().parse().ok())).filter(|a: &f64| a.is_finite() && *a >= 0.0)
+}
+
+fn fmt_amount(a: f64) -> String {
+    if a.fract() == 0.0 { format!("{a:.0}") } else { format!("{a:.2}") }
 }
 
 /// Looks up the most specific matching rule (a per-agent row wins over an
 /// org-wide `agent_id IS NULL` row for the same service.action - same
 /// "most specific match" convention `resolve_route` already uses for
-/// Custom Actions), then atomically increments its window counter.
-/// No matching rule = always allowed; this is the common case, so it's a
-/// single indexed query away rather than a per-request Redis lookup when
-/// there's nothing to enforce.
-pub async fn check_and_increment(state: &SharedState, org_id: &str, agent_id: &str, service: &str, action: &str) -> Result<SpendCapCheck, ApiError> {
+/// Custom Actions), then counts this call against it. A money cap needs
+/// the amount: a call without a usable value in `amount_field` is refused
+/// (otherwise leaving the field out would skip the cap). A refused call
+/// gives back what it added, so it doesn't use up the window.
+pub async fn check_and_increment(state: &SharedState, org_id: &str, agent_id: &str, service: &str, action: &str, payload: &serde_json::Value) -> Result<SpendCapCheck, ApiError> {
     let rule: Option<MatchedSpendCapRule> = sqlx::query_as(
-        "SELECT id, max_calls, time_window AS window, on_exceed FROM spend_cap_rules
+        "SELECT id, max_calls, time_window AS window, on_exceed, amount_field, max_amount, timezone FROM spend_cap_rules
          WHERE org_id = $1 AND service = $2 AND action = $3 AND (agent_id = $4 OR agent_id IS NULL)
          ORDER BY agent_id NULLS LAST LIMIT 1",
     )
@@ -185,22 +224,69 @@ pub async fn check_and_increment(state: &SharedState, org_id: &str, agent_id: &s
     .await?;
 
     let Some(rule) = rule else {
-        return Ok(SpendCapCheck { allowed: true, rule: None, count: 0 });
+        return Ok(SpendCapCheck { allowed: true, rule: None, message: String::new() });
     };
-
-    let key = format!("spendcap:{}:{}:{}:{}:{}", org_id, agent_id, service, action, window_bucket(&rule.window));
+    let refuse = |message: String, rule: MatchedSpendCapRule| Ok(SpendCapCheck { allowed: false, rule: Some(rule), message });
+    let period = if rule.window == "hour" { "hour" } else { "day" };
+    let bucket = window_bucket(&rule.window, rule.timezone.as_deref(), chrono::Utc::now());
+    let base = format!("spendcap:{}:{}:{}:{}:{}", org_id, agent_id, service, action, bucket);
     let mut conn = state
         .redis_conn_result()
         .map_err(|_| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "Spend-cap counter unavailable."))?;
-    let count: i64 = redis::cmd("INCR")
-        .arg(&key)
-        .query_async(&mut conn)
-        .await
-        .map_err(|_| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "Spend-cap counter failed."))?;
-    if count == 1 {
+    let counter_failed = |_| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "Spend-cap counter failed.");
+
+    let mut added_amount = None;
+    if let (Some(field), Some(max)) = (rule.amount_field.clone(), rule.max_amount) {
+        let Some(amount) = amount_of(payload, &field) else {
+            return refuse(format!("{service}.{action} needs a number in \"{field}\": spend cap #{} limits the total {field} per {period}.", rule.id), rule);
+        };
+        let key = format!("{base}:amount");
+        let total: String = redis::cmd("INCRBYFLOAT").arg(&key).arg(amount).query_async(&mut conn).await.map_err(counter_failed)?;
+        let total: f64 = total.parse().unwrap_or(f64::MAX);
         let _: Result<(), _> = redis::cmd("EXPIRE").arg(&key).arg(window_ttl_seconds(&rule.window)).query_async(&mut conn).await;
+        if total > max {
+            let _: Result<String, _> = redis::cmd("INCRBYFLOAT").arg(&key).arg(-amount).query_async(&mut conn).await;
+            return refuse(format!("Spend cap exceeded for {service}.{action}: {field} {} would bring this {period}'s total to {}, above {} (rule #{}).", fmt_amount(amount), fmt_amount(total), fmt_amount(max), rule.id), rule);
+        }
+        added_amount = Some((key, amount));
     }
 
-    let allowed = count <= rule.max_calls as i64;
-    Ok(SpendCapCheck { allowed, rule: Some(rule), count })
+    if let Some(max_calls) = rule.max_calls {
+        let count: i64 = redis::cmd("INCR").arg(&base).query_async(&mut conn).await.map_err(counter_failed)?;
+        if count == 1 {
+            let _: Result<(), _> = redis::cmd("EXPIRE").arg(&base).arg(window_ttl_seconds(&rule.window)).query_async(&mut conn).await;
+        }
+        if count > max_calls as i64 {
+            if let Some((key, amount)) = added_amount {
+                let _: Result<String, _> = redis::cmd("INCRBYFLOAT").arg(&key).arg(-amount).query_async(&mut conn).await;
+            }
+            return refuse(format!("Spend cap exceeded for {service}.{action}: {count}/{max_calls} calls this {period} (rule #{}).", rule.id), rule);
+        }
+    }
+    Ok(SpendCapCheck { allowed: true, rule: Some(rule), message: String::new() })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::TimeZone;
+
+    #[test]
+    fn a_day_starts_at_midnight_where_the_rule_says() {
+        // 20:00 UTC on Oct 16 is already Oct 17 in India (UTC+5:30).
+        let now = chrono::Utc.with_ymd_and_hms(2026, 10, 16, 20, 0, 0).unwrap();
+        assert_eq!(window_bucket("day", None, now), "2026-10-16");
+        assert_eq!(window_bucket("day", Some("Asia/Kolkata"), now), "2026-10-17");
+        assert_eq!(window_bucket("hour", Some("America/New_York"), now), "2026-10-16T16");
+    }
+
+    #[test]
+    fn amounts_come_from_numbers_or_numeric_text() {
+        let p = serde_json::json!({ "notional": "2500.50", "qty": 3, "bad": "lots", "neg": -5 });
+        assert_eq!(amount_of(&p, "notional"), Some(2500.5));
+        assert_eq!(amount_of(&p, "qty"), Some(3.0));
+        assert_eq!(amount_of(&p, "bad"), None);
+        assert_eq!(amount_of(&p, "neg"), None, "a negative amount can't free up budget");
+        assert_eq!(amount_of(&p, "missing"), None);
+    }
 }

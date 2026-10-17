@@ -628,6 +628,7 @@ const result = await client.call("stripe", "charge.create", { amount: 5000, curr
         <tr><td><code>effect</code></td><td><code>deny</code> never allows the call; <code>require</code> allows it only when the payload passes <code>fields</code>.</td></tr>
         <tr><td><code>fields</code></td><td>Same syntax as validation rules (<code>min</code>, <code>max</code>, <code>enum</code>, <code>format</code>, <code>required</code>, ...), plus <code>domains</code>: an email or URL field (or a list of them) must be on one of these domains or a subdomain. Two rules guard against a prompt-injected agent: <code>no_secrets: true</code> refuses a call whose field contains an API key, token or private key (use the field name <code>*</code> to scan the whole payload), and <code>new_destination: true</code> sends a call to an email address, phone number or URL host this org has never approved for approval once; approving it remembers the destination (needs <code>on_violation: hitl</code>).</td></tr>
         <tr><td><code>on_violation</code></td><td><code>block</code> (default), or <code>hitl</code> to send the call for approval instead. A block always wins over an approval.</td></tr>
+        <tr><td><code>hours</code></td><td>Optional, on a <code>require</code> policy: the call is allowed only inside these hours, e.g. <code>{"tz": "America/New_York", "days": ["mon", "tue", "wed", "thu", "fri"], "from": "09:30", "to": "16:00"}</code>. <code>tz</code> is an IANA time zone (daylight saving is handled), <code>days</code> defaults to every day. A policy can have hours, fields or both.</td></tr>
       </table>
     </section>
 
@@ -668,7 +669,7 @@ agentraas apply -f agentraas.yaml --prune     # also delete rules the file doesn
         <tr><td><code>ActionPolicy</code></td><td><a href="#action-policies">Action policies</a></td><td>agent + service + action + effect</td></tr>
         <tr><td><code>SpendCap</code></td><td>Spend caps</td><td>agent + service + action + window</td></tr>
       </table>
-      <p>Spec keys are the API's fields in camelCase (<code>ttl_seconds</code> becomes <code>ttlSeconds</code>, <code>on_violation</code> becomes <code>onViolation</code>). Without <code>--prune</code>, rules made in the dashboard are left alone; with it, every rule of these four kinds in the orgs the file names that the file doesn't list is deleted. The command exits non-zero if any change fails, so a CI job fails with it.</p>
+      <p>A <code>SpendCap</code> limits calls (<code>maxCalls</code>), a money total (<code>amountField</code> and <code>maxAmount</code>: the sum of that payload field per window, with a call that has no number in the field refused), or both; <code>timezone</code> (an IANA zone) sets where its day or hour starts, UTC by default. A call refused by the cap doesn't use up the window. Spec keys are the API's fields in camelCase (<code>ttl_seconds</code> becomes <code>ttlSeconds</code>, <code>on_violation</code> becomes <code>onViolation</code>). Without <code>--prune</code>, rules made in the dashboard are left alone; with it, every rule of these four kinds in the orgs the file names that the file doesn't list is deleted. The command exits non-zero if any change fails, so a CI job fails with it.</p>
     </section>
 
     <section id="inbound-webhooks">
