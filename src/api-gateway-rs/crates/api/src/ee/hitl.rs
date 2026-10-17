@@ -37,6 +37,8 @@ pub fn router() -> Router<SharedState> {
         .route("/v1/hitl/interactions/:org_id", post(interaction))
         .route("/v1/hitl/link", post(link_view))
         .route("/v1/hitl/link/decide", post(link_decide))
+        .route("/api/v1/hitl/pending", get(list_pending))
+        .route("/api/v1/hitl/:req_id/decide", post(dashboard_decide))
 }
 
 // ─── rule matching (called from handle_request) ───
@@ -465,6 +467,59 @@ async fn link_decide(State(state): State<SharedState>, Json(body): Json<LinkBody
     }
     let status: String = sqlx::query_scalar("SELECT status FROM hitl_requests WHERE req_id = $1").bind(&r.req_id).fetch_one(&state.pg).await?;
     Ok(Json(json!({ "reqId": r.req_id, "status": status })))
+}
+
+// ─── dashboard: held calls and deciding them ───
+
+/// Every held call in the orgs the user belongs to, newest first.
+async fn list_pending(State(state): State<SharedState>, user: AuthUser) -> Result<Json<Value>, ApiError> {
+    check_dashboard_rate_limit(&state, user.sub).await?;
+    let org_ids = get_user_org_ids(&state.pg, user.sub).await?;
+    if org_ids.is_empty() {
+        return Ok(Json(json!({ "pending": [] })));
+    }
+    let rows: Vec<Value> = sqlx::query_scalar(
+        "SELECT jsonb_build_object('req_id', req_id, 'org_id', org_id, 'agent_id', agent_id, 'service', service, 'action', action,
+                                   'payload', payload, 'run_id', run_id, 'created_at', created_at)
+         FROM hitl_requests WHERE org_id = ANY($1) AND status = 'pending' ORDER BY created_at DESC LIMIT 100",
+    )
+    .bind(&org_ids)
+    .fetch_all(&state.pg)
+    .await?;
+    Ok(Json(json!({ "pending": rows })))
+}
+
+/// Approve or deny from the dashboard. Members who can write to the org
+/// only (not auditors; the read-only demo can't POST at all). No tier
+/// check: a call held before a downgrade must still be clearable.
+#[derive(Deserialize)]
+struct DecideBody {
+    decision: Option<String>,
+}
+
+async fn dashboard_decide(State(state): State<SharedState>, user: AuthUser, Path(req_id): Path<String>, Json(body): Json<DecideBody>) -> Result<Json<Value>, ApiError> {
+    check_dashboard_rate_limit(&state, user.sub).await?;
+    let row: Option<(String, String)> = sqlx::query_as("SELECT org_id, status FROM hitl_requests WHERE req_id = $1").bind(&req_id).fetch_optional(&state.pg).await?;
+    let Some((org_id, status)) = row else {
+        return Err(ApiError::new(StatusCode::NOT_FOUND, "Request not found."));
+    };
+    if !get_user_org_ids(&state.pg, user.sub).await?.contains(&org_id) {
+        return Err(ApiError::new(StatusCode::NOT_FOUND, "Request not found."));
+    }
+    if !check_org_write_permission(&state.pg, user.sub, &org_id).await? {
+        return Err(ApiError::new(StatusCode::FORBIDDEN, "Auditors have read-only access to this org."));
+    }
+    if status != "pending" {
+        return Err(ApiError::new(StatusCode::CONFLICT, format!("This request was already {status}.")));
+    }
+    let resolved_by = format!("dashboard: {}", user.email);
+    match body.decision.as_deref() {
+        Some("approve") => approve(&state, &req_id, &org_id, resolved_by, None).await,
+        Some("deny") => deny(&state, &req_id, &org_id, resolved_by, None).await,
+        _ => return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "decision must be \"approve\" or \"deny\".")),
+    }
+    let status: String = sqlx::query_scalar("SELECT status FROM hitl_requests WHERE req_id = $1").bind(&req_id).fetch_one(&state.pg).await?;
+    Ok(Json(json!({ "reqId": req_id, "status": status })))
 }
 
 // ─── status poll ───

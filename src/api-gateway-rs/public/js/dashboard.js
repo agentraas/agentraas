@@ -310,7 +310,7 @@
     } catch (err) { /* not critical — just skip showing the banner if this fails */ }
   }
   function loadAll() {
-    return Promise.all([loadStats(), loadServices(), loadRecent(), loadAgents(), loadTimeseries(), loadByService(), loadUsage()]);
+    return Promise.all([loadStats(), loadServices(), loadRecent(), loadAgents(), loadTimeseries(), loadByService(), loadUsage(), loadApprovals()]);
   }
 
   async function loadUsage() {
@@ -2124,6 +2124,54 @@
       });
     } catch (err) {}
   }
+
+  // ─── Waiting for approval ───
+  const approvalsModalOverlay = document.getElementById('approvals-modal-overlay');
+  const approvalsError = document.getElementById('approvals-error');
+  const closeApprovals = () => { approvalsModalOverlay.style.display = 'none'; anyModalOpen = false; };
+  document.getElementById('approvals-btn').addEventListener('click', () => {
+    approvalsError.style.display = 'none';
+    approvalsModalOverlay.style.display = 'flex'; anyModalOpen = true;
+    loadApprovals();
+  });
+  document.getElementById('approvals-modal-close').addEventListener('click', closeApprovals);
+  approvalsModalOverlay.addEventListener('click', (e) => { if (e.target === approvalsModalOverlay) closeApprovals(); });
+
+  async function loadApprovals() {
+    const list = document.getElementById('approvals-list');
+    try {
+      const res = await fetch('/api/v1/hitl/pending', { credentials: 'include' });
+      if (!res.ok) return;
+      const { pending } = await res.json();
+      document.getElementById('approvals-count').textContent = pending.length ? `(${pending.length})` : '';
+      if (!list.isConnected || approvalsModalOverlay.style.display !== 'flex') return;
+      if (!pending.length) { list.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px 0;">Nothing is waiting. Held calls show up here.</div>'; return; }
+      list.innerHTML = '';
+      for (const p of pending) {
+        const div = document.createElement('div');
+        div.className = 'cred-row';
+        div.innerHTML = `<div class="info"><div class="svc">${escapeHtml(serviceName(p.service))} ${escapeHtml(p.action)} by ${escapeHtml(p.agent_id)}</div><div class="meta">${escapeHtml(p.org_id)} · ${escapeHtml(rowTime(p.created_at))}</div><pre style="margin:6px 0 0;font-size:11.5px;white-space:pre-wrap;word-break:break-all;">${escapeHtml(JSON.stringify(p.payload, null, 2))}</pre></div>
+          <div style="display:flex;gap:6px;"><button class="btn" data-approve="${escapeHtml(p.req_id)}" style="padding:6px 12px;font-size:12px;">Approve</button><button class="revoke" data-deny="${escapeHtml(p.req_id)}">Deny</button></div>`;
+        list.appendChild(div);
+      }
+    } catch (err) {}
+  }
+  document.getElementById('approvals-list').addEventListener('click', async (e) => {
+    const reqId = e.target.dataset.approve || e.target.dataset.deny;
+    if (!reqId) return;
+    const decision = e.target.dataset.approve ? 'approve' : 'deny';
+    // Two clicks for Approve (it runs the call): Approve, then Confirm.
+    if (decision === 'approve' && e.target.dataset.armed !== '1') { e.target.dataset.armed = '1'; e.target.textContent = 'Confirm: run it'; return; }
+    approvalsError.style.display = 'none';
+    const restoreText = withLoadingText(e.target, decision === 'approve' ? 'Running…' : 'Denying…');
+    try {
+      const r = await fetch(`/api/v1/hitl/${encodeURIComponent(reqId)}/decide`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ decision }) });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) { approvalsError.textContent = data.error || 'Could not decide.'; approvalsError.style.display = 'block'; }
+      else if (data.status === 'failed') { approvalsError.textContent = 'Approved, but the call failed. See Failed requests.'; approvalsError.style.display = 'block'; }
+    } catch (err) { approvalsError.textContent = 'Could not reach the server.'; approvalsError.style.display = 'block'; }
+    finally { restoreText(); loadApprovals(); loadRecent(); }
+  });
 
   // ─── Recordings (record and replay) ───
   const recordingsModalOverlay = document.getElementById('recordings-modal-overlay');

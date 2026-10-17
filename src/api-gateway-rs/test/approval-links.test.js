@@ -97,3 +97,28 @@ test('unknown, malformed and expired links all answer 404', async () => {
   assert.equal((await client.post('/v1/hitl/link', { token })).status, 404);
   assert.equal((await client.post('/v1/hitl/link/decide', { token, decision: 'approve' })).status, 404);
 });
+
+test('the dashboard lists held calls and decides them, once, for members only', async () => {
+  const res = await client.post(`/v1/webhook/${orgId}/${agentId}`,
+    { service: 'mockpay', action: 'payment.create', payload: { amount: 4500, fail: false } },
+    { headers: { Authorization: `Bearer ${apiKey}` } });
+  assert.equal(res.status, 202, JSON.stringify(res.data));
+  const reqId = res.data.reqId;
+
+  const pending = await client.get('/api/v1/hitl/pending', { headers: { Cookie: cookie } });
+  assert.equal(pending.status, 200);
+  assert.ok(pending.data.pending.some((p) => p.req_id === reqId && p.payload.amount === 4500));
+
+  const outsider = await client.post('/api/v1/auth/register', { email: `links-out-${RUN_ID}@internal.test`, password: 'validpassword123', org_id: `org_links_out_${RUN_ID}` });
+  const outVerify = await client.get(`/api/v1/auth/verify-email?token=${new URL(outsider.data.dev_verify_url).searchParams.get('verify_token')}`);
+  const outCookie = outVerify.headers['set-cookie'][0].split(';')[0];
+  assert.equal((await client.post(`/api/v1/hitl/${reqId}/decide`, { decision: 'approve' }, { headers: { Cookie: outCookie } })).status, 404);
+  assert.ok(!(await client.get('/api/v1/hitl/pending', { headers: { Cookie: outCookie } })).data.pending.some((p) => p.req_id === reqId));
+
+  const yes = await client.post(`/api/v1/hitl/${reqId}/decide`, { decision: 'approve' }, { headers: { Cookie: cookie } });
+  assert.equal(yes.status, 200, JSON.stringify(yes.data));
+  assert.equal(yes.data.status, 'approved');
+  const { rows } = await pg.query('SELECT resolved_by FROM hitl_requests WHERE req_id = $1', [reqId]);
+  assert.match(rows[0].resolved_by, /^dashboard: links-/);
+  assert.equal((await client.post(`/api/v1/hitl/${reqId}/decide`, { decision: 'deny' }, { headers: { Cookie: cookie } })).status, 409);
+});
