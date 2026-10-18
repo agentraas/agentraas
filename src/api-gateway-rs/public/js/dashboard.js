@@ -255,7 +255,9 @@
     sessionBanner.style.display = 'none';
 
     const isCloud = user.deployment_mode === 'cloud';
-    document.getElementById('cloud-tag').style.display = isCloud ? 'inline-flex' : 'none';
+    // The Worker can serve this script before octopus serves the new index.html.
+    const cloudTag = document.getElementById('cloud-tag');
+    if (cloudTag) cloudTag.style.display = isCloud ? 'inline-flex' : 'none';
     document.getElementById('admin-btn').style.display = (user.is_admin && isCloud) ? 'flex' : 'none';
 
     // Seed/reset data is an admin- or designated-demo-account convenience
