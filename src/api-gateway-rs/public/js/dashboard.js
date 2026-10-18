@@ -255,6 +255,7 @@
     sessionBanner.style.display = 'none';
 
     const isCloud = user.deployment_mode === 'cloud';
+    document.getElementById('cloud-tag').style.display = isCloud ? 'inline-flex' : 'none';
     document.getElementById('admin-btn').style.display = (user.is_admin && isCloud) ? 'flex' : 'none';
 
     // Seed/reset data is an admin- or designated-demo-account convenience
