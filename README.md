@@ -82,7 +82,8 @@ takes a few minutes), starts Postgres, Redis and MinIO, and runs the
 migrations. Then open `http://localhost:13001/dashboard` and register.
 Kubernetes: a Helm chart is in `infra/helm/`. Render: [one-click deploy](https://render.com/deploy?repo=https://github.com/sumedhchatse/agentraas).
 
-Works with Docker or Podman. Linux: either one. macOS: Docker Desktop.
+Works with Docker or Podman. Linux: either one. macOS: Docker Desktop (or
+Colima).
 Windows: Docker Desktop with WSL2; run `./install.sh` from a WSL terminal,
 with the repo cloned inside WSL (not on `C:\`).
 
