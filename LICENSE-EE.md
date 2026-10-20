@@ -11,10 +11,12 @@ releases keep the license they were released under.
 You may read, copy and modify this software, and run it for development,
 testing and evaluation, at no charge.
 
-You may use it in production only with a valid AgentRaaS license key
-(`LICENSE_TOKEN`) for the tier you use, obtained from agentraas.io, and
-only while that key is valid. A Team key covers Team features; an
-Enterprise key covers Team and Enterprise features. One key covers one
+You may use the Team features in production on your own servers at no
+charge and without a license key.
+
+You may use the Enterprise features in production only with a valid
+AgentRaaS Enterprise license key (`LICENSE_TOKEN`), obtained from
+agentraas.io, and only while that key is valid. One key covers one
 production deployment.
 
 What runs without a key (the server answers 403 only for features a tier

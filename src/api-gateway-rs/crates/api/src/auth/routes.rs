@@ -554,7 +554,7 @@ async fn reset_password(
     Ok(Json(json!({ "reset": true })))
 }
 
-/// Self-host: the tier its license key unlocks ("free" without one), not
+/// Self-host: the tier its license key unlocks ("team" without one), not
 /// `users.plan`. Cloud: the plan.
 fn shown_plan(state: &SharedState, plan: &str) -> String {
     if state.deployment_mode != "cloud" {

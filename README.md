@@ -82,8 +82,13 @@ takes a few minutes), starts Postgres, Redis and MinIO, and runs the
 migrations. Then open `http://localhost:13001/dashboard` and register.
 Kubernetes: a Helm chart is in `infra/helm/`. Render: [one-click deploy](https://render.com/deploy?repo=https://github.com/sumedhchatse/agentraas).
 
+Works with Docker or Podman. Linux: either one. macOS: Docker Desktop.
+Windows: Docker Desktop with WSL2; run `./install.sh` from a WSL terminal,
+with the repo cloned inside WSL (not on `C:\`).
+
 On SELinux hosts, `install.sh` relabels the bind mounts. After changing files
-by hand, recreate (`podman-compose down && up -d`) rather than `restart`.
+by hand, recreate (`docker compose` or `podman-compose`, `down` then `up -d`)
+rather than `restart`.
 
 ## What you get
 
@@ -132,18 +137,16 @@ on one machine (Intel Core i3-12100, local stack, three runs of 500 calls) with
 
 ## Pricing
 
-| | Community | Team | Enterprise |
-|---|---|---|---|
-| Price | Free | $19/month | $29/month |
-| Self-hosted | No action limit, one seat | License key, up to 3 seats | License key, unlimited seats |
-| Cloud | Free trial: 1,000 actions once, every feature | 10,000 actions a month | 20,000 actions a month |
-| Adds | Exactly-once execution, MCP gateway, dashboard, audit trail, DLQ, undo, record and replay, blocking spend caps and action policies, DLP redaction | Human approvals (also as the action of a spend cap or policy), semantic dedup, SSO | Agent identity, inbound webhooks, white-label branding |
+| | Self-hosted (Community + Team) | Enterprise |
+|---|---|---|
+| Price | Free, no license key | [Talk to us](mailto:hello@agentraas.io) |
+| Limits | No action limit, up to 3 seats | Unlimited seats |
+| Includes | Exactly-once execution, MCP gateway, dashboard, audit trail, DLQ, undo, record and replay, spend caps and action policies, DLP redaction, human approvals, semantic dedup, SSO | Everything in Self-hosted, plus agent identity, inbound webhooks, white-label branding |
 
-On Cloud, actions above what a plan includes cost $1 per 500, up to a
-monthly cap you set; duplicates, blocked calls and approval waits are never
-counted. A plan also gives you a self-hosted license key for the same tier
-(`LICENSE_TOKEN`). The core server is AGPL-3.0; the Team and Enterprise
-features are source-available (see [LICENSE.md](./LICENSE.md)).
+AgentRaaS Cloud starts with a free trial of 1,000 actions with every
+feature, for trying it out; for production, self-host. The core server is
+AGPL-3.0; the Team and Enterprise features are source-available (see
+[LICENSE.md](./LICENSE.md)).
 
 ## Testing
 

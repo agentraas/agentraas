@@ -2,8 +2,8 @@
 
 AgentRaaS's core is open source and free to self-host for any purpose,
 with no action limit. The Team and Enterprise features are
-source-available: free to read and try, and production use needs a paid
-license key. These licenses cover different parts of this repository:
+source-available: Team features are free to self-host in production,
+Enterprise features need a license key. These licenses cover different parts of this repository:
 
 | Part | License | File |
 |---|---|---|
@@ -17,11 +17,11 @@ In plain words (the license files are what counts):
   other people use a modified version over a network, you must offer them
   your modified source.
 - **Enterprise License (Team/Enterprise features, 0.16.0 on).** Read,
-  modify and try them for free. Running them in production needs a license
-  key for that tier ($19/month Team, $29/month Enterprise, from the
-  dashboard's Account settings). Without a key the server runs as the free
-  Community edition: the gated features answer 403, everything else works
-  with no limit. No hosted competing service.
+  modify and try them for free. Team features are free in production on
+  your own servers, no key needed. Enterprise features need an Enterprise
+  license key (ask hello@agentraas.io). Without one, Enterprise features
+  answer 403 and everything else works with no limit. No hosted competing
+  service.
 - **FSL (the same files in releases 0.10.0 to 0.15.1).** Those releases
   stay under the FSL: self-host for anything except a competing hosted
   service, Apache-2.0 two years after each release.

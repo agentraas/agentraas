@@ -65,7 +65,7 @@
       tag.textContent = need === 'team' ? 'Team' : 'Enterprise';
       btn.appendChild(tag);
       btn.title = isSelfHosted
-        ? `Needs a ${tag.textContent} license key (LICENSE_TOKEN).`
+        ? `Needs an Enterprise license key (LICENSE_TOKEN): ask hello@agentraas.io.`
         : `Needs the ${tag.textContent} plan: see Account and billing.`;
     });
     document.getElementById('hitl-rules-btn').style.display = '';
@@ -2643,8 +2643,8 @@
     other: 'Cloud account.',
   };
   const SELF_HOSTED_DESCRIPTIONS = {
-    free: 'Self-hosted Community: the core, no action limit. Human approvals, SSO and the other Team/Enterprise features need a license key in LICENSE_TOKEN (Team $19/month, Enterprise $29/month at agentraas.io).',
-    team: 'Self-hosted Team license: no action limit.',
+    free: 'Self-hosted: free, no action limit.',
+    team: 'Self-hosted: free, no action limit, Team features included. Enterprise features need a license key in LICENSE_TOKEN: ask hello@agentraas.io.',
     enterprise: 'Self-hosted Enterprise license: no action limit.',
   };
 

@@ -35,21 +35,25 @@ use crate::state::{ApiError, SharedState};
 // plenty to pick up a renewal or catch an expiry without a restart.
 const REFRESH_INTERVAL: Duration = Duration::from_secs(6 * 3600);
 
+/// Self-hosting without a key gets Team for free; only Enterprise needs
+/// a `LICENSE_TOKEN` (from agentraas.io, on request).
+const SELF_HOST_FREE_TIER: agentraas_core::tier::Tier = agentraas_core::tier::Tier::Team;
+
 fn resolve_from_env() -> agentraas_core::tier::Tier {
     let Ok(token) = std::env::var("LICENSE_TOKEN") else {
-        return agentraas_core::tier::Tier::Community;
+        return SELF_HOST_FREE_TIER;
     };
     if token.trim().is_empty() {
-        return agentraas_core::tier::Tier::Community;
+        return SELF_HOST_FREE_TIER;
     }
     match agentraas_core::license::verify(&token) {
         Some(license) => {
             tracing::info!(tier = ?license.tier, customer_id = %license.customer_id, "license token verified");
-            license.tier
+            license.tier.max(SELF_HOST_FREE_TIER)
         }
         None => {
-            tracing::warn!("LICENSE_TOKEN is set but invalid, expired, or tampered — falling back to Community tier");
-            agentraas_core::tier::Tier::Community
+            tracing::warn!("LICENSE_TOKEN is set but invalid, expired, or tampered — falling back to the free tier");
+            SELF_HOST_FREE_TIER
         }
     }
 }

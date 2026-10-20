@@ -143,7 +143,7 @@
     <tr><td>A retried order fills twice</td><td>The same order runs once; a repeat gets the first answer back.</td></tr>
     <tr><td>The agent sizes an order wrong</td><td>An action policy caps <code>qty</code> and <code>notional</code>, and blocks the order before it is sent.</td></tr>
     <tr><td>It trades something it shouldn't</td><td>A policy lists the symbols and order types it may use.</td></tr>
-    <tr><td>A large order needs a second look</td><td>Above a limit, the order waits for a person to approve it in Slack, Teams, Telegram or email (Team plan).</td></tr>
+    <tr><td>A large order needs a second look</td><td>Above a limit, the order waits for a person to approve it in Slack, Teams, Telegram or email (Team, free when self-hosted).</td></tr>
     <tr><td>It loops, or trades too much in a day</td><td>A spend cap limits orders per day and the total <code>notional</code> per day.</td></tr>
     <tr><td>It trades when the market is closed</td><td>A policy's hours allow orders only during market hours, in the market's own time zone.</td></tr>
     <tr><td>It closes everything at once</td><td>A policy denies <code>positions.close_all</code> for that agent.</td></tr>
@@ -197,7 +197,7 @@ kind: SpendCap
 metadata: {name: daily-limits, org: org_acme}
 spec: {agentId: trader, service: alpaca_paper, action: order.create, window: day, timezone: America/New_York,
        maxCalls: 20, amountField: notional, maxAmount: 10000, onExceed: block}</code></pre>
-  <p>Then add the approval step (Team plan) in the dashboard under <b>Rules → Approval rules</b>: service <code>alpaca_paper</code>, action <code>order.create</code>, field <code>notional</code> greater than <code>1000</code>.</p>
+  <p>Then add the approval step (Team, free when self-hosted) in the dashboard under <b>Rules → Approval rules</b>: service <code>alpaca_paper</code>, action <code>order.create</code>, field <code>notional</code> greater than <code>1000</code>.</p>
   <p class="note">Together: the same order inside a minute runs once; orders above $5,000, more than 10 shares, or off the list are blocked; orders outside 09:30 to 16:00 New York time on weekdays are blocked; orders above $1,000 that pass those wait for approval; after 20 orders or $10,000 in a New York day, the rest are blocked. Limits hold whether the agent sends <code>"notional": 500</code> or <code>"notional": "500"</code>. The daily total needs <code>notional</code> on every order: an order by <code>qty</code> alone is refused by that cap, so have your agent size orders in dollars.</p>
 
   <h2 id="india">India (NSE/BSE)</h2>

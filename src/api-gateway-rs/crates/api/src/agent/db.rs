@@ -648,7 +648,7 @@ pub async fn check_org_write_permission(pg: &PgPool, user_id: i32, org_id: &str)
 }
 
 /// The one place every feature gate asks (`require_tier`). Self-host: the
-/// tier in `LICENSE_TOKEN` (Community without one). Cloud: the org's plan,
+/// tier in `LICENSE_TOKEN` (Team without one). Cloud: the org's plan,
 /// except that the free trial gets every feature (its limit is the
 /// one-time action allowance, `get_effective_limit`).
 #[allow(dead_code)]
@@ -679,7 +679,7 @@ pub async fn require_tier(state: &SharedState, org_id: &str, minimum: agentraas_
     if effective_tier(state, org_id).await < minimum {
         return Err(ApiError::new(
             StatusCode::FORBIDDEN,
-            format!("This feature requires the {minimum:?} plan or higher (self-hosted: a license key in LICENSE_TOKEN). Everything else is free on Community."),
+            format!("This feature requires the {minimum:?} plan or higher (self-hosted: Enterprise needs a license key in LICENSE_TOKEN, ask hello@agentraas.io). Everything else is free when you self-host."),
         ));
     }
     Ok(())

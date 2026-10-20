@@ -73,7 +73,7 @@ pub struct AppState {
 
     /// Self-host's verified license tier, from `LICENSE_TOKEN` at startup and
     /// re-checked by `licensing::spawn_license_refresh_loop`. Missing,
-    /// invalid or expired means `Tier::Community`, never a refused startup.
+    /// invalid or expired means `Tier::Team` (free self-host), never a refused startup.
     /// Cloud never reads it (`agent::db::effective_tier`).
     pub license_tier: std::sync::RwLock<agentraas_core::tier::Tier>,
 

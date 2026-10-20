@@ -19,10 +19,10 @@
 <meta name="twitter:image" content="https://agentraas.io/og-image.png">
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "17545b657d6f40dcb8b3a2441ff3e39c"}'></script>
 <meta property="og:title" content="Self-host AgentRaaS on your own servers | AgentRaaS">
-<meta property="og:description" content="Run AgentRaaS on your own servers: your API keys and your agents' data never leave them. Community is free with no action limit; Team and Enterprise are a license key.">
+<meta property="og:description" content="Run AgentRaaS on your own servers: your API keys and your agents' data never leave them. Free with no action limit and no license key, Team features included; Enterprise on request.">
 <meta name="twitter:title" content="Self-host AgentRaaS on your own servers | AgentRaaS">
 <!-- site-meta:end -->
-<meta name="description" content="Run AgentRaaS on your own servers: your API keys and your agents' data never leave them. Community is free with no action limit; Team and Enterprise are a license key.">
+<meta name="description" content="Run AgentRaaS on your own servers: your API keys and your agents' data never leave them. Free with no action limit and no license key, Team features included; Enterprise on request.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2024%2024%27%3E%3Crect%20x=%270.75%27%20y=%270.75%27%20width=%2722.5%27%20height=%2722.5%27%20rx=%276%27%20fill=%27%2316191E%27%20stroke=%27%232E343C%27%20stroke-width=%271.5%27/%3E%3Ccircle%20cx=%278.6%27%20cy=%2712%27%20r=%275.1%27%20fill=%27none%27%20stroke=%27%23ECEFF3%27%20stroke-width=%271.9%27/%3E%3Ccircle%20cx=%2715.4%27%20cy=%2712%27%20r=%275.1%27%20fill=%27%23F2B544%27/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -133,24 +133,30 @@
 <main class="wrap">
   <div class="kicker">Self-hosted</div>
   <h1>Run AgentRaaS on your own servers</h1>
-  <p class="lead">For production, self-host: your API keys and your agents' data never leave your infrastructure. The Community edition is free with no action limit. Team and Enterprise features are a license key you add to the same install.</p>
+  <p class="lead">For production, self-host: your API keys and your agents' data never leave your infrastructure. It is free with no action limit and no license key, Team features (human approvals, SSO) included. Only Enterprise features need a key you add to the same install.</p>
 <pre><code>git clone https://github.com/sumedhchatse/agentraas
 cd agentraas
 ./install.sh</code></pre>
   <p class="note"><code>install.sh</code> generates fresh secrets, runs the database migrations and starts the stack (Postgres, Redis, the API and dashboard). The first run compiles from source and takes a few minutes. Kubernetes: see the <a href="/docs#helm">Helm chart</a>.</p>
+  <table>
+    <tr><th>Platform</th><th>You need</th><th>Run it from</th></tr>
+    <tr><td><b>Linux</b></td><td>Docker with Compose, or Podman with podman-compose</td><td>Any terminal</td></tr>
+    <tr><td><b>macOS</b></td><td><a href="https://docs.docker.com/desktop/setup/install/mac-install/" target="_blank" rel="noopener">Docker Desktop</a> (Apple silicon or Intel), running</td><td>Terminal</td></tr>
+    <tr><td><b>Windows</b></td><td><a href="https://learn.microsoft.com/windows/wsl/install" target="_blank" rel="noopener">WSL2</a> (<code>wsl --install</code>) and <a href="https://docs.docker.com/desktop/setup/install/windows-install/" target="_blank" rel="noopener">Docker Desktop</a> with WSL integration on</td><td>A WSL (Ubuntu) terminal. Clone inside WSL, not on <code>C:\</code>, or Postgres can't set its file permissions.</td></tr>
+  </table>
 
   <h2>Editions</h2>
   <table>
     <tr><th>Edition</th><th>Price</th><th>What you get</th></tr>
-    <tr><td><b>Community</b></td><td>Free, AGPL-3.0</td><td>Exactly-once execution, MCP gateway, dashboard, audit trail, circuit breaker, dead-letter queue, undo log, record and replay, spend caps and action policies that block, PII/DLP redaction. Unlimited actions, one dashboard seat.</td></tr>
-    <tr><td><b>Team</b></td><td>$19 per month</td><td>Everything in Community, plus human approvals (Slack, Teams, Telegram, Discord or email), approval holds on spend caps and policies, semantic dedup, OIDC SSO, up to 3 seats.</td></tr>
-    <tr><td><b>Enterprise</b></td><td>$29 per month</td><td>Everything in Team, plus agent identity, inbound webhook receivers, white-label branding per client tenant, unlimited seats.</td></tr>
+    <tr><td><b>Community</b></td><td>Free, AGPL-3.0</td><td>Exactly-once execution, MCP gateway, dashboard, audit trail, circuit breaker, dead-letter queue, undo log, record and replay, spend caps and action policies that block, PII/DLP redaction. Unlimited actions.</td></tr>
+    <tr><td><b>Team</b></td><td>Free, no key</td><td>Everything in Community, plus human approvals (Slack, Teams, Telegram, Discord or email), approval holds on spend caps and policies, semantic dedup, OIDC SSO, up to 3 seats.</td></tr>
+    <tr><td><b>Enterprise</b></td><td><a href="mailto:hello@agentraas.io">Talk to us</a></td><td>Everything in Team, plus agent identity, inbound webhook receivers, white-label branding per client tenant, unlimited seats.</td></tr>
   </table>
-  <p>Self-hosted AgentRaaS has no action limit on any edition. Without a license key the server runs as Community and always starts; a missing or expired key falls back to Community.</p>
+  <p>Self-hosted AgentRaaS has no action limit. Without a license key the server runs with Community and Team features and always starts; a missing or expired key falls back to that.</p>
 
   <h2>Adding a license key</h2>
   <ul>
-    <li>Pick Team or Enterprise on <a href="/pricing">pricing</a>. Your key appears under <b>Account</b> in the dashboard.</li>
+    <li>Only Enterprise features need a key. Email <a href="mailto:hello@agentraas.io">hello@agentraas.io</a> for one.</li>
     <li>Put it in <code>.env</code> as <code>LICENSE_TOKEN</code> and restart the API container.</li>
     <li>The key is checked on your server; nothing phones home.</li>
   </ul>

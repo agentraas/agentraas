@@ -45,7 +45,8 @@ breaking.
   the subscription is. Billing is handled by Paddle, our payment processor
   and merchant of record; subscribing means you also agree to
   [Paddle's terms](https://www.paddle.com/legal/checkout-buyer-terms).
-  The self-hosted Community edition needs no payment.
+  Self-hosting the Community and Team features needs no payment; an
+  Enterprise license is by agreement (hello@agentraas.io).
 
 <a id="refunds"></a>
 ## 3. Refunds and cancellation
