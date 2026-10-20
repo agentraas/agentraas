@@ -23,9 +23,10 @@ pub fn router() -> Router<SharedState> {
         // actually in the served HTML.
         .route("/pricing", get(landing))
         .route("/about", get(about))
-        .route("/vs-temporal", get(vs_temporal))
-        .route("/vs-composio", get(vs_composio))
-        .route("/vs-arcade", get(vs_arcade))
+        // Comparison pages removed 2026-10-20; old links and search results go home.
+        .route("/vs-temporal", get(removed_page))
+        .route("/vs-composio", get(removed_page))
+        .route("/vs-arcade", get(removed_page))
         .route("/dashboard", get(dashboard))
         .route("/dashboard/", get(dashboard))
         .route("/guide", get(guide))
@@ -85,16 +86,8 @@ async fn about() -> axum::response::Response {
     serve_html_file(public_file("about.html"), "About page not found").await
 }
 
-async fn vs_temporal() -> axum::response::Response {
-    serve_html_file(public_file("vs-temporal.html"), "Page not found").await
-}
-
-async fn vs_composio() -> axum::response::Response {
-    serve_html_file(public_file("vs-composio.html"), "Page not found").await
-}
-
-async fn vs_arcade() -> axum::response::Response {
-    serve_html_file(public_file("vs-arcade.html"), "Page not found").await
+async fn removed_page() -> axum::response::Redirect {
+    axum::response::Redirect::permanent("/")
 }
 
 async fn webhook_audit_page() -> axum::response::Response {
@@ -231,7 +224,7 @@ async fn robots_txt(axum::extract::State(state): axum::extract::State<SharedStat
     ([(header::CONTENT_TYPE, "text/plain")], body)
 }
 
-const SITEMAP_ROUTES: &[&str] = &["/", "/pricing", "/about", "/vs-temporal", "/vs-composio", "/vs-arcade", "/guide", "/docs", "/webhook-audit", "/chaos", "/mcp-scan", "/cloud", "/self-host", "/community", "/trading", "/status", "/postmortem-2026-09", "/license", "/privacy", "/terms", "/security", "/readme"];
+const SITEMAP_ROUTES: &[&str] = &["/", "/pricing", "/about", "/guide", "/docs", "/webhook-audit", "/chaos", "/mcp-scan", "/cloud", "/self-host", "/community", "/trading", "/status", "/postmortem-2026-09", "/license", "/privacy", "/terms", "/security", "/readme"];
 
 async fn sitemap_xml(axum::extract::State(state): axum::extract::State<SharedState>) -> impl IntoResponse {
     let urls: String = SITEMAP_ROUTES.iter().map(|route| format!("  <url><loc>{}{route}</loc></url>", state.public_url)).collect::<Vec<_>>().join("\n");
