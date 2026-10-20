@@ -106,10 +106,14 @@ fi
 
 # ─── 6. Wait for Postgres to actually be ready before migrating ───
 echo "→ Waiting for the database..."
-for i in $(seq 1 30); do
-  if $ENGINE exec ar-postgres pg_isready -U agentraas > /dev/null 2>&1; then
+# Over TCP, not the socket: on a fresh volume Postgres first runs a
+# socket-only temporary server for its init, which answers before the
+# agentraas database exists.
+for i in $(seq 1 90); do
+  if $ENGINE exec ar-postgres pg_isready -h 127.0.0.1 -U agentraas -d agentraas > /dev/null 2>&1; then
     break
   fi
+  [ "$i" = 90 ] && { echo "✗ The database did not start. See: $COMPOSE logs ar-postgres"; exit 1; }
   sleep 1
 done
 
