@@ -1,0 +1,29 @@
+name: Install
+
+# Runs ./install.sh from a clean checkout with Docker (the path macOS and
+# Windows/WSL2 users take) and checks the server answers. Public repo only,
+# like integration.yml.
+
+on:
+  push:
+    branches: [main]
+    paths: ['install.sh', 'compose.yaml', 'infra/migrations/**', 'src/api-gateway-rs/Containerfile', '.github/workflows/install.yml']
+  workflow_dispatch:
+
+jobs:
+  docker:
+    if: github.repository == 'sumedhchatse/agentraas'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install with Docker
+        run: ./install.sh
+      - name: Server answers
+        run: |
+          for i in $(seq 30); do curl -sf http://localhost:13001/health && break; sleep 2; done
+          curl -sf http://localhost:13001/health | grep -q '"ok":true'
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:13001/dashboard)" = 200
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --tail 80

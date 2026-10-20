@@ -8,10 +8,26 @@ echo "🛡️  AgentRaaS Installer"
 echo ""
 
 # ─── 1. Check prerequisites ───
-command -v podman >/dev/null 2>&1 || { echo "✗ podman is required. Install it first: https://podman.io/docs/installation"; exit 1; }
-command -v podman-compose >/dev/null 2>&1 || { echo "✗ podman-compose is required: pip install podman-compose"; exit 1; }
+# Podman (Linux) or Docker (Linux, macOS with Docker Desktop, Windows with
+# Docker Desktop inside WSL2). Podman wins when both are installed.
+if command -v podman >/dev/null 2>&1 && command -v podman-compose >/dev/null 2>&1; then
+  ENGINE=podman; COMPOSE="podman-compose"
+elif command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+  ENGINE=docker; COMPOSE="docker compose"
+elif command -v docker >/dev/null 2>&1 && command -v docker-compose >/dev/null 2>&1; then
+  ENGINE=docker; COMPOSE="docker-compose"
+else
+  echo "✗ Docker or Podman is required."
+  echo "  macOS/Windows: install Docker Desktop (https://docs.docker.com/desktop/), on Windows run this from a WSL2 terminal."
+  echo "  Linux: Docker, or Podman + podman-compose (pip install podman-compose)."
+  exit 1
+fi
+if [ "$ENGINE" = docker ] && ! docker info >/dev/null 2>&1; then
+  echo "✗ Docker is installed but not running. Start Docker Desktop (or the docker service) and run ./install.sh again."
+  exit 1
+fi
 command -v openssl >/dev/null 2>&1 || { echo "✗ openssl is required."; exit 1; }
-echo "✓ Prerequisites found"
+echo "✓ Prerequisites found (using $ENGINE)"
 
 # ─── 2. Generate secrets (only if not already configured) ───
 # Everything below is read by compose.yaml's `env_file: - .env` — every
@@ -60,17 +76,18 @@ fi
 # genuinely takes a few minutes, not a hang. Build explicitly (rather than
 # letting it happen silently inside `up -d`) so that wait is visible.
 echo "→ Building the API image (first run compiles from source — a few minutes, not a hang)..."
-podman-compose build ar-api-rs
+$COMPOSE build ar-api-rs
 
 # ─── 5. Start the stack ───
 echo "→ Starting containers..."
-podman-compose up -d > /dev/null 2>&1
+$COMPOSE up -d > /dev/null 2>&1
 
 # ─── 5b. Fix Redis data directory ownership ───
 # Rootless Podman's UID namespace mapping doesn't always land where Redis's
 # own process expects on a freshly created volume — this shows up as
 # "MISCONF Errors writing to the AOF file: Permission denied" on the very
 # first write. Fixing it here means nobody has to debug it manually.
+if [ "$ENGINE" = podman ]; then
 echo "→ Fixing Redis data directory ownership..."
 podman unshare chown -R 999:999 "$(pwd)/data/redis" 2>/dev/null || true
 podman restart ar-redis > /dev/null 2>&1 || true
@@ -85,11 +102,12 @@ echo "→ Fixing Postgres data directory ownership..."
 podman unshare chown -R 999:999 "$(pwd)/data/postgres" 2>/dev/null || true
 podman restart ar-postgres > /dev/null 2>&1 || true
 sleep 2
+fi
 
 # ─── 6. Wait for Postgres to actually be ready before migrating ───
 echo "→ Waiting for the database..."
 for i in $(seq 1 30); do
-  if podman exec ar-postgres pg_isready -U agentraas > /dev/null 2>&1; then
+  if $ENGINE exec ar-postgres pg_isready -U agentraas > /dev/null 2>&1; then
     break
   fi
   sleep 1
@@ -98,14 +116,14 @@ done
 # ─── 7. Run every migration, in order ───
 echo "→ Running database migrations..."
 for f in infra/migrations/*.sql; do
-  podman exec -i ar-postgres psql -U agentraas -d agentraas < "$f" > /dev/null
+  $ENGINE exec -i ar-postgres psql -U agentraas -d agentraas < "$f" > /dev/null
 done
 echo "✓ Migrations complete"
 
 # ─── 8. Recreate cleanly so SELinux labels/fresh env apply ───
 echo "→ Finalizing..."
-podman-compose down > /dev/null 2>&1
-podman-compose up -d > /dev/null 2>&1
+$COMPOSE down > /dev/null 2>&1
+$COMPOSE up -d > /dev/null 2>&1
 sleep 3
 
 echo ""
