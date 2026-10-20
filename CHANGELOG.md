@@ -13,14 +13,108 @@ Every release that adds a file under `infra/migrations/` says so. Apply
 migrations in order before starting the new version; they are written to be
 safe to re-run.
 
-## Unreleased
-
-- **License.** `dlp.rs` (PII redaction) is AGPL-3.0 again, as part of the
-  free Community edition, matching what the server and the pricing page
-  already did. It was listed under the Enterprise License in 0.16.0 to
-  0.16.4.
-
 ## [Unreleased]
+
+### Changed
+- **Self-hosted Team features are free, with no license key.** A server
+  without `LICENSE_TOKEN` now runs as Team: human approvals, approval holds
+  on spend caps and policies, semantic dedup, OIDC SSO, up to 3 seats. Only
+  Enterprise features (agent identity, inbound webhooks, white-label,
+  unlimited seats) need a key; ask hello@agentraas.io. `LICENSE-EE.md` and
+  `LICENSE.md` are reworded to match. Cloud plans are unchanged.
+- **`install.sh` works with Docker as well as Podman**, so it runs on
+  macOS (Docker Desktop) and Windows (Docker Desktop with WSL2, run from a
+  WSL terminal). Podman is used when both are installed. `.gitattributes`
+  keeps shell scripts in LF so a Windows checkout still runs.
+
+### Fixed
+- `install.sh` waited for Postgres's init server instead of the real one,
+  so a first install on a fresh volume could run migrations before the
+  `agentraas` database existed ("database does not exist").
+
+## [0.20.0] - 2026-10-17
+
+No migration.
+
+### Added
+- Indian brokers Upstox and Dhan as built-in services: place, modify and
+  cancel NSE/BSE orders, with each order run once, side/product/order
+  type/validity/segment checked before the broker sees it, and undo
+  cancelling a placed order. Live orders need self-hosting on a static IP
+  (SEBI's retail algo rules); see `/trading#india`.
+
+### Fixed
+- An alert channel that rejects a message (a deleted Teams workflow, a
+  revoked bot) is now logged instead of failing silently.
+
+## [0.19.0] - 2026-10-17
+
+Migration: `060`.
+
+### Added
+- Daily money caps: a spend cap can add up a payload field per hour or day
+  (for example 10,000 in `notional` a day), with or instead of a call count.
+  A call without a number in that field is refused, a refused call doesn't
+  use up the budget, and a cap can name a time zone.
+- Allowed hours on action policies (for example weekdays 09:30 to 16:00
+  America/New_York), daylight saving handled; outside them a call is
+  blocked or held for approval. In the dashboard, the API and
+  `agentraas apply`.
+
+## [0.18.0] - 2026-10-17
+
+Migrations: `058`, `059`.
+
+### Added
+- Approval links: a held call sends a one-time link to every alert channel
+  (Microsoft Teams, Telegram, email, Discord and Slack webhooks, alongside
+  the Slack app). Opening it only shows the request; Approve or Deny
+  decides. Held calls can also be approved in the dashboard (Monitor →
+  Waiting for approval). The first decision wins.
+- Alpaca paper and live trading as built-in services.
+- One AgentRaaS key per agent works for every connected service, with
+  per-key switches to limit it to chosen services.
+- Teams and email alert channels; dashboard charts follow the org filter.
+
+### Security
+- A policy limit or approval threshold now also applies when the number
+  arrives as a string (`"5000"`). Before, a quoted number skipped it.
+  Upgrading is recommended.
+
+## [0.17.0] - 2026-10-13
+
+Migration: `057`.
+
+### Added
+- Validation errors carry a concrete `hint` for the agent (for example
+  "send amount as a JSON number: 49.99").
+- Jira as a service (`jira.issue.create/comment/transition/delete`; create
+  is undoable) and as an alert channel (one ticket per org per alert per
+  day).
+- An alert on every channel when a call's outcome is unknown (once an hour
+  per action).
+
+## [0.16.5] - 2026-10-13
+
+Migration: `056`.
+
+### Security
+- An org auditor could delete or change rules, policies, caps, webhooks and
+  gateway targets, revoke identity tokens and replay DLQ entries; by-id
+  writes now check write access, not just membership.
+- The public demo session could fetch a license key and the self-host
+  package; it no longer can.
+- The Paddle webhook trusted a browser-written user id; the subscription's
+  first owner now decides.
+- `{ACCOUNT}` in a URL is now character-checked.
+- A per-account cap of 50 failed logins an hour from all IPs (a password
+  reset clears it).
+
+### Changed
+- Emails are case-insensitive (migration 056).
+- **License.** `dlp.rs` (PII redaction) is AGPL-3.0 again, part of the free
+  Community edition. It was listed under the Enterprise License in 0.16.0
+  to 0.16.4.
 
 ## [0.16.4] - 2026-10-11
 

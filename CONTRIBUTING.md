@@ -48,11 +48,12 @@ generic proxy pattern can't express.
 
 ## Development setup
 
-See the README for the full local setup (Podman, migrations, environment
-variables). Short version:
+See the README for the full local setup. Short version (Linux, macOS with
+Docker Desktop, or Windows with Docker Desktop + WSL2):
 
 ```bash
-podman-compose up -d
-podman exec -i ar-postgres psql -U agentraas -d agentraas < infra/migrations/<latest>.sql   # for any new migrations
-cd src/api-gateway && npm install && npm run dev
+./install.sh                     # Docker or Podman; re-run after pulling to rebuild and migrate
+cd src/api-gateway-rs
+cargo test --workspace           # add --features enterprise for the full edition
+TEST_BASE_URL=http://localhost:13001 test/run-each.sh   # integration tests, env vars in its header
 ```

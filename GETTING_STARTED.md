@@ -24,8 +24,8 @@ The rest of this guide explains each piece in more detail.
 | | AgentRaaS Cloud | Self-hosted |
 |---|---|---|
 | Where it runs | Our servers | Your own server |
-| Setup | Register, log in, done | Register, download, run `install.sh` |
-| Limit | Free trial of 1,000 actions once, then Team ($19/month, 10,000 a month) or Enterprise ($29/month, 20,000 a month) | None: unlimited actions; Team/Enterprise features need a license key |
+| Setup | Register, log in, done | Clone, run `install.sh` (Linux, macOS, or Windows with WSL2) |
+| Limit | Free trial of 1,000 actions once, every feature | None: free, unlimited actions, Team features included; only Enterprise needs a license key |
 | Good for | Trying it out, no infra to manage | Your own data residency, unlimited volume |
 
 You can do both — try it on Cloud first, and self-host later if you want
@@ -78,10 +78,14 @@ account (separate, lives on your own server).
 2. Open your **Account** menu (click your email, top right) → **Self-host
    AgentRaaS**. Fill in the short form (what you'll use it for, and
    optionally your company/team name), then download the `.zip`.
-3. On your own server, unzip it and run:
+3. On your own server, unzip it (or `git clone https://github.com/sumedhchatse/agentraas`)
+   and run:
    ```bash
    ./install.sh
    ```
+   It needs Docker or Podman. Linux: either. macOS: Docker Desktop.
+   Windows: Docker Desktop with WSL2, run from a WSL terminal with the
+   files inside WSL (not on `C:\`).
    This generates fresh secrets, runs the database migrations, and starts
    the stack.
 4. Once it's running, go to `http://your-server:13001/dashboard` (or
@@ -103,12 +107,10 @@ How you update depends on how you got the source:
 **Cloned from GitHub** (`git clone https://github.com/sumedhchatse/agentraas`):
 ```bash
 git pull
-podman-compose build ar-api-rs
-podman-compose up -d --force-recreate ar-api-rs
-for f in infra/migrations/*.sql; do
-  podman exec -i ar-postgres psql -U agentraas -d agentraas -v ON_ERROR_STOP=1 < "$f"
-done
+./install.sh
 ```
+`install.sh` keeps your `.env`, rebuilds the API image, restarts the stack
+and runs every migration. It uses Docker or Podman, whichever you have.
 Every migration file is safe to re-run — already-applied ones just no-op.
 Your `.env`, `data/`, and any local edits you made outside the repo's own
 files are untouched by `git pull`.
@@ -213,7 +215,7 @@ deployment choice, not one of AgentRaaS's own paid features.
 **Self-hosted:**
 
 ```bash
-podman-compose --profile agentgateway up -d agentgateway
+podman-compose --profile agentgateway up -d agentgateway   # or: docker compose --profile agentgateway up -d agentgateway
 ```
 
 See `config/agentgateway.yaml` for the config and what it does — AgentRaaS

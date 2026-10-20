@@ -1,6 +1,6 @@
 # AgentRaaS Helm chart
 
-Runs the AgentRaaS API (Community edition image) on Kubernetes, with a
+Runs the AgentRaaS API (the free self-host image; Team features on, Enterprise with a key) on Kubernetes, with a
 bundled single-instance Postgres and Redis, or your own.
 
 ```bash
