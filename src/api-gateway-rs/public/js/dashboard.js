@@ -198,10 +198,10 @@
         return;
       }
       const r = await res.json();
-      banner.innerHTML = `Sent <strong>${r.sent}</strong> identical requests to the sandbox endpoint — `
-        + `<strong>${r.executed}</strong> actually executed, `
-        + `<strong>${r.deduplicated}</strong> caught as duplicates`
-        + (r.errored ? `, ${r.errored} errored` : '')
+      banner.innerHTML = `Sent <strong>${escapeHtml(r.sent)}</strong> identical requests to the sandbox endpoint — `
+        + `<strong>${escapeHtml(r.executed)}</strong> actually executed, `
+        + `<strong>${escapeHtml(r.deduplicated)}</strong> caught as duplicates`
+        + (r.errored ? `, ${escapeHtml(r.errored)} errored` : '')
         + `. See the rows below in Recent activity — same req/idempotency key, real audit log.`;
       await loadAll();
     } catch {
@@ -2349,7 +2349,7 @@
       if (res.status === 401) return handleUnauthenticated();
       if (!res.ok) return;
       const data = await res.json();
-      hcServiceSelect.innerHTML = data.supported_services.map((s) => `<option value="${s}">${s.charAt(0).toUpperCase() + s.slice(1)}</option>`).join('');
+      hcServiceSelect.innerHTML = data.supported_services.map((s) => `<option value="${escapeHtml(s)}">${escapeHtml(s.charAt(0).toUpperCase() + s.slice(1))}</option>`).join('');
       if (!data.enabled.length) { list.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px 0;">Nothing actively monitored yet.</div>'; return; }
       list.innerHTML = '';
       for (const row of data.enabled) {
@@ -2882,7 +2882,7 @@
     });
 
     if (!users.length) {
-      list.innerHTML = `<div style="color:var(--muted);font-size:13px;padding:12px 0;">No ${adminActiveTab} users yet.</div>`;
+      list.innerHTML = `<div style="color:var(--muted);font-size:13px;padding:12px 0;">No ${escapeHtml(adminActiveTab)} users yet.</div>`;
       return;
     }
 

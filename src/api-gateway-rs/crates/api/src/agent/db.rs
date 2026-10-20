@@ -673,7 +673,7 @@ pub async fn effective_tier(state: &SharedState, org_id: &str) -> agentraas_core
 /// switch can't express "Pro can, Community can't," so this checks the
 /// calling org's actual tier instead (cloud: from the billing DB;
 /// self-host: from the cached license). No license, or an invalid/
-/// expired one, correctly gets 403 here — never a silent bypass.
+/// expired one, falls back to Team, so Enterprise-only features 403 here.
 #[allow(dead_code)]
 pub async fn require_tier(state: &SharedState, org_id: &str, minimum: agentraas_core::tier::Tier) -> Result<(), ApiError> {
     if effective_tier(state, org_id).await < minimum {

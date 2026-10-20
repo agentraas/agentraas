@@ -54,6 +54,6 @@ url = "2"
 tokio-stream = { version = "0.1", features = ["sync"] }
 futures-util = "0.3"
 walkdir = "2"
-zip = { version = "0.6", default-features = false, features = ["deflate"] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
 hmac = "0.12"
 pulldown-cmark = "0.12"

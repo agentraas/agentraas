@@ -15,6 +15,12 @@ safe to re-run.
 
 ## [Unreleased]
 
+### Security
+- Dependency updates from `cargo audit`: `zip` 0.6 to 9 (three advisories,
+  only reachable when extracting, which AgentRaaS never does), `rustls`
+  0.23.46 and `quinn-proto` 0.11.19. The remaining `rsa` advisory comes in
+  only through sqlx's unused MySQL driver and has no fix yet.
+
 ### Changed
 - **Self-hosted Team features are free, with no license key.** A server
   without `LICENSE_TOKEN` now runs as Team: human approvals, approval holds

@@ -146,7 +146,7 @@ const INCLUDE_FILES: &[&str] = &[
 fn build_zip_archive(seed_sql: String, instructions_txt: String) -> Result<Vec<u8>, String> {
     let buf = std::io::Cursor::new(Vec::new());
     let mut zip = zip::ZipWriter::new(buf);
-    let options = zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
     for dir in INCLUDE_DIRS {
         let full_dir = std::path::Path::new(SNAPSHOT_DIR).join(dir);
