@@ -27,3 +27,45 @@ jobs:
       - name: Logs on failure
         if: failure()
         run: docker compose logs --tail 80
+
+  macos:
+    # Colima stands in for Docker Desktop (same Linux VM + docker CLI); the
+    # point is macOS's own bash 3.2, LibreSSL openssl and BSD tools. Intel
+    # runner: Apple silicon runners have no nested virtualization.
+    if: github.repository == 'sumedhchatse/agentraas'
+    runs-on: macos-15-intel
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Docker via Colima
+        run: |
+          brew install colima docker docker-compose
+          mkdir -p ~/.docker/cli-plugins
+          ln -sfn "$(brew --prefix)/opt/docker-compose/bin/docker-compose" ~/.docker/cli-plugins/docker-compose
+          colima start --cpu 3 --memory 8
+      - name: Install with Docker
+        run: ./install.sh
+      - name: Server answers
+        run: |
+          for i in $(seq 30); do curl -sf http://localhost:13001/health && break; sleep 2; done
+          curl -sf http://localhost:13001/health | grep -q '"ok":true'
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:13001/dashboard)" = 200
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --tail 80
+
+  windows-checkout:
+    # Hosted Windows runners can't run Linux containers (no WSL2), so this
+    # only proves a Windows checkout keeps install.sh runnable: LF endings
+    # even with autocrlf on, and valid bash.
+    if: github.repository == 'sumedhchatse/agentraas'
+    runs-on: windows-latest
+    steps:
+      - run: git config --global core.autocrlf true
+      - uses: actions/checkout@v4
+      - name: install.sh survives a Windows checkout
+        shell: bash
+        run: |
+          if grep -q $'\r' install.sh; then echo "install.sh has CRLF"; exit 1; fi
+          bash -n install.sh
+          echo "LF and syntax OK"
