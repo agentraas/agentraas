@@ -228,6 +228,7 @@
       <div class="group-label">Operating</div>
       <a href="#self-hosting">Self-hosting</a>
       <a href="#helm">Kubernetes (Helm)</a>
+      <a href="#kms">Key management (KMS)</a>
       <a href="#metrics">Metrics</a>
       <a href="#latency">Latency</a>
       <a href="#plans">Plans &amp; limits</a>
@@ -722,6 +723,45 @@ helm install agentraas ./infra/helm/agentraas \
       </table>
       <p>Every database migration runs before the API starts, in an init container that holds a Postgres advisory lock so replicas don't race; all migrations are safe to re-run. The API runs with a read-only root filesystem and is probed on <code>/health</code>.</p>
       <div class="callout"><p>Back up <code>CREDENTIALS_ENCRYPTION_KEY</code> (in the generated Secret). Without it, the third-party credentials AgentRaaS stores can't be decrypted. Redis holds the dedup slots: run it with persistence, or a restart reopens recent calls to duplicates.</p></div>
+    </section>
+    <section id="kms">
+      <h2>Key management (KMS)</h2>
+      <p>Service keys, SSO secrets and webhook targets are stored encrypted with one AES-256 key, <code>CREDENTIALS_ENCRYPTION_KEY</code>. By default that variable is the key itself. To keep it out of your <code>.env</code>, encrypt it with a key in your KMS and store the result instead: the server asks the KMS to decrypt it once at startup, and the master key never leaves the KMS. Stored data does not change, so you can switch an existing install over without re-encrypting anything.</p>
+      <p>Start from your current key (or a new one from <code>openssl rand -base64 32</code> on a fresh install):</p>
+      <pre><code>KEY='&lt;current CREDENTIALS_ENCRYPTION_KEY&gt;'
+echo "$KEY" | base64 -d &gt; key.bin   # AWS and GCP read the raw bytes</code></pre>
+      <p><strong>HashiCorp Vault / OpenBao</strong> (transit engine; the token only needs <code>update</code> on <code>transit/decrypt/agentraas</code>):</p>
+      <pre><code>vault secrets enable transit
+vault write -f transit/keys/agentraas
+vault write -field=ciphertext transit/encrypt/agentraas plaintext="$KEY"
+
+CREDENTIALS_KEY_PROVIDER=vault
+CREDENTIALS_KMS_KEY=agentraas
+CREDENTIALS_ENCRYPTION_KEY=vault:v1:...      # the output above
+VAULT_ADDR=https://vault.example.com:8200
+VAULT_TOKEN=...                              # optional: VAULT_NAMESPACE, VAULT_TRANSIT_MOUNT</code></pre>
+      <p><strong>AWS KMS</strong> (the server needs <code>kms:Decrypt</code> on the key; credentials come from <code>AWS_ACCESS_KEY_ID</code>/<code>AWS_SECRET_ACCESS_KEY</code>, the ECS task role or the EC2 instance role):</p>
+      <pre><code>aws kms encrypt --key-id arn:aws:kms:us-east-1:111122223333:key/... \
+  --plaintext fileb://key.bin --query CiphertextBlob --output text
+
+CREDENTIALS_KEY_PROVIDER=aws
+CREDENTIALS_KMS_KEY=arn:aws:kms:us-east-1:111122223333:key/...
+CREDENTIALS_ENCRYPTION_KEY=AQICAH...         # the output above</code></pre>
+      <p><strong>Google Cloud KMS</strong> (runs on Google Cloud; the service account needs <code>roles/cloudkms.cryptoKeyDecrypter</code>):</p>
+      <pre><code>gcloud kms encrypt --location global --keyring agentraas --key credentials \
+  --plaintext-file key.bin --ciphertext-file - | base64 -w0
+
+CREDENTIALS_KEY_PROVIDER=gcp
+CREDENTIALS_KMS_KEY=projects/my-project/locations/global/keyRings/agentraas/cryptoKeys/credentials
+CREDENTIALS_ENCRYPTION_KEY=CiQA...           # the output above</code></pre>
+      <p><strong>Azure Key Vault</strong> (an RSA key; the managed identity needs the Key Vault Crypto User role, <code>AZURE_CLIENT_ID</code> picks a user-assigned one):</p>
+      <pre><code>az keyvault key encrypt --vault-name my-vault --name agentraas --algorithm RSA-OAEP-256 \
+  --data-type base64 --value "$KEY" --query result -o tsv
+
+CREDENTIALS_KEY_PROVIDER=azure
+CREDENTIALS_KMS_KEY=https://my-vault.vault.azure.net/keys/agentraas/&lt;version&gt;
+CREDENTIALS_ENCRYPTION_KEY=...               # the output above</code></pre>
+      <p>Then delete <code>key.bin</code> and the plain key from your shell history. If the server can't reach the KMS it refuses to start and says why. Keep deletion protection on the KMS key: if it is deleted, every stored secret is lost. To rotate, rotate the KMS key and re-encrypt the same 32 bytes (Vault: <code>vault write transit/rewrap/agentraas ciphertext=...</code>); stored data stays as it is.</p>
     </section>
 
     <section id="metrics">

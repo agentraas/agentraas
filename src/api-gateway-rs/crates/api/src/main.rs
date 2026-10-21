@@ -10,6 +10,7 @@ mod dlq;
 mod ee;
 mod email;
 mod health_checks;
+mod kms;
 mod licensing;
 mod long_tail;
 mod mcp;
@@ -65,6 +66,7 @@ async fn main() -> anyhow::Result<()> {
         std::env::var("JWT_SECRET").map_err(|_| anyhow::anyhow!("JWT_SECRET must be set"))?;
     let credentials_key = std::env::var("CREDENTIALS_ENCRYPTION_KEY")
         .map_err(|_| anyhow::anyhow!("CREDENTIALS_ENCRYPTION_KEY must be set"))?;
+    let credentials_key = kms::credentials_key(&credentials_key).await?;
     let cipher = agentraas_core::crypto::CredentialCipher::from_base64_key(&credentials_key)
         .map_err(|e| anyhow::anyhow!("invalid CREDENTIALS_ENCRYPTION_KEY: {e}"))?;
 

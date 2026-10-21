@@ -15,6 +15,20 @@ safe to re-run.
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-10-21
+
+No migration.
+
+### Added
+- **KMS key management.** `CREDENTIALS_ENCRYPTION_KEY` can now hold the key
+  encrypted by HashiCorp Vault / OpenBao (transit), AWS KMS, Google Cloud
+  KMS or Azure Key Vault instead of the plain key: set
+  `CREDENTIALS_KEY_PROVIDER` (`vault`, `aws`, `gcp`, `azure`) and
+  `CREDENTIALS_KMS_KEY`. The server decrypts it once at startup and refuses
+  to start if it can't. Stored data is unchanged, so an existing install
+  switches over without re-encrypting anything. Unset, nothing changes.
+  Steps per provider: `/docs#kms`.
+
 ### Security
 - Dependency updates from `cargo audit`: `zip` 0.6 to 9 (three advisories,
   only reachable when extracting, which AgentRaaS never does), `rustls`
@@ -471,7 +485,8 @@ server's `/health` response now includes its version.
 - Up to `050_known_destinations.sql`. On an existing install, apply any of
   `046` to `050` you have not run yet.
 
-[Unreleased]: https://github.com/agentraas/agentraas/compare/v0.9.2...HEAD
+[Unreleased]: https://github.com/agentraas/agentraas/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/agentraas/agentraas/compare/v0.20.0...v0.21.0
 [0.9.2]: https://github.com/agentraas/agentraas/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/agentraas/agentraas/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/agentraas/agentraas/releases/tag/v0.9.0
