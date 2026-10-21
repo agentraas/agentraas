@@ -51,7 +51,7 @@ Measured overhead: 2.1 to 2.4 ms added per call at the median (one machine, Inte
 - [Getting started guide](https://agentraas.io/guide)
 - [Source code (GitHub)](https://github.com/agentraas/agentraas)
 - [Python package (PyPI)](https://pypi.org/project/agentraas/)
-- [MCP Registry entry](https://registry.modelcontextprotocol.io): `io.github.sumedhchatse/agentraas`
+- [MCP Registry entry](https://registry.modelcontextprotocol.io): `io.github.agentraas/agentraas`
 
 ## Common questions
 

@@ -1,9 +1,9 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.sumedhchatse/agentraas",
+  "name": "io.github.agentraas/agentraas",
   "title": "AgentRaaS wrap",
   "description": "Wraps any MCP server: identical write-tool calls run once, and every tool call is audit-logged.",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "websiteUrl": "https://agentraas.io",
   "repository": {
     "url": "https://github.com/agentraas/agentraas",
@@ -14,7 +14,7 @@
     {
       "registryType": "pypi",
       "identifier": "agentraas",
-      "version": "0.12.0",
+      "version": "0.12.1",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"

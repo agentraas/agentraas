@@ -61,7 +61,7 @@ def charge(customer, amount, idempotency_key=None):
 - `protect_tool` for LangChain/LangGraph and CrewAI, `protectTools` for the
   Vercel AI SDK (`npm install agentraas`).
 - `agentraas wrap -- <mcp server>` gives any MCP server exactly-once write
-  tools and a log. In the [official MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.sumedhchatse/agentraas).
+  tools and a log. In the [official MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.agentraas/agentraas).
 - `agentraas scan` lists which tools in your MCP servers can move money,
   delete data, run code or send messages, without calling any of them
   ([GitHub Action](src/scan-action/action.yml) for pull requests).

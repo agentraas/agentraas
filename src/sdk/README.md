@@ -1,6 +1,6 @@
 # agentraas (Python SDK)
 
-<!-- mcp-name: io.github.sumedhchatse/agentraas -->
+<!-- mcp-name: io.github.agentraas/agentraas -->
 
 The reliability layer for what AI agents do. Every action your agent
 takes (a charge, an email, a CRM update, a tool call) runs once even when
