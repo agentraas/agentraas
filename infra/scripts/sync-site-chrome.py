@@ -33,7 +33,7 @@ MARK = ('<span class="sn-mark"><svg width="18" height="18" viewBox="0 0 24 24" f
         '<circle cx="8.5" cy="12" r="5.6" fill="none" stroke="#ECEFF3" stroke-width="2"/>'
         '<circle cx="15.5" cy="12" r="5.6" fill="#F2B544"/></svg></span>')
 GITHUB = ('<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.5 0-.24-.01-.87-.01-1.71-2.78.62-3.37-1.37-3.37-1.37-.46-1.2-1.11-1.52-1.11-1.52-.91-.64.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05a9.3 9.3 0 0 1 2.5-.35c.85 0 1.71.12 2.5.35 1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.46.1 2.72.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.79-4.57 5.05.36.32.68.95.68 1.92 0 1.39-.01 2.51-.01 2.85 0 .28.18.61.69.5A10.26 10.26 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>')
-REPO = "https://github.com/sumedhchatse/agentraas"
+REPO = "https://github.com/agentraas/agentraas"
 LINKS = [("Platform", "/#features"), ("Open source", "/#open-source"), ("Pricing", "/#pricing"),
          ("Docs", "/docs"), ("Guide", "/guide"), ("Community", "/community"), ("Status", "/status")]
 
@@ -205,7 +205,7 @@ def landing_jsonld(s):
          "description": "Open-source reliability layer for AI agents that take real actions: exactly-once tool calls, action policies (what each agent may do, where it may send data), human approval for risky actions, spend caps, an audit trail and OpenTelemetry export. Works through a webhook, the Python SDK or MCP. Free and self-hosted.",
          "url": SITE + "/", "license": "https://agentraas.io/license",
          "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD", "description": "Community edition, self-hosted, no action limit"},
-         "sameAs": ["https://github.com/sumedhchatse/agentraas", "https://pypi.org/project/agentraas/"]},
+         "sameAs": ["https://github.com/agentraas/agentraas", "https://pypi.org/project/agentraas/"]},
         {"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": faqs},
     ]
     body = json.dumps(data, ensure_ascii=False, indent=1).replace("</", "<\\/")

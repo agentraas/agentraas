@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   integration:
-    if: github.repository == 'sumedhchatse/agentraas'
+    if: github.repository == 'agentraas/agentraas'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     strategy:

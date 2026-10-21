@@ -12,7 +12,7 @@ on:
 
 jobs:
   docker:
-    if: github.repository == 'sumedhchatse/agentraas'
+    if: github.repository == 'agentraas/agentraas'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -32,7 +32,7 @@ jobs:
     # Colima stands in for Docker Desktop (same Linux VM + docker CLI); the
     # point is macOS's own bash 3.2, LibreSSL openssl and BSD tools. Intel
     # runner: Apple silicon runners have no nested virtualization.
-    if: github.repository == 'sumedhchatse/agentraas'
+    if: github.repository == 'agentraas/agentraas'
     runs-on: macos-15-intel
     timeout-minutes: 60
     steps:
@@ -58,7 +58,7 @@ jobs:
     # Hosted Windows runners can't run Linux containers (no WSL2), so this
     # only proves a Windows checkout keeps install.sh runnable: LF endings
     # even with autocrlf on, and valid bash.
-    if: github.repository == 'sumedhchatse/agentraas'
+    if: github.repository == 'agentraas/agentraas'
     runs-on: windows-latest
     steps:
       - run: git config --global core.autocrlf true

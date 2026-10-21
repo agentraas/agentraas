@@ -6,7 +6,7 @@
   "version": "0.12.0",
   "websiteUrl": "https://agentraas.io",
   "repository": {
-    "url": "https://github.com/sumedhchatse/agentraas",
+    "url": "https://github.com/agentraas/agentraas",
     "source": "github",
     "subfolder": "src/sdk"
   },

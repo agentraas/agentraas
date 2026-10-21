@@ -1,7 +1,7 @@
 # agentraas (TypeScript / JavaScript SDK)
 
 Exactly-once execution for AI agents — a thin, dependency-free wrapper
-around [AgentRaaS](https://github.com/sumedhchatse/agentraas)'s SDK-style
+around [AgentRaaS](https://github.com/agentraas/agentraas)'s SDK-style
 REST gateway. If your agent code calls Stripe, Twilio, HubSpot, or any
 other API directly (from Node, a serverless function, or a browser),
 wrap it with this client so a retry — yours, your framework's, or a
@@ -102,7 +102,7 @@ const stripe = client.service("stripe");
 const result = await stripe.call("charge.create", { amount: 5000, currency: "usd" });
 ```
 
-Calling a [Custom Action](https://github.com/sumedhchatse/agentraas#supported-services)
+Calling a [Custom Action](https://github.com/agentraas/agentraas#supported-services)
 you've registered:
 
 ```typescript
@@ -177,4 +177,4 @@ error can fix them all in one retry.
 
 MIT — see [LICENSE](./LICENSE). (The AgentRaaS server is AGPL-3.0, its
 Team/Enterprise features FSL, all free to self-host; see the
-[main repo](https://github.com/sumedhchatse/agentraas).)
+[main repo](https://github.com/agentraas/agentraas).)

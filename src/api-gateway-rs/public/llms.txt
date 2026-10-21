@@ -49,7 +49,7 @@ Measured overhead: 2.1 to 2.4 ms added per call at the median (one machine, Inte
 - [Trading agents](https://agentraas.io/trading): a safety layer for agents that already trade (Alpaca, Upstox, Dhan): orders run once, with limits, hours and approvals
 - [Community](https://agentraas.io/community): questions and answers in GitHub Discussions
 - [Getting started guide](https://agentraas.io/guide)
-- [Source code (GitHub)](https://github.com/sumedhchatse/agentraas)
+- [Source code (GitHub)](https://github.com/agentraas/agentraas)
 - [Python package (PyPI)](https://pypi.org/project/agentraas/)
 - [MCP Registry entry](https://registry.modelcontextprotocol.io): `io.github.sumedhchatse/agentraas`
 

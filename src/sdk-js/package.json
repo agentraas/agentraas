@@ -25,10 +25,10 @@
   "author": "Sumedh Chatse",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sumedhchatse/agentraas.git",
+    "url": "git+https://github.com/agentraas/agentraas.git",
     "directory": "src/sdk-js"
   },
-  "homepage": "https://github.com/sumedhchatse/agentraas",
+  "homepage": "https://github.com/agentraas/agentraas",
   "engines": {
     "node": ">=18"
   },

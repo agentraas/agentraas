@@ -6,10 +6,10 @@ vars (`AGENTRAAS_JWT_SECRET`, `AGENTRAAS_CRED_KEY` — `openssl rand -hex 32`
 and `openssl rand -base64 32` respectively), and `docker compose up -d`.
 AgentRaaS is then reachable at `http://agentraas:13000` from any other
 service on the same compose network — self-hosted, free, unlimited on
-every tier (see [LICENSE.md](https://github.com/sumedhchatse/agentraas/blob/main/LICENSE.md)).
+every tier (see [LICENSE.md](https://github.com/agentraas/agentraas/blob/main/LICENSE.md)).
 
 The container image is published from this repo's own CI on every push
-to `main` — `ghcr.io/sumedhchatse/agentraas:latest`.
+to `main` — `ghcr.io/agentraas/agentraas:latest`.
 
 ## Flowise
 
@@ -38,7 +38,7 @@ docker-compose setup already runs multiple services on one network, so
 1. Open `http://localhost:13000/dashboard` from the host running Compose
    and register the first account (self-hosted is single-tenant — no
    special admin bootstrap needed, see the main repo's
-   [Getting Started](https://github.com/sumedhchatse/agentraas/blob/main/GETTING_STARTED.md)).
+   [Getting Started](https://github.com/agentraas/agentraas/blob/main/GETTING_STARTED.md)).
 2. **+ Connect agent** to get an API key, org id, and agent id.
 3. Add credentials for whatever real service you're calling (Stripe,
    Twilio, ...) from the **Credentials** panel — AgentRaaS forwards using

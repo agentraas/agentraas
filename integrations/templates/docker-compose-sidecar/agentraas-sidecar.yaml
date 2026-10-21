@@ -9,11 +9,11 @@
 # calls at it instead of the real API. See docker-compose-sidecar/README.md
 # for the small per-tool notes (where each one configures outbound URLs).
 #
-# Full env var reference: https://github.com/sumedhchatse/agentraas/blob/main/.env.example
+# Full env var reference: https://github.com/agentraas/agentraas/blob/main/.env.example
 
 services:
   agentraas:
-    image: ghcr.io/sumedhchatse/agentraas:latest
+    image: ghcr.io/agentraas/agentraas:latest
     container_name: agentraas
     restart: unless-stopped
     ports:

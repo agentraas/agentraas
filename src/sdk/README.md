@@ -160,7 +160,7 @@ machine-readable output. https://agentraas.io/mcp-scan
 GitHub Actions:
 
 ```yaml
-- uses: sumedhchatse/agentraas/src/scan-action@main
+- uses: agentraas/agentraas/src/scan-action@main
   with:
     config: .mcp.json   # or command: "npx -y @modelcontextprotocol/server-github"; fail-on: high | medium | none
 ```
@@ -207,7 +207,7 @@ In GitHub Actions:
 ```yaml
 - uses: actions/setup-python@v5
   with: { python-version: "3.12" }
-- uses: sumedhchatse/agentraas/src/chaos-action@main
+- uses: agentraas/agentraas/src/chaos-action@main
   with:
     run: python my_agent.py
 ```
@@ -366,4 +366,4 @@ Nothing was sent. Fix every field listed in validation_errors, following each hi
 
 MIT — see [LICENSE](./LICENSE). (The AgentRaaS server is AGPL-3.0, its
 Team/Enterprise features FSL, all free to self-host; see the
-[main repo](https://github.com/sumedhchatse/agentraas).)
+[main repo](https://github.com/agentraas/agentraas).)

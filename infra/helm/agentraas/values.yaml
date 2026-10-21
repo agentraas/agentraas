@@ -1,6 +1,6 @@
 # Community edition image. Its tag defaults to the chart's appVersion.
 image:
-  repository: ghcr.io/sumedhchatse/agentraas
+  repository: ghcr.io/agentraas/agentraas
   tag: ""
   pullPolicy: IfNotPresent
 imagePullSecrets: []

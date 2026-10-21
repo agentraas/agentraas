@@ -78,7 +78,7 @@ account (separate, lives on your own server).
 2. Open your **Account** menu (click your email, top right) → **Self-host
    AgentRaaS**. Fill in the short form (what you'll use it for, and
    optionally your company/team name), then download the `.zip`.
-3. On your own server, unzip it (or `git clone https://github.com/sumedhchatse/agentraas`)
+3. On your own server, unzip it (or `git clone https://github.com/agentraas/agentraas`)
    and run:
    ```bash
    ./install.sh
@@ -104,7 +104,7 @@ account (separate, lives on your own server).
 
 How you update depends on how you got the source:
 
-**Cloned from GitHub** (`git clone https://github.com/sumedhchatse/agentraas`):
+**Cloned from GitHub** (`git clone https://github.com/agentraas/agentraas`):
 ```bash
 git pull
 ./install.sh

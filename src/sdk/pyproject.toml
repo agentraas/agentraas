@@ -38,10 +38,10 @@ agentraas = "agentraas.cli:main"
 agentraas-chaos = "agentraas.chaos:main"
 
 [project.urls]
-Homepage = "https://github.com/sumedhchatse/agentraas"
-Repository = "https://github.com/sumedhchatse/agentraas"
-Documentation = "https://github.com/sumedhchatse/agentraas#readme"
-Issues = "https://github.com/sumedhchatse/agentraas/issues"
+Homepage = "https://github.com/agentraas/agentraas"
+Repository = "https://github.com/agentraas/agentraas"
+Documentation = "https://github.com/agentraas/agentraas#readme"
+Issues = "https://github.com/agentraas/agentraas/issues"
 
 [tool.setuptools.packages.find]
 include = ["agentraas*"]

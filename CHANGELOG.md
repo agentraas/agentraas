@@ -471,7 +471,7 @@ server's `/health` response now includes its version.
 - Up to `050_known_destinations.sql`. On an existing install, apply any of
   `046` to `050` you have not run yet.
 
-[Unreleased]: https://github.com/sumedhchatse/agentraas/compare/v0.9.2...HEAD
-[0.9.2]: https://github.com/sumedhchatse/agentraas/compare/v0.9.1...v0.9.2
-[0.9.1]: https://github.com/sumedhchatse/agentraas/compare/v0.9.0...v0.9.1
-[0.9.0]: https://github.com/sumedhchatse/agentraas/releases/tag/v0.9.0
+[Unreleased]: https://github.com/agentraas/agentraas/compare/v0.9.2...HEAD
+[0.9.2]: https://github.com/agentraas/agentraas/compare/v0.9.1...v0.9.2
+[0.9.1]: https://github.com/agentraas/agentraas/compare/v0.9.0...v0.9.1
+[0.9.0]: https://github.com/agentraas/agentraas/releases/tag/v0.9.0

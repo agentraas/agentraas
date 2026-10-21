@@ -72,7 +72,7 @@ Details: [`src/sdk/README.md`](src/sdk/README.md), [`src/sdk-js`](src/sdk-js).
 ## Self-host
 
 ```bash
-git clone https://github.com/sumedhchatse/agentraas.git
+git clone https://github.com/agentraas/agentraas.git
 cd agentraas
 ./install.sh
 ```
@@ -80,7 +80,7 @@ cd agentraas
 `install.sh` generates the secrets, builds the image (the first Rust build
 takes a few minutes), starts Postgres, Redis and MinIO, and runs the
 migrations. Then open `http://localhost:13001/dashboard` and register.
-Kubernetes: a Helm chart is in `infra/helm/`. Render: [one-click deploy](https://render.com/deploy?repo=https://github.com/sumedhchatse/agentraas).
+Kubernetes: a Helm chart is in `infra/helm/`. Render: [one-click deploy](https://render.com/deploy?repo=https://github.com/agentraas/agentraas).
 
 Works with Docker or Podman. Linux: either one. macOS: Docker Desktop (or
 Colima).
