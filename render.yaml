@@ -2,7 +2,7 @@ services:
   - type: web
     name: agentraas
     runtime: docker
-    dockerfilePath: ./src/api-gateway-rs/Containerfile.render
+    dockerfilePath: ./src/api-gateway-rs/Containerfile
     dockerContext: .
     plan: starter
     healthCheckPath: /health

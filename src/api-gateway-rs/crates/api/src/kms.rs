@@ -36,7 +36,17 @@ pub async fn credentials_key(stored: &str) -> anyhow::Result<String> {
         other => bail!("unknown CREDENTIALS_KEY_PROVIDER {other:?} (env, vault, aws, gcp or azure)"),
     }
     .with_context(|| format!("unwrapping CREDENTIALS_ENCRYPTION_KEY with {provider}"))?;
-    Ok(STANDARD.encode(raw))
+    Ok(key_as_base64(&raw))
+}
+
+/// The KMS may hold the 32 key bytes or their base64 text (what Terraform and
+/// most CLIs can pass); either way the result is the base64 key.
+fn key_as_base64(unwrapped: &[u8]) -> String {
+    let as_text = std::str::from_utf8(unwrapped).ok().map(str::trim);
+    match as_text {
+        Some(t) if unwrapped.len() != 32 && STANDARD.decode(t).is_ok_and(|b| b.len() == 32) => t.to_string(),
+        _ => STANDARD.encode(unwrapped),
+    }
 }
 
 pub(crate) async fn json_ok(resp: reqwest::Response) -> anyhow::Result<Value> {
@@ -317,6 +327,15 @@ mod tests {
             "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY", "us-east-1", "service", "20150830T123600Z",
         );
         assert!(auth.ends_with("Signature=5fa00fa31553b73ebf1942676e86291e8372ff2a2260956d9b8aae1d763fbf31"), "{auth}");
+    }
+
+    #[test]
+    fn key_may_be_wrapped_as_bytes_or_base64_text() {
+        let raw = [7u8; 32];
+        let b64 = STANDARD.encode(raw);
+        assert_eq!(key_as_base64(&raw), b64);
+        assert_eq!(key_as_base64(b64.as_bytes()), b64);
+        assert_eq!(key_as_base64(format!("{b64}\n").as_bytes()), b64);
     }
 
     #[test]

@@ -65,8 +65,8 @@ services:
   # The API and dashboard (Rust).
   ar-api-rs:
     build:
-      context: ./src/api-gateway-rs
-      dockerfile: Containerfile
+      context: .
+      dockerfile: src/api-gateway-rs/Containerfile
     container_name: ar-api-rs
     hostname: ar-api-rs
     networks:

@@ -1,0 +1,11 @@
+# The API image builds from the repo root (src/api-gateway-rs/Containerfile)
+# so it can carry the service catalog and migrations. Send only what it uses:
+# the rest includes Cargo's multi-GB target/ and local database folders.
+*
+!src/api-gateway-rs/Cargo.toml
+!src/api-gateway-rs/Cargo.lock
+!src/api-gateway-rs/crates
+!src/api-gateway-rs/public
+!src/api-gateway-rs/migrate.sh
+!config
+!infra/migrations

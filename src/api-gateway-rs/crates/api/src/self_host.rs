@@ -55,9 +55,9 @@ pub fn build_snapshot() {
 
     const SNAPSHOT_DIRS: &[&str] = &["src", "infra", "config"];
     const SNAPSHOT_FILES: &[&str] = &[
-        "README.md", "LICENSE.md", "LICENSE-AGPL", "LICENSE-FSL.md", "LICENSE-MIT", "LICENSE-APACHE", "PRIVACY.md", "TERMS.md", "SECURITY.md",
+        "README.md", "LICENSE.md", "LICENSE-AGPL", "LICENSE-EE.md", "LICENSE-FSL.md", "LICENSE-MIT", "LICENSE-APACHE", "PRIVACY.md", "TERMS.md", "SECURITY.md",
         "CODE_OF_CONDUCT.md", "CONTRIBUTING.md", "GETTING_STARTED.md", "compose.yaml", "install.sh",
-        ".env.example", ".gitignore",
+        ".env.example", ".gitignore", ".dockerignore",
     ];
 
     for dir in SNAPSHOT_DIRS {
@@ -136,9 +136,9 @@ const EXCLUDED_SCRIPTS: &[&str] = &["bootstrap-admin.sh", "set-org-limit.sh", "c
 const EXCLUDED_MIGRATIONS: &[&str] = &["013_single_admin_and_forced_password_change.sql", "014_move_admin_to_local_range.sql"];
 const INCLUDE_DIRS: &[&str] = &["src", "infra", "config"];
 const INCLUDE_FILES: &[&str] = &[
-    "README.md", "LICENSE.md", "LICENSE-AGPL", "LICENSE-FSL.md", "LICENSE-MIT", "LICENSE-APACHE", "PRIVACY.md", "TERMS.md", "SECURITY.md",
+    "README.md", "LICENSE.md", "LICENSE-AGPL", "LICENSE-EE.md", "LICENSE-FSL.md", "LICENSE-MIT", "LICENSE-APACHE", "PRIVACY.md", "TERMS.md", "SECURITY.md",
     "CODE_OF_CONDUCT.md", "CONTRIBUTING.md", "GETTING_STARTED.md", "compose.yaml", "install.sh",
-    ".env.example", ".gitignore",
+    ".env.example", ".gitignore", ".dockerignore",
 ];
 
 /// Builds the zip archive synchronously (the `zip` crate is blocking) —

@@ -15,6 +15,36 @@ safe to re-run.
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-10-21
+
+No new migration; `001`, `005` and `057` changed only so they re-run safely.
+
+### Added
+- **AWS template** (`infra/aws`, Terraform): ECS Fargate behind a load
+  balancer, RDS Postgres, ElastiCache Redis, a KMS key for the credentials
+  master key, Secrets Manager. Checked with `terraform validate` and
+  tflint; not yet applied to a real account.
+- The image runs on its own: it now carries the service catalog and the
+  migrations, plus `agentraas-migrate` (psql under an advisory lock) to run
+  before the API on platforms without compose or Helm. It builds from the
+  repo root (`podman build -f src/api-gateway-rs/Containerfile .`);
+  `Containerfile.render` is gone, Render uses the same file.
+- `CLIENT_IP_HEADER=x-forwarded-for:last` reads the last entry, the one a
+  load balancer that appends (AWS) added. Plain `x-forwarded-for` still
+  takes the first entry, which the client controls.
+
+### Changed
+- A KMS may hold the credentials key as its base64 text as well as the raw
+  32 bytes (Terraform and most CLIs pass text).
+- The self-host download now includes `LICENSE-EE.md`.
+
+### Fixed
+- Re-running the whole migration set failed: `001` created three indexes
+  without `IF NOT EXISTS`, `005` updated audit rows after `024` made them
+  append-only, and `057` narrowed the alert-type check that `058` widens.
+  All three are now safe to re-run on a new or an existing database, as the
+  Helm chart and `agentraas-migrate` do on every start.
+
 ## [0.22.1] - 2026-10-21
 
 No migration.
@@ -511,7 +541,8 @@ server's `/health` response now includes its version.
 - Up to `050_known_destinations.sql`. On an existing install, apply any of
   `046` to `050` you have not run yet.
 
-[Unreleased]: https://github.com/agentraas/agentraas/compare/v0.22.1...HEAD
+[Unreleased]: https://github.com/agentraas/agentraas/compare/v0.23.0...HEAD
+[0.23.0]: https://github.com/agentraas/agentraas/compare/v0.22.1...v0.23.0
 [0.22.1]: https://github.com/agentraas/agentraas/compare/v0.22.0...v0.22.1
 [0.22.0]: https://github.com/agentraas/agentraas/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/agentraas/agentraas/compare/v0.20.0...v0.21.0

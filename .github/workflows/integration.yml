@@ -56,7 +56,7 @@ jobs:
       - name: Build the API image
         uses: docker/build-push-action@v5
         with:
-          context: ./src/api-gateway-rs
+          context: .
           file: ./src/api-gateway-rs/Containerfile
           load: true
           tags: agentraas-api:ci

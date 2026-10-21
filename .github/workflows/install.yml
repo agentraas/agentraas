@@ -7,7 +7,7 @@ name: Install
 on:
   push:
     branches: [main]
-    paths: ['install.sh', 'compose.yaml', 'infra/migrations/**', 'src/api-gateway-rs/Containerfile', '.github/workflows/install.yml']
+    paths: ['install.sh', 'compose.yaml', 'infra/migrations/**', 'src/api-gateway-rs/Containerfile', '.dockerignore', '.github/workflows/install.yml']
   workflow_dispatch:
 
 jobs:

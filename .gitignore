@@ -24,6 +24,11 @@ Thumbs.db
 *.swp
 *.swo
 
+# Terraform working files and state (state holds secrets)
+.terraform/
+*.tfstate
+*.tfstate.*
+
 # Build artifacts
 dist/
 build/

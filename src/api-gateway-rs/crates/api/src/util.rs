@@ -39,11 +39,22 @@ pub fn real_client_ip(headers: &axum::http::HeaderMap, connect_addr: &std::net::
     client_ip_from(headers, connect_addr, header.as_deref())
 }
 
+/// `trusted_header` is a header name, whose first entry is the client (a
+/// proxy that replaces the header, like Cloudflare's `cf-connecting-ip`), or
+/// `name:last` for a proxy that appends the address it saw to whatever the
+/// client sent, like AWS's load balancer with `x-forwarded-for`: there only
+/// the last entry can be trusted.
 fn client_ip_from(headers: &axum::http::HeaderMap, connect_addr: &std::net::SocketAddr, trusted_header: Option<&str>) -> String {
-    trusted_header
-        .and_then(|name| headers.get(name))
+    let (name, last) = match trusted_header {
+        Some(spec) => match spec.strip_suffix(":last") {
+            Some(name) => (Some(name), true),
+            None => (Some(spec), false),
+        },
+        None => (None, false),
+    };
+    name.and_then(|name| headers.get(name))
         .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.split(',').next())
+        .and_then(|v| if last { v.rsplit(',').next() } else { v.split(',').next() })
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .map(str::to_string)
@@ -203,6 +214,14 @@ mod real_client_ip_tests {
         headers.insert("cf-connecting-ip", "203.0.113.7".parse().unwrap());
         assert_eq!(client_ip_from(&headers, &connect_addr(), Some("cf-connecting-ip")), "203.0.113.7");
         assert_eq!(client_ip_from(&headers, &connect_addr(), None), "127.0.0.1", "unset: peer address, never XFF");
+    }
+
+    #[test]
+    fn last_takes_the_entry_the_load_balancer_appended() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-forwarded-for", "6.6.6.6, 203.0.113.7".parse().unwrap());
+        assert_eq!(client_ip_from(&headers, &connect_addr(), Some("x-forwarded-for:last")), "203.0.113.7");
+        assert_eq!(client_ip_from(&headers, &connect_addr(), Some("x-forwarded-for")), "6.6.6.6", "first entry is what the client sent");
     }
 
     #[test]

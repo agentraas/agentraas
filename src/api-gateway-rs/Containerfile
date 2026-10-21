@@ -1,8 +1,12 @@
+# Build context is the REPO ROOT (see /.dockerignore), so the image carries
+# the service catalog and the migrations and runs on its own: compose, Helm,
+# AWS ECS, Cloud Run, Container Apps, Render.
+#   podman build -f src/api-gateway-rs/Containerfile .
 FROM docker.io/library/rust:1-slim-bookworm AS builder
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
-COPY Cargo.toml ./
-COPY crates ./crates
+COPY src/api-gateway-rs/Cargo.toml src/api-gateway-rs/Cargo.lock ./
+COPY src/api-gateway-rs/crates ./crates
 # --features enterprise: every build compiles the full edition; Team and
 # Enterprise features then unlock with a license key (LICENSE_TOKEN). CI adds
 # test-license-key so it can mint its own key; never for a release image.
@@ -10,10 +14,14 @@ ARG FEATURES=enterprise
 RUN cargo build --release -p api --features "$FEATURES"
 
 FROM docker.io/library/debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libssl3 && rm -rf /var/lib/apt/lists/*
+# postgresql-client: for agentraas-migrate (psql, pg_isready).
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libssl3 postgresql-client && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app/target/release/ar-api-rs /usr/local/bin/ar-api-rs
-# Dashboard and pages, so the image runs on its own (Kubernetes, Helm).
-# compose.yaml still bind-mounts ./public over this, so edits there need no rebuild.
-COPY public /public
+COPY src/api-gateway-rs/migrate.sh /usr/local/bin/agentraas-migrate
+# compose.yaml still bind-mounts ./public and ./config over these, so edits
+# there need no rebuild.
+COPY src/api-gateway-rs/public /public
+COPY config /config
+COPY infra/migrations /migrations
 EXPOSE 3000
 CMD ["ar-api-rs"]

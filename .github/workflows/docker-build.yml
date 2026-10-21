@@ -52,7 +52,7 @@ jobs:
           # rewrite; a root-level Dockerfile hasn't existed since, which is
           # why this workflow had been failing on every push). It builds
           # the full edition (--features enterprise, see the Containerfile).
-          context: ./src/api-gateway-rs
+          context: .
           file: ./src/api-gateway-rs/Containerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
