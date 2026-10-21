@@ -22,6 +22,7 @@ mod pages;
 mod pruning_settings;
 mod rules;
 mod schema_drift;
+mod secret_refs;
 mod self_host;
 mod billing;
 mod recordings;

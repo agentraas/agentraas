@@ -229,6 +229,7 @@
       <a href="#self-hosting">Self-hosting</a>
       <a href="#helm">Kubernetes (Helm)</a>
       <a href="#kms">Key management (KMS)</a>
+      <a href="#secret-refs">Secret references</a>
       <a href="#metrics">Metrics</a>
       <a href="#latency">Latency</a>
       <a href="#plans">Plans &amp; limits</a>
@@ -762,6 +763,20 @@ CREDENTIALS_KEY_PROVIDER=azure
 CREDENTIALS_KMS_KEY=https://my-vault.vault.azure.net/keys/agentraas/&lt;version&gt;
 CREDENTIALS_ENCRYPTION_KEY=...               # the output above</code></pre>
       <p>Then delete <code>key.bin</code> and the plain key from your shell history. If the server can't reach the KMS it refuses to start and says why. Keep deletion protection on the KMS key: if it is deleted, every stored secret is lost. To rotate, rotate the KMS key and re-encrypt the same 32 bytes (Vault: <code>vault write transit/rewrap/agentraas ciphertext=...</code>); stored data stays as it is.</p>
+    </section>
+
+    <section id="secret-refs">
+      <h2>Secret references (self-hosted Enterprise)</h2>
+      <p>Instead of pasting a service key into AgentRaaS, you can paste a reference to where it lives in your own secrets manager. AgentRaaS fetches the key when an agent call needs it, keeps it in memory for 5 minutes (<code>SECRET_REF_CACHE_SECONDS</code>), and never stores it. Rotate the key in your secrets manager and AgentRaaS picks up the new one on the next fetch; your secrets manager's audit log shows every read.</p>
+      <table>
+        <tr><th>Secrets manager</th><th>Reference to paste as the API key</th></tr>
+        <tr><td>Vault / OpenBao KV</td><td><code>vault://secret/data/stripe#api_key</code></td></tr>
+        <tr><td>AWS Secrets Manager</td><td><code>aws-sm://arn:aws:secretsmanager:us-east-1:111122223333:secret:stripe-AbCd</code></td></tr>
+        <tr><td>Google Secret Manager</td><td><code>gcp-sm://projects/my-project/secrets/stripe</code> (latest version, or add <code>/versions/3</code>)</td></tr>
+        <tr><td>Azure Key Vault</td><td><code>azure-kv://my-vault.vault.azure.net/secrets/stripe</code></td></tr>
+      </table>
+      <p>Add <code>#field</code> to read one field of a JSON secret, for example <code>aws-sm://...:secret:payments#stripe_key</code>. Vault references always name a field. The server logs in to the secrets manager the same way as for the KMS above: <code>VAULT_ADDR</code> and <code>VAULT_TOKEN</code>, the AWS role or keys, the Google Cloud service account, or the Azure managed identity. It needs read access to those secrets only. Because the server reads them with its own access, secret references work on self-hosted servers only, not on AgentRaaS Cloud.</p>
+      <p>Paste the reference in the dashboard's Credentials panel (or in the <code>api_key</code>, <code>username</code> or <code>password</code> of <code>POST /api/v1/credentials</code>); the panel shows the reference itself, since it isn't secret. If a key can't be fetched, the call fails with the reason and nothing is sent to the service; if a refresh fails after an earlier fetch worked, the last value is used and the failure is logged.</p>
     </section>
 
     <section id="metrics">

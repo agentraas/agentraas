@@ -27,6 +27,10 @@ fn masked_preview(credentials: &Value) -> String {
     let Some(val) = val.filter(|v| !v.is_empty()) else {
         return "••••".to_string();
     };
+    // A reference names a secret, it isn't one: show it so people can tell which.
+    if crate::secret_refs::is_ref(val) {
+        return val.chars().take(200).collect();
+    }
     if val.chars().count() > 8 {
         let chars: Vec<char> = val.chars().collect();
         let first4: String = chars[..4].iter().collect();
@@ -52,7 +56,19 @@ pub async fn save_credential(
     service_key: &str,
     credentials: &Value,
     end_user_id: Option<&str>,
-) -> Result<String, sqlx::Error> {
+) -> Result<String, ApiError> {
+    if crate::secret_refs::has_ref(credentials) {
+        if state.deployment_mode == "cloud" {
+            return Err(ApiError::new(
+                StatusCode::FORBIDDEN,
+                "Secret references work on a self-hosted server only: they are read with the server's own access to your secrets manager.",
+            ));
+        }
+        crate::agent::db::require_tier(state, org_id, agentraas_core::tier::Tier::Enterprise).await?;
+        for r in credentials.as_object().into_iter().flat_map(|o| o.values()).filter_map(Value::as_str).filter(|v| crate::secret_refs::is_ref(v)) {
+            crate::secret_refs::check(r).map_err(|e| ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, e.to_string()))?;
+        }
+    }
     let encrypted = state.cipher.encrypt(&credentials.to_string());
     let preview = masked_preview(credentials);
 

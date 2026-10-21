@@ -39,7 +39,7 @@ pub async fn credentials_key(stored: &str) -> anyhow::Result<String> {
     Ok(STANDARD.encode(raw))
 }
 
-async fn json_ok(resp: reqwest::Response) -> anyhow::Result<Value> {
+pub(crate) async fn json_ok(resp: reqwest::Response) -> anyhow::Result<Value> {
     let status = resp.status();
     let body = resp.text().await?;
     if !status.is_success() {
@@ -48,7 +48,7 @@ async fn json_ok(resp: reqwest::Response) -> anyhow::Result<Value> {
     Ok(serde_json::from_str(&body)?)
 }
 
-fn field<'a>(v: &'a Value, path: &[&str]) -> anyhow::Result<&'a str> {
+pub(crate) fn field<'a>(v: &'a Value, path: &[&str]) -> anyhow::Result<&'a str> {
     path.iter()
         .try_fold(v, |v, k| v.get(k))
         .and_then(Value::as_str)
@@ -58,35 +58,32 @@ fn field<'a>(v: &'a Value, path: &[&str]) -> anyhow::Result<&'a str> {
 // Vault / OpenBao transit: `vault write transit/encrypt/<key> plaintext=<base64 key>`
 // gives the `vault:v1:...` string to store.
 async fn vault_decrypt(http: &reqwest::Client, key: &str, stored: &str) -> anyhow::Result<Vec<u8>> {
+    let mount = configured_env("VAULT_TRANSIT_MOUNT").unwrap_or_else(|| "transit".into());
+    let req = vault_request(http, reqwest::Method::POST, &format!("{mount}/decrypt/{key}"))?;
+    let v = json_ok(req.json(&json!({ "ciphertext": stored })).send().await?).await?;
+    Ok(STANDARD.decode(field(&v, &["data", "plaintext"])?)?)
+}
+
+/// A request to `$VAULT_ADDR/v1/<path>` with the token (and namespace) set.
+pub(crate) fn vault_request(http: &reqwest::Client, method: reqwest::Method, path: &str) -> anyhow::Result<reqwest::RequestBuilder> {
     let addr = configured_env("VAULT_ADDR").ok_or_else(|| anyhow!("VAULT_ADDR must be set"))?;
     let token = configured_env("VAULT_TOKEN").ok_or_else(|| anyhow!("VAULT_TOKEN must be set"))?;
-    let mount = configured_env("VAULT_TRANSIT_MOUNT").unwrap_or_else(|| "transit".into());
     let mut req = http
-        .post(format!("{}/v1/{mount}/decrypt/{key}", addr.trim_end_matches('/')))
-        .header("X-Vault-Token", token)
-        .json(&json!({ "ciphertext": stored }));
+        .request(method, format!("{}/v1/{path}", addr.trim_end_matches('/')))
+        .header("X-Vault-Token", token);
     if let Some(ns) = configured_env("VAULT_NAMESPACE") {
         req = req.header("X-Vault-Namespace", ns);
     }
-    let v = json_ok(req.send().await?).await?;
-    Ok(STANDARD.decode(field(&v, &["data", "plaintext"])?)?)
+    Ok(req)
 }
 
 // GCP Cloud KMS, token from the metadata server (GCE, GKE workload identity,
 // Cloud Run). ponytail: no service-account JSON key file; add if someone runs
 // outside Google Cloud and needs it.
 async fn gcp_decrypt(http: &reqwest::Client, key: &str, stored: &str) -> anyhow::Result<Vec<u8>> {
-    let tok = json_ok(
-        http.get("http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token")
-            .header("Metadata-Flavor", "Google")
-            .send()
-            .await
-            .context("GCP metadata server unreachable (not on Google Cloud?)")?,
-    )
-    .await?;
     let v = json_ok(
         http.post(format!("https://cloudkms.googleapis.com/v1/{key}:decrypt"))
-            .bearer_auth(field(&tok, &["access_token"])?)
+            .bearer_auth(gcp_token(http).await?)
             .json(&json!({ "ciphertext": stored }))
             .send()
             .await?,
@@ -95,10 +92,22 @@ async fn gcp_decrypt(http: &reqwest::Client, key: &str, stored: &str) -> anyhow:
     Ok(STANDARD.decode(field(&v, &["plaintext"])?)?)
 }
 
-// Azure Key Vault (RSA-OAEP-256), token from managed identity (IMDS;
-// `AZURE_CLIENT_ID` picks a user-assigned identity). ponytail: no App Service
-// IDENTITY_ENDPOINT or client-secret login; add if someone needs it.
-async fn azure_decrypt(http: &reqwest::Client, key_url: &str, stored: &str) -> anyhow::Result<Vec<u8>> {
+pub(crate) async fn gcp_token(http: &reqwest::Client) -> anyhow::Result<String> {
+    let tok = json_ok(
+        http.get("http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token")
+            .header("Metadata-Flavor", "Google")
+            .send()
+            .await
+            .context("GCP metadata server unreachable (not on Google Cloud?)")?,
+    )
+    .await?;
+    Ok(field(&tok, &["access_token"])?.to_string())
+}
+
+// Azure Key Vault token from managed identity (IMDS; `AZURE_CLIENT_ID` picks
+// a user-assigned identity). ponytail: no App Service IDENTITY_ENDPOINT or
+// client-secret login; add if someone needs it.
+pub(crate) async fn azure_token(http: &reqwest::Client) -> anyhow::Result<String> {
     let mut url = "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https%3A%2F%2Fvault.azure.net".to_string();
     if let Some(id) = configured_env("AZURE_CLIENT_ID") {
         url.push_str(&format!("&client_id={id}"));
@@ -111,9 +120,14 @@ async fn azure_decrypt(http: &reqwest::Client, key_url: &str, stored: &str) -> a
             .context("Azure IMDS unreachable (no managed identity?)")?,
     )
     .await?;
+    Ok(field(&tok, &["access_token"])?.to_string())
+}
+
+// Azure Key Vault key (RSA-OAEP-256).
+async fn azure_decrypt(http: &reqwest::Client, key_url: &str, stored: &str) -> anyhow::Result<Vec<u8>> {
     let v = json_ok(
         http.post(format!("{}/decrypt?api-version=7.4", key_url.trim_end_matches('/')))
-            .bearer_auth(field(&tok, &["access_token"])?)
+            .bearer_auth(azure_token(http).await?)
             .json(&json!({ "alg": "RSA-OAEP-256", "value": to_base64url(stored) }))
             .send()
             .await?,
@@ -133,38 +147,54 @@ struct AwsCreds {
     token: Option<String>,
 }
 
-// AWS KMS Decrypt, signed with SigV4 by hand (no AWS SDK). Credentials from
-// AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY[/AWS_SESSION_TOKEN], else the ECS
-// task role, else the EC2 instance role (IMDSv2). ponytail: no EKS IRSA
-// (web identity) or SSO profiles; add if someone needs them.
+// AWS KMS Decrypt.
 async fn aws_decrypt(http: &reqwest::Client, key_arn: &str, stored: &str) -> anyhow::Result<Vec<u8>> {
-    let region = configured_env("AWS_REGION")
+    let region = aws_region(key_arn)?;
+    let v = aws_call(http, &region, "kms", "TrentService.Decrypt", &json!({ "CiphertextBlob": stored, "KeyId": key_arn })).await?;
+    Ok(STANDARD.decode(field(&v, &["Plaintext"])?)?)
+}
+
+/// AWS_REGION / AWS_DEFAULT_REGION, else the region inside an ARN.
+pub(crate) fn aws_region(arn: &str) -> anyhow::Result<String> {
+    configured_env("AWS_REGION")
         .or_else(|| configured_env("AWS_DEFAULT_REGION"))
-        .or_else(|| key_arn.split(':').nth(3).filter(|r| !r.is_empty()).map(String::from))
-        .ok_or_else(|| anyhow!("set AWS_REGION or use a full key ARN"))?;
+        .or_else(|| arn.split(':').nth(3).filter(|r| !r.is_empty()).map(String::from))
+        .ok_or_else(|| anyhow!("set AWS_REGION or use a full ARN"))
+}
+
+// One AWS JSON API call, signed with SigV4 by hand (no AWS SDK). Credentials
+// from AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY[/AWS_SESSION_TOKEN], else the
+// ECS task role, else the EC2 instance role (IMDSv2). ponytail: no EKS IRSA
+// (web identity) or SSO profiles; add if someone needs them.
+pub(crate) async fn aws_call(
+    http: &reqwest::Client,
+    region: &str,
+    service: &str,
+    target: &str,
+    body: &Value,
+) -> anyhow::Result<Value> {
     let creds = aws_creds(http).await?;
-    let host = format!("kms.{region}.amazonaws.com");
-    let body = serde_json::to_vec(&json!({ "CiphertextBlob": stored, "KeyId": key_arn }))?;
+    let host = format!("{service}.{region}.amazonaws.com");
+    let body = serde_json::to_vec(body)?;
     let amz_date = chrono::Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
     let mut headers = vec![
         ("content-type", "application/x-amz-json-1.1".to_string()),
         ("host", host.clone()),
         ("x-amz-date", amz_date.clone()),
-        ("x-amz-target", "TrentService.Decrypt".to_string()),
+        ("x-amz-target", target.to_string()),
     ];
     if let Some(t) = &creds.token {
         headers.push(("x-amz-security-token", t.clone()));
         headers.sort();
     }
     let auth = sigv4_authorization(
-        "POST", "/", "", &headers, &body, &creds.access, &creds.secret, &region, "kms", &amz_date,
+        "POST", "/", "", &headers, &body, &creds.access, &creds.secret, region, service, &amz_date,
     );
     let mut req = http.post(format!("https://{host}/")).header("authorization", auth).body(body);
     for (k, v) in headers.iter().filter(|(k, _)| *k != "host") {
         req = req.header(*k, v);
     }
-    let v = json_ok(req.send().await?).await?;
-    Ok(STANDARD.decode(field(&v, &["Plaintext"])?)?)
+    json_ok(req.send().await?).await
 }
 
 async fn aws_creds(http: &reqwest::Client) -> anyhow::Result<AwsCreds> {

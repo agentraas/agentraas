@@ -15,6 +15,20 @@ safe to re-run.
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-10-21
+
+No migration.
+
+### Added
+- **Secret references (self-hosted Enterprise).** A service credential can be a
+  reference such as `vault://secret/data/stripe#api_key`,
+  `aws-sm://<secret ARN>`, `gcp-sm://projects/p/secrets/s` or
+  `azure-kv://<vault>.vault.azure.net/secrets/s` instead of the key. The
+  key is fetched from your secrets manager when a call needs it, cached in
+  memory for 5 minutes (`SECRET_REF_CACHE_SECONDS`) and never stored. Not
+  available on Cloud, where the server's access to a secrets manager would
+  be shared between customers. See `/docs#secret-refs`.
+
 ## [0.21.0] - 2026-10-21
 
 No migration.
@@ -485,7 +499,8 @@ server's `/health` response now includes its version.
 - Up to `050_known_destinations.sql`. On an existing install, apply any of
   `046` to `050` you have not run yet.
 
-[Unreleased]: https://github.com/agentraas/agentraas/compare/v0.21.0...HEAD
+[Unreleased]: https://github.com/agentraas/agentraas/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/agentraas/agentraas/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/agentraas/agentraas/compare/v0.20.0...v0.21.0
 [0.9.2]: https://github.com/agentraas/agentraas/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/agentraas/agentraas/compare/v0.9.0...v0.9.1

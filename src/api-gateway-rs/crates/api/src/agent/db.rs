@@ -227,6 +227,18 @@ pub struct Credential {
 /// it in the first place. `None` behaves exactly as before this feature
 /// existed.
 pub async fn get_credential(state: &SharedState, service: &str, org_id: &str, end_user_id: Option<&str>) -> Option<Credential> {
+    get_credential_checked(state, service, org_id, end_user_id).await.ok().flatten()
+}
+
+/// Like `get_credential`, but a stored secret reference (`secret_refs.rs`)
+/// that can't be fetched is an `Err` with the reason, so the caller can say
+/// that instead of "no credentials configured".
+pub async fn get_credential_checked(
+    state: &SharedState,
+    service: &str,
+    org_id: &str,
+    end_user_id: Option<&str>,
+) -> Result<Option<Credential>, String> {
     let row: Option<String> = if let Some(end_user_id) = end_user_id {
         sqlx::query_scalar(
             "SELECT encrypted_payload FROM service_credentials
@@ -258,11 +270,11 @@ pub async fn get_credential(state: &SharedState, service: &str, org_id: &str, en
         match state.cipher.decrypt(&encrypted) {
             Ok(plaintext) => match serde_json::from_str::<Value>(&plaintext) {
                 Ok(v) => {
-                    return Some(Credential {
-                        api_key: v.get("api_key").and_then(Value::as_str).map(String::from),
-                        username: v.get("username").and_then(Value::as_str).map(String::from),
-                        password: v.get("password").and_then(Value::as_str).map(String::from),
-                    })
+                    return Ok(Some(Credential {
+                        api_key: credential_field(state, &v, "api_key", service, org_id).await?,
+                        username: credential_field(state, &v, "username", service, org_id).await?,
+                        password: credential_field(state, &v, "password", service, org_id).await?,
+                    }));
                 }
                 Err(err) => tracing::error!(?err, service, org_id, "stored credential is not valid JSON"),
             },
@@ -274,14 +286,17 @@ pub async fn get_credential(state: &SharedState, service: &str, org_id: &str, en
     // never used to satisfy an end-user-scoped lookup, same fail-closed
     // reasoning as above.
     if end_user_id.is_some() {
-        return None;
+        return Ok(None);
     }
     let env_var = format!("AGENTRAAS_KEY_{}_{}", service.to_uppercase(), org_id);
-    let env_val = std::env::var(&env_var)
+    let Some(env_val) = std::env::var(&env_var)
         .ok()
-        .or_else(|| std::env::var(format!("AGENTRAAS_KEY_{}_DEFAULT", service.to_uppercase())).ok())?;
+        .or_else(|| std::env::var(format!("AGENTRAAS_KEY_{}_DEFAULT", service.to_uppercase())).ok())
+    else {
+        return Ok(None);
+    };
 
-    if let Some((username, password)) = env_val.split_once(':') {
+    Ok(if let Some((username, password)) = env_val.split_once(':') {
         Some(Credential {
             username: Some(username.to_string()),
             password: Some(password.to_string()),
@@ -293,7 +308,20 @@ pub async fn get_credential(state: &SharedState, service: &str, org_id: &str, en
             username: None,
             password: None,
         })
+    })
+}
+
+/// One field of a stored credential, fetched from the secrets manager when
+/// it is a secret reference.
+async fn credential_field(state: &SharedState, v: &Value, key: &str, service: &str, org_id: &str) -> Result<Option<String>, String> {
+    let Some(raw) = v.get(key).and_then(Value::as_str) else { return Ok(None) };
+    if state.deployment_mode == "cloud" && crate::secret_refs::is_ref(raw) {
+        return Err(format!("The {service} credential is a secret reference, which only works on a self-hosted server."));
     }
+    crate::secret_refs::resolve(raw).await.map(Some).map_err(|err| {
+        tracing::error!(%err, service, org_id, reference = raw, "secret reference could not be fetched");
+        format!("The {service} credential is a secret reference ({raw}) that could not be fetched: {err}")
+    })
 }
 
 pub struct ApiKeyVerification {

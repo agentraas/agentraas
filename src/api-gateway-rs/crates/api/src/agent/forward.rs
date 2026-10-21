@@ -7,7 +7,7 @@ use std::time::Duration;
 use agentraas_core::circuit_breaker;
 use serde_json::{json, Value};
 
-use super::db::{extract_upstream_error_message, get_credential, ResolvedMcpRoute, ResolvedRoute};
+use super::db::{extract_upstream_error_message, get_credential_checked, ResolvedMcpRoute, ResolvedRoute};
 use crate::state::SharedState;
 
 pub struct ForwardError {
@@ -96,7 +96,12 @@ async fn build_request(
         }
     }
 
-    let credential = get_credential(state, &route.credential_key, org_id, end_user_id).await;
+    let credential = match get_credential_checked(state, &route.credential_key, org_id, end_user_id).await {
+        Ok(c) => c,
+        Err(message) => {
+            return Err(ForwardError { message, upstream_status: None, upstream_body: None, circuit_already_recorded: false, outcome_unknown: false })
+        }
+    };
 
     if !route.internal && route.auth_type != "none" && credential.is_none() {
         let message = match end_user_id {
@@ -323,7 +328,12 @@ pub async fn forward_mcp_tool_call(
         });
     }
 
-    let credential = get_credential(state, &route.credential_key, org_id, end_user_id).await;
+    let credential = match get_credential_checked(state, &route.credential_key, org_id, end_user_id).await {
+        Ok(c) => c,
+        Err(message) => {
+            return Err(ForwardError { message, upstream_status: None, upstream_body: None, circuit_already_recorded: false, outcome_unknown: false })
+        }
+    };
     if route.auth_type != "none" && credential.is_none() {
         let message = match end_user_id {
             Some(uid) => format!("No credentials connected for end-user \"{uid}\" on this MCP server. Connect one for this specific end-user from the dashboard's Credentials panel."),
