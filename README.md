@@ -112,6 +112,10 @@ rather than `restart`.
   Prometheus, short-lived scoped agent tokens.
 - **Data safety:** PII redaction, prompt-injection filtering on tool output,
   schema drift alerts.
+- **Keys:** stored service keys are encrypted (AES-256-GCM); self-hosted, the
+  master key can live in Vault, AWS KMS, Google Cloud KMS or Azure Key Vault,
+  and Enterprise can leave service keys in your own secrets manager and have
+  them fetched per call ([docs](https://agentraas.io/docs#kms)).
 - **Teams:** OIDC SSO, roles, client tenants with white-label branding.
 
 Curated services (Stripe, Twilio, HubSpot, Shopify, Slack, PayPal, Alpaca

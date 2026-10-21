@@ -22,7 +22,9 @@ What it does:
 - Generates `JWT_SECRET`, `CREDENTIALS_ENCRYPTION_KEY` and the database
   password on first install and keeps them on upgrade. Or bring your own
   Secret with `existingSecret`. **Back up `CREDENTIALS_ENCRYPTION_KEY`**:
-  stored third-party credentials can't be decrypted without it.
+  stored third-party credentials can't be decrypted without it. To keep
+  it in Vault, AWS KMS, Google Cloud KMS or Azure Key Vault instead, see
+  `values.yaml` and https://agentraas.io/docs#kms.
 - Runs every file in `infra/migrations` before the API starts (an init
   container, under a Postgres advisory lock, so replicas don't race). All
   migrations are safe to re-run.

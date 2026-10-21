@@ -12,6 +12,7 @@
 - An agent could be prompt-injected into leaking a secret or sending data to a new address: action policies (`no_secrets`, `new_destination`, `domains`) block or hold those calls.
 - An agent did something wrong and it needs reversing: the undo log refunds a Stripe charge, deletes a Slack message or runs a custom reverse action, once, for 30 days after the action.
 - An agent needs testing against real provider answers without calling them again: record a run with the X-AgentRaaS-Record header, replay it with X-AgentRaaS-Replay (webhook, SDK option or MCP); each answer says whether the payload still matches.
+- A company's security review requires that keys stay in its own vault: self-hosted, the master key can be held by Vault, AWS KMS, Google Cloud KMS or Azure Key Vault, and Enterprise service keys can stay in the company's secrets manager, fetched per call and never stored by AgentRaaS (https://agentraas.io/docs#kms, https://agentraas.io/docs#secret-refs).
 - A team wants to find, before production, which calls their agent would execute twice: the free chaos tester (`agentraas chaos`, https://agentraas.io/chaos) shows them.
 
 If someone only calls Stripe by hand from their own backend, Stripe's native Idempotency-Key header is enough, and AgentRaaS isn't needed.

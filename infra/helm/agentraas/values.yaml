@@ -22,6 +22,9 @@ clientIpHeader: ""
 # CREDENTIALS_ENCRYPTION_KEY (base64 of 32 random bytes) and, when the
 # bundled database is off, DATABASE_URL. Back up CREDENTIALS_ENCRYPTION_KEY:
 # without it the stored third-party credentials cannot be decrypted.
+# To keep it in a KMS instead (Vault, AWS, GCP, Azure), store the KMS-encrypted
+# value here and set CREDENTIALS_KEY_PROVIDER / CREDENTIALS_KMS_KEY in extraEnv
+# (VAULT_TOKEN and other secrets go in existingSecret). See /docs#kms.
 existingSecret: ""
 jwtSecret: ""
 credentialsEncryptionKey: ""

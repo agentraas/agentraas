@@ -166,7 +166,7 @@ cd agentraas
     <li>Set <code>PUBLIC_URL</code> to your real domain: approval links, email links and the Connect Agent URLs use it.</li>
     <li>Behind a reverse proxy, set <code>CLIENT_IP_HEADER</code> so rate limits apply per visitor.</li>
     <li>Set <code>SMTP_*</code> for password resets and email alerts.</li>
-    <li>Back up Postgres: it holds the audit trail and stored credentials (encrypted with <code>CREDENTIALS_ENCRYPTION_KEY</code>; keep that key safe).</li>
+    <li>Back up Postgres: it holds the audit trail and stored credentials (encrypted with <code>CREDENTIALS_ENCRYPTION_KEY</code>; keep that key safe, or keep it in your KMS: <a href="/docs#kms">Vault, AWS, Google Cloud or Azure</a>).</li>
   </ul>
   <p>All settings: <a href="/docs#self-hosting">Self-hosting in the docs</a>.</p>
 
