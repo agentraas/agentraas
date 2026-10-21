@@ -698,7 +698,7 @@ agentraas apply -f agentraas.yaml --prune     # also delete rules the file doesn
         <tr><td><code>OTEL_EXPORTER_OTLP_ENDPOINT</code></td><td>Optional. Sends every call AgentRaaS handles (ran, deduplicated, blocked, held for approval) as an OpenTelemetry span over OTLP/HTTP to your collector or tracing tool (Langfuse, Grafana, Datadog, Honeycomb, Jaeger), named <code>execute_tool service.action</code> per the GenAI conventions. Calls sharing an <code>X-AgentRaaS-Run-Id</code> share a trace. Auth goes in <code>OTEL_EXPORTER_OTLP_HEADERS</code> (<code>key=value,key2=value2</code>); <code>OTEL_EXPORTER_OTLP_TRACES_ENDPOINT</code> takes a full URL instead. Payloads are never exported.</td></tr>
         <tr><td><code>SMTP_*</code></td><td>Optional. Without it, password-reset links are logged server-side instead of emailed.</td></tr>
       </table>
-      <div class="callout"><p>Without a license key the server runs free with Community and Team features (human approvals, semantic dedup, SSO), no action limit. Enterprise features (agent identity, inbound webhooks, white-label) need an Enterprise key in <code>LICENSE_TOKEN</code>: ask <a href="mailto:hello@agentraas.io">hello@agentraas.io</a>. A missing or expired key falls back to the free tier; the server always starts.</p></div>
+      <div class="callout"><p>Without a license key the server runs free with Community and Team features (human approvals, semantic dedup, SSO), no action limit. Enterprise features (agent identity, inbound webhooks, white-label, secret references) need an Enterprise key in <code>LICENSE_TOKEN</code>: ask <a href="mailto:hello@agentraas.io">hello@agentraas.io</a>. A missing or expired key falls back to the free tier; the server always starts.</p></div>
     </section>
 
     <section id="helm">
@@ -819,7 +819,7 @@ histogram_quantile(0.95, sum by (le) (rate(agentraas_call_duration_ms_bucket[5m]
         <tr><th></th><th>Community</th><th>Team</th><th>Enterprise</th></tr>
         <tr><td>Self-hosted</td><td colspan="2">Free, unlimited actions, no license key</td><td>License key: <a href="mailto:hello@agentraas.io">talk to us</a></td></tr>
         <tr><td>Cloud</td><td colspan="3">Free trial: 1,000 actions once, every feature</td></tr>
-        <tr><td>Features</td><td>Exactly-once execution, MCP gateway, dashboard, audit trail, DLQ, undo, record and replay, blocking spend caps and action policies, DLP redaction</td><td>+ human approvals (also on spend caps and policies), semantic dedup, SSO</td><td>+ agent identity, inbound webhooks, white-label branding</td></tr>
+        <tr><td>Features</td><td>Exactly-once execution, MCP gateway, dashboard, audit trail, DLQ, undo, record and replay, blocking spend caps and action policies, DLP redaction</td><td>+ human approvals (also on spend caps and policies), semantic dedup, SSO</td><td>+ agent identity, inbound webhooks, white-label branding, <a href="#secret-refs">secret references</a></td></tr>
         <tr><td>Seats</td><td colspan="2">3</td><td>Unlimited</td></tr>
       </table>
       <p>For production, self-host: your API keys and data stay on your servers. AgentRaaS Cloud is the quickest way to try it; use test or restricted keys there for now.</p>

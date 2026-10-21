@@ -146,7 +146,7 @@ on one machine (Intel Core i3-12100, local stack, three runs of 500 calls) with
 |---|---|---|
 | Price | Free, no license key | [Talk to us](mailto:hello@agentraas.io) |
 | Limits | No action limit, up to 3 seats | Unlimited seats |
-| Includes | Exactly-once execution, MCP gateway, dashboard, audit trail, DLQ, undo, record and replay, spend caps and action policies, DLP redaction, human approvals, semantic dedup, SSO | Everything in Self-hosted, plus agent identity, inbound webhooks, white-label branding |
+| Includes | Exactly-once execution, MCP gateway, dashboard, audit trail, DLQ, undo, record and replay, spend caps and action policies, DLP redaction, human approvals, semantic dedup, SSO | Everything in Self-hosted, plus agent identity, inbound webhooks, white-label branding, service keys read from your own secrets manager |
 
 AgentRaaS Cloud starts with a free trial of 1,000 actions with every
 feature, for trying it out; for production, self-host. The core server is

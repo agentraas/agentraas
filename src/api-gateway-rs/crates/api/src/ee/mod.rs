@@ -7,6 +7,7 @@ pub mod identity;
 pub mod inbound_webhooks;
 pub mod maintenance;
 pub mod output_sanitization;
+pub mod secret_refs;
 pub mod sso;
 
 use axum::http::StatusCode;

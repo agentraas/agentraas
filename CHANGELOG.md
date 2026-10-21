@@ -15,6 +15,18 @@ safe to re-run.
 
 ## [Unreleased]
 
+## [0.22.1] - 2026-10-21
+
+No migration.
+
+### Changed
+- Fetching secret references moved to `crates/api/src/ee/`, under the
+  AgentRaaS Enterprise License like the other Enterprise features. 0.22.0
+  shipped it under AGPL-3.0 and that release stays so. A build without the
+  `enterprise` feature recognises a reference and refuses it.
+- The Helm chart's default image is the current release (it pointed at
+  0.9.0, which no registry has).
+
 ## [0.22.0] - 2026-10-21
 
 No migration.
@@ -499,7 +511,8 @@ server's `/health` response now includes its version.
 - Up to `050_known_destinations.sql`. On an existing install, apply any of
   `046` to `050` you have not run yet.
 
-[Unreleased]: https://github.com/agentraas/agentraas/compare/v0.22.0...HEAD
+[Unreleased]: https://github.com/agentraas/agentraas/compare/v0.22.1...HEAD
+[0.22.1]: https://github.com/agentraas/agentraas/compare/v0.22.0...v0.22.1
 [0.22.0]: https://github.com/agentraas/agentraas/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/agentraas/agentraas/compare/v0.20.0...v0.21.0
 [0.9.2]: https://github.com/agentraas/agentraas/compare/v0.9.1...v0.9.2
