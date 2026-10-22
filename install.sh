@@ -61,6 +61,11 @@ ENVEOF
   echo "✓ Secrets generated (saved to $ENV_FILE — back this up, it won't be shown again)"
 else
   echo "✓ $ENV_FILE already exists — skipping secret generation"
+  # The API moved from host port 13001 to 13000; follow it if PUBLIC_URL is still the old default.
+  if grep -qx 'PUBLIC_URL=http://localhost:13001' "$ENV_FILE"; then
+    sed -i.bak 's#^PUBLIC_URL=http://localhost:13001$#PUBLIC_URL=http://localhost:13000#' "$ENV_FILE" && rm -f "$ENV_FILE.bak"
+    echo "✓ PUBLIC_URL moved to http://localhost:13000 (the API's new port)"
+  fi
 fi
 
 # ─── 3. SELinux relabeling (Fedora/RHEL-family hosts only) ───

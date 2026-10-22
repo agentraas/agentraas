@@ -115,6 +115,11 @@ Every migration file is safe to re-run — already-applied ones just no-op.
 Your `.env`, `data/`, and any local edits you made outside the repo's own
 files are untouched by `git pull`.
 
+The API's host port changed from 13001 to 13000 (2026-10-22, to match the
+SDKs' default). `install.sh` moves a `PUBLIC_URL` of
+`http://localhost:13001` along with it; update anything else you pointed
+at `:13001` yourself (a reverse proxy, tunnel, n8n credential, scripts).
+
 **Downloaded the `.zip` from the dashboard's Self-host panel:** there's no
 git remote in that download, so there's currently no in-place upgrade
 path — re-downloading a fresh zip and manually copying your `.env` (and
