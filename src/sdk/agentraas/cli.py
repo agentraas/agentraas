@@ -14,6 +14,8 @@ commands:
          agentraas approvals
          agentraas approve req_abc123      (runs the call; asks first, or --yes)
          agentraas deny req_abc123
+  audit  the audit log, newest first (--limit N, --json, --csv)
+         agentraas audit -n 20
   wrap   exactly-once tool calls + audit log for any MCP server
          agentraas wrap -- npx -y @modelcontextprotocol/server-github
   scan   list which MCP tools can spend money, delete data or send messages
@@ -86,6 +88,38 @@ def approvals(argv):
     return 0
 
 
+def audit(argv):
+    p = argparse.ArgumentParser(prog="agentraas audit", description="Show the audit log of every org you belong to, newest first. "
+                                "Logs in with AGENTRAAS_EMAIL / AGENTRAAS_PASSWORD against AGENTRAAS_URL (default https://agentraas.io).")
+    p.add_argument("-n", "--limit", type=int, default=50, help="how many entries (default 50, the server returns at most 1,000)")
+    fmt = p.add_mutually_exclusive_group()
+    fmt.add_argument("--json", action="store_true", help="print the entries as JSON (adds run, step, dedup hash, payload preview)")
+    fmt.add_argument("--csv", action="store_true", help="print the dashboard's CSV export (newest 10,000, ignores --limit)")
+    args = p.parse_args(argv)
+    if args.limit < 1:
+        p.error("--limit must be at least 1")
+
+    from .apply import login
+
+    s, base = login()
+    r = s.get(base + "/api/v1/export/csv", timeout=60) if args.csv else s.get(base + "/api/v1/recent", params={"limit": args.limit}, timeout=30)
+    if r.status_code != 200:
+        print("error ({}): {}".format(r.status_code, r.text[:300]), file=sys.stderr)
+        return 1
+    if args.csv:
+        print(r.text)
+        return 0
+    entries = r.json()
+    if args.json:
+        print(json.dumps(entries, indent=2))
+    elif not entries:
+        print("No calls recorded yet.")
+    for e in [] if args.json else entries:
+        print("{created_at}  {status:<16} {service} {action} by {agent_id} ({org_id}) {duration_ms}ms  {req_id}".format(**e)
+              + ("  " + e["error_type"] if e.get("error_type") else ""))
+    return 0
+
+
 def decide(decision, argv):
     p = argparse.ArgumentParser(prog="agentraas " + decision, description="{} a held call by its request id (from `agentraas approvals`).".format(decision.capitalize()))
     p.add_argument("req_id")
@@ -126,6 +160,8 @@ def main(argv=None):
         return approvals(rest)
     elif cmd in ("approve", "deny"):
         return decide(cmd, rest)
+    elif cmd == "audit":
+        return audit(rest)
     elif cmd == "wrap":
         from .mcp_wrap import main as run
     elif cmd == "scan":

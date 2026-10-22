@@ -1,4 +1,4 @@
-"""`agentraas approvals` / `approve` / `deny` against a stub server, no AgentRaaS needed."""
+"""`agentraas approvals` / `approve` / `deny` / `audit` against a stub server, no AgentRaaS needed."""
 import contextlib
 import io
 import json
@@ -11,6 +11,13 @@ from agentraas.cli import main as cli
 HELD = {"req_id": "req_1", "org_id": "org_a", "agent_id": "agent_1", "service": "stripe", "action": "charge.create",
         "payload": {"amount": 4999}, "run_id": None, "created_at": "2026-10-22T09:00:00Z"}
 decided = []
+AUDIT = [
+    {"req_id": "req_2", "api_key": "ar_live_…", "org_id": "org_a", "agent_id": "agent_1", "service": "stripe", "action": "charge.create",
+     "status": "blocked", "error_type": "policy", "duration_ms": 3, "created_at": "2026-10-22T09:01:00Z"},
+    {"req_id": "req_1", "api_key": "ar_live_…", "org_id": "org_a", "agent_id": "agent_1", "service": "stripe", "action": "charge.create",
+     "status": "success", "error_type": None, "duration_ms": 120, "created_at": "2026-10-22T09:00:00Z"},
+]
+CSV = 'Timestamp,Request ID\n"2026-10-22T09:01:00+00:00","req_2"'
 
 
 class Stub(BaseHTTPRequestHandler):
@@ -26,6 +33,14 @@ class Stub(BaseHTTPRequestHandler):
     def do_GET(self):
         if "session=s1" not in self.headers.get("Cookie", ""):
             return self.reply(401, {"error": "not logged in"})
+        if self.path.startswith("/api/v1/recent"):
+            limit = int(self.path.split("limit=")[1])
+            return self.reply(200, AUDIT[:limit])
+        if self.path == "/api/v1/export/csv":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/csv")
+            self.end_headers()
+            return self.wfile.write(CSV.encode())
         self.reply(200, {"pending": [HELD]})
 
     def do_POST(self):
@@ -70,5 +85,18 @@ assert code == 0 and out.strip() == "req_1: denied", out
 code, _, err = run("deny", "req_done")
 assert code == 1 and "already approved" in err, err
 
+code, out, _ = run("audit")
+lines = out.strip().splitlines()
+assert code == 0 and len(lines) == 2 and lines[0].startswith("2026-10-22T09:01:00Z  blocked          stripe") and lines[0].endswith("req_2  policy"), out
+assert "120ms  req_1" in lines[1] and not lines[1].endswith("None"), out
+code, out, _ = run("audit", "-n", "1", "--json")
+assert code == 0 and json.loads(out) == AUDIT[:1], out
+code, out, _ = run("audit", "--csv")
+assert code == 0 and out.strip() == CSV, out
+code, _, err = run("audit", "--json", "--csv")
+assert code == 2 and "not allowed with" in err, err
+code, _, err = run("audit", "-n", "0")
+assert code == 2 and "at least 1" in err, err
+
 server.shutdown()
-print("cli approvals: ok")
+print("cli: ok")

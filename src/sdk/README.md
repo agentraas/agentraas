@@ -290,6 +290,17 @@ agtrs deny req_abc123
 Without a terminal it refuses unless `--yes` is passed, so a script never
 approves by accident.
 
+## Read the audit log from the shell
+
+Every call in the orgs you belong to, newest first, with the same login as
+`approvals`:
+
+```bash
+agtrs audit                      # last 50: time, status, service action, agent, org, duration, req id, error
+agtrs audit -n 200 --json        # adds run/step ids, dedup hash, redacted payload preview (max 1,000)
+agtrs audit --csv > audit.csv    # the dashboard's CSV export (newest 10,000)
+```
+
 ## Quickstart
 
 1. Connect an agent from your AgentRaaS dashboard (**+ Connect Agent**) —
