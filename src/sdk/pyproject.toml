@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentraas"
-version = "0.12.1"
+version = "0.12.2"
 description = "Reliability layer for AI agent actions: exactly-once tool calls (@exactly_once, LangChain and CrewAI protect_tool, MCP wrap), an MCP safety scan, a chaos tester for duplicate calls, and the AgentRaaS client for policies, approvals and audit"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -35,6 +35,7 @@ apply = ["pyyaml>=5.1"]
 
 [project.scripts]
 agentraas = "agentraas.cli:main"
+agtrs = "agentraas.cli:main"
 agentraas-chaos = "agentraas.chaos:main"
 
 [project.urls]

@@ -257,6 +257,23 @@ agentraas tunnel --port 3000 --org org_acme --agent agent_1 --key ar_live_...
 
 One tunnel per org, 2-hour sessions, 30-second local response timeout.
 
+## Send one action from the shell: `agentraas call`
+
+Every command also runs under the short name `agtrs`. `call` sends one
+action through an AgentRaaS server and prints the answer as JSON: the same
+dedup, policies, approvals and audit as the `Client`. Handy for scripts and
+for checking a rule by hand.
+
+```bash
+export AGENTRAAS_KEY=ar_live_... AGENTRAAS_ORG=org_acme AGENTRAAS_AGENT=agent_1
+export AGENTRAAS_URL=https://agentraas.io      # default http://localhost:13000
+agtrs call stripe charge.create '{"amount": 4999, "currency": "usd"}'
+echo '{"text": "hi"}' | agtrs call slack message.post -
+```
+
+`--key`, `--org`, `--agent`, `--url` and `--idempotency-key` override the
+environment. A rejected call prints the error and its hints and exits 1.
+
 ## Quickstart
 
 1. Connect an agent from your AgentRaaS dashboard (**+ Connect Agent**) —

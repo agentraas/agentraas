@@ -48,5 +48,16 @@ try:
 except agentraas.AgentRaaSError as err:
     assert err.validation_errors == [] and str(err) == "[401] nope (reqId=req_2)", str(err)
 
+# The CLI (`agentraas call` / `agtrs call`) prints the same hints and exits 1.
+import contextlib
+import io
+
+from agentraas.cli import main as cli
+
+err_out = io.StringIO()
+with contextlib.redirect_stderr(err_out):
+    code = cli(["call", "stripe", "charge.create", '{"amount": "49.99"}', "--key", "k", "--url", client.base_url])
+assert code == 1 and "49.99, without quotes" in err_out.getvalue(), (code, err_out.getvalue())
+
 server.shutdown()
 print("client errors: ok")
