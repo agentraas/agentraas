@@ -187,7 +187,7 @@ struct RecentQuery {
 
 async fn recent(State(state): State<SharedState>, user: AuthUser, Query(q): Query<RecentQuery>) -> Result<Json<Vec<Value>>, ApiError> {
     check_dashboard_rate_limit(&state, user.sub).await?;
-    let limit = q.limit.filter(|&l| l > 0).unwrap_or(50);
+    let limit = q.limit.filter(|&l| l > 0).unwrap_or(50).min(1000);
     let org_ids = get_user_org_ids(&state.pg, user.sub).await?;
     if org_ids.is_empty() {
         return Ok(Json(vec![]));

@@ -15,6 +15,22 @@ safe to re-run.
 
 ## [Unreleased]
 
+## [0.23.1] - 2026-10-22
+
+No new migration.
+
+### Changed
+- **Breaking for anyone pointing at port 13001:** the API's host port is now
+  13000 (`compose.yaml`), the port the SDKs, `.env.example` and the
+  self-host download already used. `./install.sh` recreates the containers
+  and moves a `PUBLIC_URL` of `http://localhost:13001` to 13000; update
+  reverse proxies, tunnels and scripts that point at `:13001` yourself.
+
+### Fixed
+- `GET /api/v1/recent` (the audit log behind the dashboard's activity list)
+  returns at most 1,000 rows; any larger `limit` used to read every row the
+  caller's orgs have. The CSV export (newest 10,000) is unchanged.
+
 ## [0.23.0] - 2026-10-21
 
 No new migration; `001`, `005` and `057` changed only so they re-run safely.
@@ -541,7 +557,8 @@ server's `/health` response now includes its version.
 - Up to `050_known_destinations.sql`. On an existing install, apply any of
   `046` to `050` you have not run yet.
 
-[Unreleased]: https://github.com/agentraas/agentraas/compare/v0.23.0...HEAD
+[Unreleased]: https://github.com/agentraas/agentraas/compare/v0.23.1...HEAD
+[0.23.1]: https://github.com/agentraas/agentraas/compare/v0.23.0...v0.23.1
 [0.23.0]: https://github.com/agentraas/agentraas/compare/v0.22.1...v0.23.0
 [0.22.1]: https://github.com/agentraas/agentraas/compare/v0.22.0...v0.22.1
 [0.22.0]: https://github.com/agentraas/agentraas/compare/v0.21.0...v0.22.0
