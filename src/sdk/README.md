@@ -274,6 +274,22 @@ echo '{"text": "hi"}' | agtrs call slack message.post -
 `--key`, `--org`, `--agent`, `--url` and `--idempotency-key` override the
 environment. A rejected call prints the error and its hints and exits 1.
 
+## Approve held calls from the shell
+
+The same list as the dashboard's **Waiting for approval**, for any org you
+can write to. Logs in like `apply` (AGENTRAAS_EMAIL / AGENTRAAS_PASSWORD
+against AGENTRAAS_URL, default https://agentraas.io).
+
+```bash
+agtrs approvals                  # req id, service, action, agent, payload
+agtrs approve req_abc123         # runs the call; asks first (--yes to skip)
+agtrs deny req_abc123
+```
+
+`approve` exits 1 if the call ran and failed (it is then in Failed requests).
+Without a terminal it refuses unless `--yes` is passed, so a script never
+approves by accident.
+
 ## Quickstart
 
 1. Connect an agent from your AgentRaaS dashboard (**+ Connect Agent**) —

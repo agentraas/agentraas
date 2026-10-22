@@ -3,12 +3,17 @@ import argparse
 import json
 import os
 import sys
+from urllib.parse import quote
 
 USAGE = """usage: agentraas <command> [options]     (short form: agtrs <command>)
 
 commands:
   call   send one action through AgentRaaS (dedup, policies, approvals, audit)
          agentraas call stripe charge.create '{"amount": 4999, "currency": "usd"}'
+  approvals  list calls waiting for approval; approve or deny one by id
+         agentraas approvals
+         agentraas approve req_abc123      (runs the call; asks first, or --yes)
+         agentraas deny req_abc123
   wrap   exactly-once tool calls + audit log for any MCP server
          agentraas wrap -- npx -y @modelcontextprotocol/server-github
   scan   list which MCP tools can spend money, delete data or send messages
@@ -57,6 +62,58 @@ def call(argv):
     return 0
 
 
+def approvals(argv):
+    p = argparse.ArgumentParser(prog="agentraas approvals", description="List calls waiting for approval (newest first, up to 100). "
+                                "Logs in with AGENTRAAS_EMAIL / AGENTRAAS_PASSWORD against AGENTRAAS_URL (default https://agentraas.io).")
+    p.add_argument("--json", action="store_true", help="print the raw list as JSON")
+    args = p.parse_args(argv)
+
+    from .apply import login
+
+    s, base = login()
+    r = s.get(base + "/api/v1/hitl/pending", timeout=30)
+    if r.status_code != 200:
+        print("error ({}): {}".format(r.status_code, r.text[:300]), file=sys.stderr)
+        return 1
+    pending = r.json()["pending"]
+    if args.json:
+        print(json.dumps(pending, indent=2))
+    elif not pending:
+        print("Nothing is waiting.")
+    for item in [] if args.json else pending:
+        print("{req_id}  {service} {action} by {agent_id}  ({org_id}, {created_at})".format(**item))
+        print("  " + json.dumps(item["payload"]))
+    return 0
+
+
+def decide(decision, argv):
+    p = argparse.ArgumentParser(prog="agentraas " + decision, description="{} a held call by its request id (from `agentraas approvals`).".format(decision.capitalize()))
+    p.add_argument("req_id")
+    if decision == "approve":
+        p.add_argument("-y", "--yes", action="store_true", help="don't ask before running the call")
+    args = p.parse_args(argv)
+
+    # Approving runs the call for real, so ask first (like the dashboard's Confirm click).
+    if decision == "approve" and not args.yes:
+        if not sys.stdin.isatty():
+            p.error("approving runs the call; pass --yes when not at a terminal")
+        if input("Approve {} and run the call now? [y/N] ".format(args.req_id)).strip().lower() not in ("y", "yes"):
+            print("Not approved.")
+            return 1
+
+    from .apply import login
+
+    s, base = login()
+    r = s.post("{}/api/v1/hitl/{}/decide".format(base, quote(args.req_id, safe="")), json={"decision": decision}, timeout=60)
+    data = r.json() if r.headers.get("Content-Type", "").startswith("application/json") else {}
+    if r.status_code != 200:
+        print("error ({}): {}".format(r.status_code, data.get("error") or r.text[:300]), file=sys.stderr)
+        return 1
+    print("{}: {}".format(args.req_id, data["status"]))
+    # Approved but the provider call failed: it is in Failed requests (the DLQ).
+    return 1 if data["status"] == "failed" else 0
+
+
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     if not argv or argv[0] in ("-h", "--help"):
@@ -65,6 +122,10 @@ def main(argv=None):
     cmd, rest = argv[0], argv[1:]
     if cmd == "call":
         return call(rest)
+    elif cmd == "approvals":
+        return approvals(rest)
+    elif cmd in ("approve", "deny"):
+        return decide(cmd, rest)
     elif cmd == "wrap":
         from .mcp_wrap import main as run
     elif cmd == "scan":

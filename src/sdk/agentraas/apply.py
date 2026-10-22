@@ -131,6 +131,19 @@ def body_for(kind, org, spec):
     return body
 
 
+def login():
+    """A logged-in session and the base URL, from AGENTRAAS_URL / _EMAIL / _PASSWORD."""
+    base = os.environ.get("AGENTRAAS_URL", "https://agentraas.io").rstrip("/")
+    email, password = os.environ.get("AGENTRAAS_EMAIL"), os.environ.get("AGENTRAAS_PASSWORD")
+    if not email or not password:
+        sys.exit("Set AGENTRAAS_EMAIL and AGENTRAAS_PASSWORD (a user with write access to the org).")
+    s = requests.Session()
+    r = s.post(base + "/api/v1/auth/login", json={"email": email, "password": password}, timeout=30)
+    if r.status_code != 200:
+        sys.exit("login failed ({}): {}".format(r.status_code, r.text[:200]))
+    return s, base
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="agentraas apply", description="Make the server's rules match a YAML file.")
     ap.add_argument("-f", "--file", required=True)
@@ -140,14 +153,7 @@ def main(argv=None):
 
     desired = load(args.file)
     orgs = {norm["org_id"] for _, norm, _, _ in desired}
-    base = os.environ.get("AGENTRAAS_URL", "https://agentraas.io").rstrip("/")
-    email, password = os.environ.get("AGENTRAAS_EMAIL"), os.environ.get("AGENTRAAS_PASSWORD")
-    if not email or not password:
-        sys.exit("Set AGENTRAAS_EMAIL and AGENTRAAS_PASSWORD (a user with write access to the org).")
-    s = requests.Session()
-    r = s.post(base + "/api/v1/auth/login", json={"email": email, "password": password}, timeout=30)
-    if r.status_code != 200:
-        sys.exit("login failed ({}): {}".format(r.status_code, r.text[:200]))
+    s, base = login()
 
     current = {}
     for kind, (path, key, _, _) in KINDS.items():
