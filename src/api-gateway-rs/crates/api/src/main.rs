@@ -147,7 +147,7 @@ async fn main() -> anyhow::Result<()> {
         service_catalog,
         jwt_secret,
         public_url: std::env::var("PUBLIC_URL")
-            .unwrap_or_else(|_| "http://localhost:13001".to_string()),
+            .unwrap_or_else(|_| "http://localhost:13000".to_string()),
         deployment_mode: std::env::var("DEPLOYMENT_MODE").unwrap_or_else(|_| "cloud".to_string()),
         is_production: node_env == "production",
         expose_dev_verify_url: std::env::var("EXPOSE_DEV_VERIFY_URL").as_deref() == Ok("true"),

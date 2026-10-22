@@ -1,6 +1,6 @@
 # Benchmarks
 
-Two tests, both against the local stack (`./install.sh`, API on `:13001`),
+Two tests, both against the local stack (`./install.sh`, API on `:13000`),
 both reproducible with the commands below. Never point them at production.
 
 - `infra/scripts/bench-overhead.py`: **latency added** per call, sequential,

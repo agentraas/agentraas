@@ -1,4 +1,4 @@
-"""Run: TEST_BASE_URL=http://localhost:13001 python test_tunnel.py
+"""Run: TEST_BASE_URL=http://localhost:13000 python test_tunnel.py
 
 End-to-end: needs a running AgentRaaS stack and websocket-client. Starts a
 local echo server, runs the real `agentraas tunnel` CLI against it, sends a
@@ -15,7 +15,7 @@ from urllib.parse import urlparse, parse_qs
 
 import requests
 
-BASE = os.environ.get("TEST_BASE_URL", "http://localhost:13001")
+BASE = os.environ.get("TEST_BASE_URL", "http://localhost:13000")
 RUN_ID = int(time.time() * 1000)
 
 

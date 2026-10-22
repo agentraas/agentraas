@@ -15,7 +15,7 @@
 // a new build against a known traffic pattern before it goes live.
 //
 // Usage:
-//   node replay-traffic.js --file requests.jsonl --url http://localhost:13001 \
+//   node replay-traffic.js --file requests.jsonl --url http://localhost:13000 \
 //     --org myorg --agent myagent --key ar_live_...
 //
 // requests.jsonl: one JSON object per line, each {"service":"stripe","action":"charge.create","payload":{...}}

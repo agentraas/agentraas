@@ -79,7 +79,7 @@ cd agentraas
 
 `install.sh` generates the secrets, builds the image (the first Rust build
 takes a few minutes), starts Postgres, Redis and MinIO, and runs the
-migrations. Then open `http://localhost:13001/dashboard` and register.
+migrations. Then open `http://localhost:13000/dashboard` and register.
 Kubernetes: a Helm chart is in `infra/helm/`. Render: [one-click deploy](https://render.com/deploy?repo=https://github.com/agentraas/agentraas).
 
 Works with Docker or Podman. Linux: either one. macOS: Docker Desktop (or
@@ -158,7 +158,7 @@ AGPL-3.0; the Team and Enterprise features are source-available (see
 ```bash
 cd src/api-gateway-rs
 cargo test --workspace --features enterprise          # unit tests
-TEST_BASE_URL=http://localhost:13001 npm test         # integration tests, real server
+TEST_BASE_URL=http://localhost:13000 npm test         # integration tests, real server
 ```
 
 The integration tests send concurrent duplicates, replays and failures

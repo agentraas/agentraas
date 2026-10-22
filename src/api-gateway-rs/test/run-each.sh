@@ -3,7 +3,7 @@
 # resetting rate limits and breakers in between (test/reset-limits.js).
 # Needs TEST_BASE_URL, DATABASE_URL and REDIS_URL, and the server started with
 # PROXY_TIMEOUT_SECONDS=2 (outcome-unknown.test.js outlasts it). Local stack:
-#   TEST_BASE_URL=http://localhost:13001 REDIS_URL=redis://localhost:16379 \
+#   TEST_BASE_URL=http://localhost:13000 REDIS_URL=redis://localhost:16379 \
 #   DATABASE_URL=postgres://agentraas:<POSTGRES_PASSWORD>@localhost:15432/agentraas test/run-each.sh
 # Exits non-zero if any file fails, printing that file's output.
 set -uo pipefail

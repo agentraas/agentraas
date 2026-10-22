@@ -28,7 +28,7 @@ binds:
           - name: agentraas
             mcp:
               # ar-api-rs's in-network hostname/port (see compose.yaml) —
-              # not the host-mapped 13001 port, since this runs as another
+              # not the host-mapped 13000 port, since this runs as another
               # container on the same agentraas-net.
               host: http://ar-api-rs:3000/mcp
       matches:

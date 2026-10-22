@@ -8,7 +8,7 @@
 import http from 'k6/http';
 import { check } from 'k6';
 
-const BASE = __ENV.BASE || 'http://localhost:13001';
+const BASE = __ENV.BASE || 'http://localhost:13000';
 const via = (__ENV.TARGET || 'via') === 'via';
 const dup = __ENV.DUP === '1';
 

@@ -88,7 +88,7 @@ account (separate, lives on your own server).
    files inside WSL (not on `C:\`).
    This generates fresh secrets, runs the database migrations, and starts
    the stack.
-4. Once it's running, go to `http://your-server:13001/dashboard` (or
+4. Once it's running, go to `http://your-server:13000/dashboard` (or
    whatever host/port you configured). Your account is already pre-seeded
    with the email you used on Cloud — click **Forgot password** and enter
    that same email to set a password for *this* instance (see

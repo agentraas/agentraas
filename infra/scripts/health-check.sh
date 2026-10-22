@@ -78,12 +78,12 @@ done
 ar_api_status=$(podman inspect ar-api --format '{{.State.Status}}' 2>/dev/null || echo "missing")
 report+=("Container ar-api (rollback slot, not required): ${ar_api_status}")
 
-health_body=$(curl -s -m 5 http://localhost:13001/health || echo "")
+health_body=$(curl -s -m 5 http://localhost:13000/health || echo "")
 if echo "${health_body}" | grep -q '"ok":true'; then
   report+=("ar-api-rs /health: ok")
 else
   report+=("ar-api-rs /health: NOT ok — ${health_body:-<no response>}")
-  issues+=("http://localhost:13001/health did not return ok:true — got: ${health_body:-<no response>}")
+  issues+=("http://localhost:13000/health did not return ok:true — got: ${health_body:-<no response>}")
 fi
 
 panic_count=$(podman logs ar-api-rs --since 15m 2>&1 | grep -ic panic || true)

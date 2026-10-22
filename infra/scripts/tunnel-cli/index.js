@@ -2,7 +2,7 @@
 // agentraas-tunnel — CLI local dev tunnel (SPEC-TUNNEL.md). Local script
 // for now, not published to npm (npm publishing itself is blocked on the
 // account being locked this session) — run with:
-//   node infra/scripts/tunnel-cli/index.js --port 13001 --org org_acme \
+//   node infra/scripts/tunnel-cli/index.js --port 13000 --org org_acme \
 //     --agent agent_1 --key ar_live_... [--host agentraas.io]
 //
 // Opens a WebSocket to /api/v1/tunnel/connect/:org/:agent, prints the

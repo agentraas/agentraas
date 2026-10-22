@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Measure the latency AgentRaaS adds in front of an upstream API.
 
-Local stack only (./install.sh, API on :13001). The upstream is the API's
+Local stack only (./install.sh, API on :13000). The upstream is the API's
 built-in mock payment endpoint (/internal/mockpay: no delay, no I/O), so the
 same POST can be timed (a) straight to it and (b) through /v1/webhook, where
 the gateway makes that same call itself after auth, dedup, spend caps and
@@ -26,7 +26,7 @@ from urllib.parse import parse_qs, urlparse
 
 import requests
 
-BASE = "http://localhost:13001"
+BASE = "http://localhost:13000"
 
 
 def timed(fn, n):

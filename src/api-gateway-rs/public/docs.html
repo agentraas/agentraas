@@ -833,7 +833,7 @@ histogram_quantile(0.95, sum by (le) (rate(agentraas_call_duration_ms_bucket[5m]
 
       <h3>Start here: 60-second checks</h3>
       <ol>
-        <li>Is the server up? Cloud: <a href="/status">/status</a>, or <code>curl https://agentraas.io/health</code> should return <code>{"ok":true,"postgres":true,"redis":true}</code>. Self-hosted: <code>curl http://localhost:13001/health</code>.</li>
+        <li>Is the server up? Cloud: <a href="/status">/status</a>, or <code>curl https://agentraas.io/health</code> should return <code>{"ok":true,"postgres":true,"redis":true}</code>. Self-hosted: <code>curl http://localhost:13000/health</code>.</li>
         <li>Read the response body. Every error has a message and a <code>reqId</code>; the table below says what each status means.</li>
         <li>Upgrade the package: <code>pip install -U agentraas</code>. Check what you have with <code>pip show agentraas</code>.</li>
       </ol>
@@ -917,7 +917,7 @@ redis-cli --scan --pattern 'dedup:local:*' | xargs -r redis-cli del</code></pre>
 
       <h3>Self-hosted server</h3>
       <ul>
-        <li><b>Basic.</b> <code>podman ps</code> (or <code>docker ps</code>): are the API, Postgres and Redis containers running? Then <code>curl localhost:13001/health</code>.</li>
+        <li><b>Basic.</b> <code>podman ps</code> (or <code>docker ps</code>): are the API, Postgres and Redis containers running? Then <code>curl localhost:13000/health</code>.</li>
         <li><b>Intermediate: the API container exits at start.</b> Read its logs. A missing or empty <code>JWT_SECRET</code>, <code>DATABASE_URL</code>, <code>REDIS_URL</code> or <code>CREDENTIALS_ENCRYPTION_KEY</code> is the usual cause.</li>
         <li><b>Intermediate: <code>relation "..." does not exist</code>.</b> A migration wasn't applied. Run every file in <code>infra/migrations/</code> in order; they're safe to re-run.</li>
         <li><b>Intermediate: approvals, SSO or DLP missing.</b> Check that <code>ENTERPRISE_MODE=true</code> reaches the container and that the image was built with <code>--features enterprise</code> (the default <code>Containerfile</code> does).</li>

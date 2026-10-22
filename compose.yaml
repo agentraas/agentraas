@@ -95,9 +95,9 @@ services:
       # the admin audit-integrity check and SIEM export.
       ENTERPRISE_MODE: "true"
     ports:
-      # 13001: production's cloudflared tunnel and the docs point here;
+      # 13000: production's cloudflared tunnel and the docs point here;
       # change them together.
-      - "127.0.0.1:13001:3000"
+      - "127.0.0.1:13000:3000"
     # No depends_on: podman-compose 1.5 tries to "ensure" already-running
     # dependencies and restarts them on a name conflict. The API fails fast
     # with a clear error if Redis/Postgres aren't up, and restart: on-failure

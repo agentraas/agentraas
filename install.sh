@@ -52,7 +52,7 @@ JWT_SECRET=${JWT_SECRET}
 CREDENTIALS_ENCRYPTION_KEY=${CRED_KEY}
 MINIO_ROOT_USER=agentraas
 MINIO_ROOT_PASSWORD=${MINIO_PASSWORD}
-PUBLIC_URL=http://localhost:13001
+PUBLIC_URL=http://localhost:13000
 DEPLOYMENT_MODE=self-hosted
 SELF_HOST_MONTHLY_LIMIT=100000
 ENVEOF
@@ -132,8 +132,8 @@ sleep 3
 
 echo ""
 echo "✅ AgentRaaS is running."
-echo "   Dashboard: http://localhost:13001/dashboard"
+echo "   Dashboard: http://localhost:13000/dashboard"
 echo "   Register an account there to get started."
 echo ""
 echo "   Run the test suite any time with:"
-echo "     cd src/api-gateway-rs && npm install && TEST_BASE_URL=http://localhost:13001 npm test"
+echo "     cd src/api-gateway-rs && npm install && TEST_BASE_URL=http://localhost:13000 npm test"
