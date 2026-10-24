@@ -45,7 +45,7 @@ for (const plan of ['free', 'team']) {
     assert.match(res.headers['content-disposition'], /filename="agentraas-self-host\.zip"/);
     // Zip entry names are stored uncompressed in the central directory.
     const zip = Buffer.from(res.data);
-    for (const name of ['src/api-gateway-rs/crates/api/src/ee/mod.rs', 'src/api-gateway-rs/crates/core/src/dlp.rs', 'LICENSE-AGPL', 'LICENSE-FSL.md']) {
+    for (const name of ['src/api-gateway-rs/crates/api/src/ee/mod.rs', 'src/api-gateway-rs/crates/core/src/dlp.rs', 'LICENSE-MIT', 'LICENSE-EE.md']) {
       assert.ok(zip.includes(name), `zip is missing ${name}`);
     }
     assert.ok(!zip.includes('landing-worker'), 'zip must not include the private landing-worker');

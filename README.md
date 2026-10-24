@@ -150,7 +150,7 @@ on one machine (Intel Core i3-12100, local stack, three runs of 500 calls) with
 
 AgentRaaS Cloud starts with a free trial of 1,000 actions with every
 feature, for trying it out; for production, self-host. The core server is
-AGPL-3.0; the Team and Enterprise features are source-available (see
+MIT; the Team and Enterprise features are source-available (see
 [LICENSE.md](./LICENSE.md)).
 
 ## Testing
@@ -176,12 +176,12 @@ through the built-in `mockpay` service, so no real API keys are needed.
 self-hosting details. Questions: [agentraas.io/community](https://agentraas.io/community)
 (GitHub Discussions).
 
-The server is AGPL-3.0. The Team and Enterprise features
+The server core and the SDKs are MIT. The Team and Enterprise features
 (`crates/api/src/ee/`, `crates/core/src/{semantic_dedup,hmac_verify}.rs`,
 `compose.ee.yaml`) are source-available under the AgentRaaS Enterprise
-License from 0.16.0: free to read and try, production use needs a license
-key (releases 0.10.0 to 0.15.1 stay under the Functional Source License).
-The SDKs are MIT/Apache-2.0. See [LICENSE.md](./LICENSE.md).
+License: free to read and try, Team features free in production, Enterprise
+features need a license key. Earlier releases keep the license they shipped
+under. See [LICENSE.md](./LICENSE.md).
 
 [CONTRIBUTING.md](./CONTRIBUTING.md) · [SECURITY.md](./SECURITY.md) (report
 vulnerabilities privately, not as issues) · [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)

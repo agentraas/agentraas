@@ -4,14 +4,13 @@ Thanks for your interest in AgentRaaS. A few things to know before you dive in.
 
 ## License
 
-The server (`src/api-gateway-rs/`) is AGPL-3.0, the Team/Enterprise
-features inside it are under the Functional Source License
-(FSL-1.1-ALv2), and the SDKs and everything else are MIT/Apache-2.0. The
-exact file list is in [LICENSE.md](./LICENSE.md). By submitting a
+The Team/Enterprise features are under the AgentRaaS Enterprise License,
+and the server core, the SDKs and everything else are MIT. The exact file
+list is in [LICENSE.md](./LICENSE.md). By submitting a
 contribution, you agree that it may be distributed under whichever of these
 licenses already covers the file(s) you're touching.
 
-The FSL part may not be offered as a competing hosted service. If you're
+The Enterprise License part may not be offered as a competing hosted service. If you're
 contributing as part of building something like that, reach out to
 support@agentraas.io first.
 

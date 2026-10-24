@@ -3,11 +3,10 @@ MIT License
 Copyright (c) 2026 Sumedh Chatse
 
 Scope: this license applies to everything in this repository EXCEPT the
-enterprise module — `src/ee/`, `src/api-gateway-rs/crates/api/src/ee/`,
-`src/api-gateway-rs/crates/core/src/dlp.rs`,
-`src/api-gateway-rs/crates/core/src/hmac_verify.rs`, and
-`compose.ee.yaml` — which is licensed separately under LICENSE.md. See
-README.md's License section for the one-sentence version of this split.
+Team/Enterprise features listed in LICENSE.md (`src/api-gateway-rs/crates/api/src/ee/`,
+`src/api-gateway-rs/crates/core/src/semantic_dedup.rs`,
+`src/api-gateway-rs/crates/core/src/hmac_verify.rs` and `compose.ee.yaml`),
+which are under the AgentRaaS Enterprise License in LICENSE-EE.md.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to

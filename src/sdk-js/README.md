@@ -175,6 +175,6 @@ error can fix them all in one retry.
 
 ## License
 
-MIT — see [LICENSE](./LICENSE). (The AgentRaaS server is AGPL-3.0, its
-Team/Enterprise features FSL, all free to self-host; see the
+MIT — see [LICENSE](./LICENSE). (The AgentRaaS server core is MIT too, its
+Team/Enterprise features source-available; see the
 [main repo](https://github.com/agentraas/agentraas).)

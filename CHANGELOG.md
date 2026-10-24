@@ -15,6 +15,14 @@ safe to re-run.
 
 ## [Unreleased]
 
+### Changed
+- **License.** The server core is now MIT (was AGPL-3.0), and the SDKs and
+  everything else are MIT only (was MIT or Apache-2.0). The Team/Enterprise
+  features stay under the AgentRaaS Enterprise License. Two licenses in
+  total: `LICENSE-MIT` and `LICENSE-EE.md`; `LICENSE-AGPL`, `LICENSE-APACHE`
+  and `LICENSE-FSL.md` are removed. Earlier releases keep the license they
+  shipped under (see `LICENSE.md`).
+
 ## [0.23.1] - 2026-10-22
 
 No new migration.

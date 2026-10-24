@@ -1,4 +1,4 @@
-//! Team/Enterprise features (FSL-licensed, see LICENSE.md), compiled in with
+//! Team/Enterprise features (AgentRaaS Enterprise License, see LICENSE.md), compiled in with
 //! the `enterprise` Cargo feature. Each route also checks the org's tier
 //! (`require_tier`) or the server's `ENTERPRISE_MODE` switch.
 
