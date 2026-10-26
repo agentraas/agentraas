@@ -1,0 +1,3374 @@
+{
+ "openapi": "3.1.0",
+ "info": {
+  "title": "AgentRaaS API",
+  "version": "0.24.1",
+  "description": "Generated from the server's routes by infra/scripts/build-openapi.py. Guides: https://agentraas.io/docs"
+ },
+ "servers": [
+  {
+   "url": "https://agentraas.io",
+   "description": "Cloud"
+  },
+  {
+   "url": "http://localhost:13000",
+   "description": "Self-hosted"
+  }
+ ],
+ "components": {
+  "securitySchemes": {
+   "agentKey": {
+    "type": "http",
+    "scheme": "bearer",
+    "description": "An agent key (ar_live_...) from Connect agent or Connect a service."
+   },
+   "session": {
+    "type": "apiKey",
+    "in": "cookie",
+    "name": "ar_session",
+    "description": "Set by POST /api/v1/auth/login."
+   },
+   "sessionBearer": {
+    "type": "http",
+    "scheme": "bearer",
+    "description": "The same session token as a bearer token."
+   },
+   "metricsToken": {
+    "type": "http",
+    "scheme": "bearer",
+    "description": "METRICS_TOKEN, when set on the server."
+   }
+  }
+ },
+ "paths": {
+  "/api/v1/action-policies": {
+   "get": {
+    "tags": [
+     "Rules"
+    ],
+    "summary": "List action policies.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "Rules"
+    ],
+    "summary": "Create an action policy: deny, or allow only within limits, domains or hours.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "example": {
+        "org_id": "org_acme",
+        "service": "resend",
+        "action": "email.send",
+        "effect": "require",
+        "fields": {
+         "to": {
+          "domains": [
+           "acme.com"
+          ]
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/action-policies/{id}": {
+   "delete": {
+    "tags": [
+     "Rules"
+    ],
+    "summary": "Delete an action policy.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/admin/audit/siem-export": {
+   "get": {
+    "tags": [
+     "Server admin"
+    ],
+    "summary": "Export the audit log for a SIEM.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/admin/audit/verify-integrity": {
+   "get": {
+    "tags": [
+     "Server admin"
+    ],
+    "summary": "Check the audit log's hash chain.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/admin/maintenance": {
+   "get": {
+    "tags": [
+     "Server admin"
+    ],
+    "summary": "Whether maintenance mode is on.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/admin/maintenance/pause": {
+   "post": {
+    "tags": [
+     "Server admin"
+    ],
+    "summary": "Pause forwarding (calls are held, not lost).",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/admin/maintenance/resume": {
+   "post": {
+    "tags": [
+     "Server admin"
+    ],
+    "summary": "Resume forwarding.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/admin/overview": {
+   "get": {
+    "tags": [
+     "Server admin"
+    ],
+    "summary": "Server-wide overview.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/admin/users": {
+   "get": {
+    "tags": [
+     "Server admin"
+    ],
+    "summary": "All users.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/agent-identity-tokens": {
+   "get": {
+    "tags": [
+     "Agents and services"
+    ],
+    "summary": "List agent identity tokens.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "Agents and services"
+    ],
+    "summary": "Issue an agent identity token.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/agent-identity-tokens/{id}": {
+   "delete": {
+    "tags": [
+     "Agents and services"
+    ],
+    "summary": "Revoke an agent identity token.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/agentgateway-targets": {
+   "get": {
+    "tags": [
+     "Agents and services"
+    ],
+    "summary": "List agentgateway targets.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "Agents and services"
+    ],
+    "summary": "Add an agentgateway target.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/agentgateway-targets/{id}": {
+   "delete": {
+    "tags": [
+     "Agents and services"
+    ],
+    "summary": "Delete an agentgateway target.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/agents": {
+   "get": {
+    "tags": [
+     "Agents and services"
+    ],
+    "summary": "Agents seen recently.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/agents/connect": {
+   "post": {
+    "tags": [
+     "Agents and services"
+    ],
+    "summary": "Connect an agent: returns its key (shown once) and its URLs.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "example": {
+        "org_id": "org_acme",
+        "agent_id": "billing-agent",
+        "label": "billing agent"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/agents/keys": {
+   "get": {
+    "tags": [
+     "Agents and services"
+    ],
+    "summary": "List agent keys.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/agents/keys/{id}": {
+   "delete": {
+    "tags": [
+     "Agents and services"
+    ],
+    "summary": "Revoke an agent key.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/agents/keys/{id}/regenerate": {
+   "post": {
+    "tags": [
+     "Agents and services"
+    ],
+    "summary": "Replace an agent key; the old one stops working.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/agents/keys/{id}/services": {
+   "put": {
+    "tags": [
+     "Agents and services"
+    ],
+    "summary": "Choose which connected services an agent key may use.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/auth/forgot-password": {
+   "post": {
+    "tags": [
+     "Account"
+    ],
+    "summary": "Email a reset link.",
+    "security": [],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/auth/invites/accept": {
+   "post": {
+    "tags": [
+     "Account"
+    ],
+    "summary": "Accept an invite to an org.",
+    "security": [],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/auth/login": {
+   "post": {
+    "tags": [
+     "Account"
+    ],
+    "summary": "Log in; sets the session cookie.",
+    "security": [],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "example": {
+        "email": "you@example.com",
+        "password": "..."
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/auth/logout": {
+   "post": {
+    "tags": [
+     "Account"
+    ],
+    "summary": "Log out this session.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/auth/logout-all": {
+   "post": {
+    "tags": [
+     "Account"
+    ],
+    "summary": "Log out every session.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/auth/me": {
+   "get": {
+    "tags": [
+     "Account"
+    ],
+    "summary": "The logged-in user, org and plan.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/auth/password": {
+   "post": {
+    "tags": [
+     "Account"
+    ],
+    "summary": "Change the password.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/auth/register": {
+   "post": {
+    "tags": [
+     "Account"
+    ],
+    "summary": "Create an account.",
+    "security": [],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/auth/reset-password": {
+   "post": {
+    "tags": [
+     "Account"
+    ],
+    "summary": "Set a new password from a reset link.",
+    "security": [],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/auth/sso/{org_id}/configs": {
+   "get": {
+    "tags": [
+     "Single sign-on and members"
+    ],
+    "summary": "List identity providers.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "org_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   },
+   "post": {
+    "tags": [
+     "Single sign-on and members"
+    ],
+    "summary": "Add an identity provider (OIDC).",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "org_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/auth/sso/{org_id}/configs/{config_id}": {
+   "delete": {
+    "tags": [
+     "Single sign-on and members"
+    ],
+    "summary": "Remove an identity provider.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "org_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "config_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   },
+   "put": {
+    "tags": [
+     "Single sign-on and members"
+    ],
+    "summary": "Change an identity provider.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "org_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "config_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/auth/sso/{org_id}/invites": {
+   "get": {
+    "tags": [
+     "Single sign-on and members"
+    ],
+    "summary": "List open invites.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "org_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   },
+   "post": {
+    "tags": [
+     "Single sign-on and members"
+    ],
+    "summary": "Invite someone by email, with a role.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "org_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/auth/sso/{org_id}/invites/{id}": {
+   "delete": {
+    "tags": [
+     "Single sign-on and members"
+    ],
+    "summary": "Cancel an invite.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "org_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/auth/sso/{org_id}/login": {
+   "get": {
+    "tags": [
+     "Single sign-on and members"
+    ],
+    "summary": "Start SSO login for an org.",
+    "security": [],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "org_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/auth/sso/{org_id}/members": {
+   "get": {
+    "tags": [
+     "Single sign-on and members"
+    ],
+    "summary": "List members and roles.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "org_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/auth/sso/{org_id}/members/{user_id}": {
+   "delete": {
+    "tags": [
+     "Single sign-on and members"
+    ],
+    "summary": "Remove a member.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "org_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "user_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   },
+   "put": {
+    "tags": [
+     "Single sign-on and members"
+    ],
+    "summary": "Change a member's role.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "org_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "user_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/auth/sso/callback": {
+   "get": {
+    "tags": [
+     "Single sign-on and members"
+    ],
+    "summary": "SSO callback from the identity provider.",
+    "security": [],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/auth/verify-email": {
+   "get": {
+    "tags": [
+     "Account"
+    ],
+    "summary": "Confirm an email address (link from the email).",
+    "security": [],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/billing/checkout-info": {
+   "get": {
+    "tags": [
+     "Account"
+    ],
+    "summary": "What the checkout needs (Cloud).",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/billing/usage": {
+   "get": {
+    "tags": [
+     "Account"
+    ],
+    "summary": "Cloud usage and the monthly cap.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   },
+   "put": {
+    "tags": [
+     "Account"
+    ],
+    "summary": "Change the monthly cap.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/chaos": {
+   "get": {
+    "tags": [
+     "Rules"
+    ],
+    "summary": "Chaos mode settings (inject failures to test an agent).",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   },
+   "put": {
+    "tags": [
+     "Rules"
+    ],
+    "summary": "Change chaos mode settings.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/credentials": {
+   "get": {
+    "tags": [
+     "Agents and services"
+    ],
+    "summary": "List saved service keys (never the values).",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "Agents and services"
+    ],
+    "summary": "Save a service key, encrypted.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/credentials/{id}": {
+   "delete": {
+    "tags": [
+     "Agents and services"
+    ],
+    "summary": "Delete a saved service key.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/custom-actions": {
+   "get": {
+    "tags": [
+     "Agents and services"
+    ],
+    "summary": "List custom actions (your own HTTP APIs).",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "Agents and services"
+    ],
+    "summary": "Register a custom action.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/custom-actions/{id}": {
+   "delete": {
+    "tags": [
+     "Agents and services"
+    ],
+    "summary": "Delete a custom action.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/dashboard/by-service": {
+   "get": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Calls per service for a range.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/dashboard/runs/{run_id}": {
+   "get": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "One run, as the dashboard shows it.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "run_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/dashboard/stats": {
+   "get": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Totals for a range (24h, 7d, 30d, 90d), optionally one org.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/dashboard/timeseries": {
+   "get": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Calls over time for a range.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/dead-letter-queue": {
+   "get": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Failed requests (the service itself refused them).",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/dead-letter-queue/{id}": {
+   "delete": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Dismiss a failed request.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/dead-letter-queue/{id}/replay": {
+   "post": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Send a failed request again, optionally with an edited payload.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/dedup-rules": {
+   "get": {
+    "tags": [
+     "Rules"
+    ],
+    "summary": "List dedup rules (which fields make two calls the same).",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "Rules"
+    ],
+    "summary": "Create a dedup rule: {org_id, service, action, fields}.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/dedup-rules/{id}": {
+   "delete": {
+    "tags": [
+     "Rules"
+    ],
+    "summary": "Delete a dedup rule.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/demo/live-test": {
+   "post": {
+    "tags": [
+     "Demo and tools"
+    ],
+    "summary": "Send 8 identical calls to the sandbox and show that 1 ran.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/demo/reset": {
+   "post": {
+    "tags": [
+     "Demo and tools"
+    ],
+    "summary": "Clear an org's demo data.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/demo/seed": {
+   "post": {
+    "tags": [
+     "Demo and tools"
+    ],
+    "summary": "Fill an org with demo data.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/demo/session": {
+   "get": {
+    "tags": [
+     "Demo and tools"
+    ],
+    "summary": "Open the read-only demo dashboard.",
+    "security": [],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/download/self-host": {
+   "get": {
+    "tags": [
+     "Account"
+    ],
+    "summary": "Download the self-host bundle.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/download/self-host/request": {
+   "post": {
+    "tags": [
+     "Account"
+    ],
+    "summary": "Ask for a self-host download link.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/export/csv": {
+   "get": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Download the audit log as CSV.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/health-checks": {
+   "get": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Services under active monitoring.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Turn on active monitoring for a service.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/health-checks/{org_id}/{service}": {
+   "delete": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Turn off active monitoring for a service.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "org_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "service",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/hitl-escalation-config": {
+   "get": {
+    "tags": [
+     "Approvals"
+    ],
+    "summary": "What happens to a call nobody decides on in time.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "Approvals"
+    ],
+    "summary": "Set the escalation for undecided calls.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/hitl-rules": {
+   "get": {
+    "tags": [
+     "Approvals"
+    ],
+    "summary": "List approval rules.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "Approvals"
+    ],
+    "summary": "Create an approval rule: {org_id, service, action, field?, operator?, threshold?}.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "example": {
+        "org_id": "org_acme",
+        "service": "stripe",
+        "action": "charge.create",
+        "field": "amount",
+        "operator": "gt",
+        "threshold": 50000
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/hitl-rules/{id}": {
+   "delete": {
+    "tags": [
+     "Approvals"
+    ],
+    "summary": "Delete an approval rule.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/hitl-slack-config": {
+   "get": {
+    "tags": [
+     "Approvals"
+    ],
+    "summary": "The Slack destination for approval cards.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "Approvals"
+    ],
+    "summary": "Set the Slack destination for approval cards.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/hitl/{req_id}/decide": {
+   "post": {
+    "tags": [
+     "Approvals"
+    ],
+    "summary": "Approve or deny a held call: {decision: approve | deny}.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "req_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "example": {
+        "decision": "approve"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/hitl/pending": {
+   "get": {
+    "tags": [
+     "Approvals"
+    ],
+    "summary": "Calls waiting for approval.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/inbound-webhooks": {
+   "get": {
+    "tags": [
+     "Agents and services"
+    ],
+    "summary": "List inbound webhook URLs.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "Agents and services"
+    ],
+    "summary": "Create an inbound webhook URL.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/inbound-webhooks/{id}": {
+   "delete": {
+    "tags": [
+     "Agents and services"
+    ],
+    "summary": "Delete an inbound webhook URL.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/licensing/token": {
+   "get": {
+    "tags": [
+     "Account"
+    ],
+    "summary": "The self-host license key for a paid plan.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/mcp-servers": {
+   "get": {
+    "tags": [
+     "Agents and services"
+    ],
+    "summary": "List registered MCP servers.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "Agents and services"
+    ],
+    "summary": "Register an MCP server.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/mcp-servers/{id}": {
+   "delete": {
+    "tags": [
+     "Agents and services"
+    ],
+    "summary": "Delete an MCP server.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/notification-webhooks": {
+   "get": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Alert channels (Slack, Discord, Telegram, Teams, email, Jira).",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Add an alert channel.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/notification-webhooks/{id}": {
+   "delete": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Delete an alert channel.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/notification-webhooks/{id}/test": {
+   "post": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Send a test alert.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/org-branding/{org_id}": {
+   "get": {
+    "tags": [
+     "Account"
+    ],
+    "summary": "An org's branding (name, logo) for approval pages.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "org_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   },
+   "put": {
+    "tags": [
+     "Account"
+    ],
+    "summary": "Change an org's branding.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "org_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/output-pruning": {
+   "get": {
+    "tags": [
+     "Rules"
+    ],
+    "summary": "Whether tool output pruning is on for an org.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   },
+   "put": {
+    "tags": [
+     "Rules"
+    ],
+    "summary": "Turn tool output pruning on or off.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/output-sanitization": {
+   "get": {
+    "tags": [
+     "Rules"
+    ],
+    "summary": "Whether output sanitization is on for an org.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   },
+   "put": {
+    "tags": [
+     "Rules"
+    ],
+    "summary": "Turn output sanitization on or off.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/public/execution-ledger": {
+   "get": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Public, hash-chained count of executions.",
+    "security": [],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/public/status": {
+   "get": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Public status of each service (the status page).",
+    "security": [],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/recent": {
+   "get": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Recent calls with their outcome (the dashboard's activity list).",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/recordings": {
+   "get": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Recorded runs (X-AgentRaaS-Record).",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/recordings/{name}": {
+   "delete": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Delete a recording.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   },
+   "get": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Every call and answer in one recording.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/reliability-report": {
+   "get": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Uptime, success rate and duplicates prevented per service.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/runs/{run_id}": {
+   "get": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Every step of one agent run.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "run_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/schema-drift-events": {
+   "get": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Times a service's response shape changed.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/services": {
+   "get": {
+    "tags": [
+     "Agents and services"
+    ],
+    "summary": "The service catalog: every service and action AgentRaaS knows.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/spend-cap-rules": {
+   "get": {
+    "tags": [
+     "Rules"
+    ],
+    "summary": "List spend caps.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "Rules"
+    ],
+    "summary": "Create a spend cap: calls or a money total per hour or day, then block or ask a person.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "example": {
+        "org_id": "org_acme",
+        "agent_id": "billing-agent",
+        "service": "stripe",
+        "action": "charge.create",
+        "window": "day",
+        "amount_field": "amount",
+        "max_amount": 100000,
+        "on_exceed": "block"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/spend-cap-rules/{id}": {
+   "delete": {
+    "tags": [
+     "Rules"
+    ],
+    "summary": "Delete a spend cap.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/stats": {
+   "get": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Overall counts.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/tools/webhook-audit": {
+   "post": {
+    "tags": [
+     "Demo and tools"
+    ],
+    "summary": "The free webhook audit tool.",
+    "security": [],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/tunnel/connect/{org_id}/{agent_id}": {
+   "get": {
+    "tags": [
+     "Agents and services"
+    ],
+    "summary": "Dev tunnel: the CLI's WebSocket to a local service.",
+    "security": [
+     {
+      "agentKey": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "org_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "agent_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/tunnel/stream": {
+   "get": {
+    "tags": [
+     "Agents and services"
+    ],
+    "summary": "Dev tunnel: live requests (server-sent events).",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/undo-log": {
+   "get": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Actions that can be undone, for 30 days.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/undo-log/{id}/undo": {
+   "post": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Undo an action once (for example refund a charge).",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/usage": {
+   "get": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Actions used this month.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/usage/stream": {
+   "get": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Live usage (server-sent events).",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/validation-rules": {
+   "get": {
+    "tags": [
+     "Rules"
+    ],
+    "summary": "List validation rules.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "Rules"
+    ],
+    "summary": "Create or replace a validation rule for a service action.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/validation-rules/{id}": {
+   "delete": {
+    "tags": [
+     "Rules"
+    ],
+    "summary": "Delete a validation rule.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/validation-rules/test": {
+   "post": {
+    "tags": [
+     "Rules"
+    ],
+    "summary": "Test a rule against a sample payload without saving it.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/webhooks/paddle": {
+   "post": {
+    "tags": [
+     "Account"
+    ],
+    "summary": "Paddle's billing webhook (signed by Paddle).",
+    "security": [],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/health": {
+   "get": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Server health: Postgres, Redis and the version.",
+    "security": [],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/mcp": {
+   "post": {
+    "tags": [
+     "Calling services"
+    ],
+    "summary": "MCP endpoint (JSON-RPC): every connected service as MCP tools, through the same checks.",
+    "security": [
+     {
+      "agentKey": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/metrics": {
+   "get": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Prometheus metrics.",
+    "security": [
+     {
+      "metricsToken": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/v1/hitl/{req_id}": {
+   "get": {
+    "tags": [
+     "Calling services"
+    ],
+    "summary": "Status of a call held for approval: pending, approved (with its result) or denied.",
+    "security": [
+     {
+      "agentKey": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "req_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/v1/hitl/interactions/{org_id}": {
+   "post": {
+    "tags": [
+     "Approvals"
+    ],
+    "summary": "Slack's interactive button callback (Approve/Deny in Slack).",
+    "security": [],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "org_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/v1/hitl/link": {
+   "post": {
+    "tags": [
+     "Approvals"
+    ],
+    "summary": "Read an approval link's call (the one-time link sent to Slack, Teams, Telegram, Discord or email).",
+    "security": [],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/v1/hitl/link/decide": {
+   "post": {
+    "tags": [
+     "Approvals"
+    ],
+    "summary": "Approve or deny through an approval link.",
+    "security": [],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/v1/inbound/{token}": {
+   "get": {
+    "tags": [
+     "Calling services"
+    ],
+    "summary": "Check an inbound webhook URL is live.",
+    "security": [],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "token",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   },
+   "post": {
+    "tags": [
+     "Calling services"
+    ],
+    "summary": "Receive a third-party webhook, deduplicated, and pass it on.",
+    "security": [],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "token",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/v1/sdk/{service}/{action}": {
+   "post": {
+    "tags": [
+     "Calling services"
+    ],
+    "summary": "The same call, SDK style: the service and action in the path, the payload as the body.",
+    "security": [
+     {
+      "agentKey": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "service",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "action",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/v1/sdk/whoami": {
+   "get": {
+    "tags": [
+     "Calling services"
+    ],
+    "summary": "Which org and agent an agent key belongs to.",
+    "security": [
+     {
+      "agentKey": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/v1/webhook/{org_id}/{agent_id}": {
+   "post": {
+    "tags": [
+     "Calling services"
+    ],
+    "summary": "Run one action through AgentRaaS: body {service, action, payload}. The main call for webhooks, n8n, Make, Zapier and plain HTTP.",
+    "security": [
+     {
+      "agentKey": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "org_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "agent_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "example": {
+        "service": "stripe",
+        "action": "charge.create",
+        "payload": {
+         "amount": 2500,
+         "currency": "usd",
+         "customer": "cus_123"
+        }
+       }
+      }
+     }
+    }
+   }
+  }
+ }
+}

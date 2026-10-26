@@ -1142,7 +1142,7 @@ async fn forward_error_response(
     } else {
         let _ = dedup::release_dedup_slot(conn, claim_key).await;
     }
-    if !err.circuit_already_recorded {
+    if !err.circuit_already_recorded && !err.setup_error {
         if let Ok(mut c2) = state.redis_conn_result() {
             if let Ok(Some(t)) = circuit_breaker::record_failure(&mut c2, circuit_key).await {
                 forward::log_circuit_transition(state, t).await;
@@ -1165,15 +1165,16 @@ async fn forward_error_response(
         )
             .into();
     }
-    let response_message = if err.upstream_status.is_some() {
+    let response_message = if err.upstream_status.is_some() || err.setup_error {
         err.message.clone()
     } else {
         "An internal error occurred while processing this request.".to_string()
     };
-    let status = err
-        .upstream_status
-        .and_then(|s| StatusCode::from_u16(s).ok())
-        .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+    let status = if err.setup_error {
+        StatusCode::FAILED_DEPENDENCY
+    } else {
+        err.upstream_status.and_then(|s| StatusCode::from_u16(s).ok()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)
+    };
     (
         status,
         Json(json!({ "error": response_message, "reqId": req_id, "agentraas_note": "Request blocked by AgentRaaS." })),

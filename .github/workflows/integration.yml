@@ -91,6 +91,17 @@ jobs:
           done
           docker logs api; exit 1
 
+      # Before the suite, which uses up the signup rate limit. Re-runs every
+      # tutorial case and fails if a documented response no longer matches.
+      - name: Tutorials still match the server
+        if: matrix.mode == 'self-hosted'
+        env:
+          AGENTRAAS_URL: http://localhost:3000
+        run: |
+          sudo apt-get install -y -qq redis-tools > /dev/null
+          pip install -q requests
+          python3 infra/tutorials/check_docs.py --signup
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20

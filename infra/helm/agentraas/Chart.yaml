@@ -2,8 +2,8 @@ apiVersion: v2
 name: agentraas
 description: AgentRaaS, the reliability layer for AI agent actions (duplicate suppression, policies, spend caps, approvals, audit trail).
 type: application
-version: 0.2.2
-appVersion: "0.24.0"
+version: 0.2.3
+appVersion: "0.24.1"
 home: https://agentraas.io
 sources:
   - https://github.com/agentraas/agentraas

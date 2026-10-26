@@ -1,15 +1,18 @@
 """Run every tutorial case against a local AgentRaaS server and record the real
 requests and responses to tutorials.json. Usage: run_server.py <creds.txt> <out.json>"""
-import json, sys, time, subprocess, requests
+import json, os, sys, time, subprocess, requests
+
+# This laptop's stack by default; CI sets AGENTRAAS_URL and REDIS_URL (check_docs.py).
+REDIS = ['redis-cli', '-u', os.environ['REDIS_URL']] if os.environ.get('REDIS_URL') else ['podman', 'exec', 'ar-redis', 'redis-cli']
 
 def redis_del(pattern):
-    # local dev stack only: reset cached results and counters so a re-run starts clean
-    keys = subprocess.run(['podman', 'exec', 'ar-redis', 'redis-cli', '--scan', '--pattern', pattern], capture_output=True, text=True).stdout.split()
-    if keys: subprocess.run(['podman', 'exec', 'ar-redis', 'redis-cli', 'del', *keys], capture_output=True)
+    # test stacks only: reset cached results and counters so a re-run starts clean
+    keys = subprocess.run([*REDIS, '--scan', '--pattern', pattern], capture_output=True, text=True).stdout.split()
+    if keys: subprocess.run([*REDIS, 'del', *keys], capture_output=True)
 
 for p in ['dedup:*', 'spendcap:org_acme*', 'replay:org_acme*', 'circuit:mockpay', 'circuit-notified:org_acme*', 'hitl_usage:org_acme*']: redis_del(p)
 
-B = 'http://localhost:13000'
+B = os.environ.get('AGENTRAAS_URL', 'http://localhost:13000')
 ORG, AGENT, OTHER = 'org_acme', 'billing-agent', 'support-agent'
 email, pw = open(sys.argv[1]).read().split()
 dash = requests.Session()

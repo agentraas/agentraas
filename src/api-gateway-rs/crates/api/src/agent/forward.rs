@@ -25,6 +25,10 @@ pub struct ForwardError {
     /// action ran is unknown. Never retried automatically; the caller keeps
     /// the dedup slot instead of releasing it (see `mark_dedup_slot_unknown`).
     pub outcome_unknown: bool,
+    /// The org hasn't finished setting the service up (no key saved). Nothing
+    /// was sent, a retry can't help, and it says nothing about the provider's
+    /// health, so it is neither retried nor counted against the shared circuit.
+    pub setup_error: bool,
 }
 
 /// When a claimer should have finished forwarding (epoch ms): every attempt
@@ -49,10 +53,14 @@ fn send_error(err: reqwest::Error) -> ForwardError {
         upstream_status: None,
         upstream_body: None,
         circuit_already_recorded: false,
+        setup_error: false,
     }
 }
 
 fn is_retryable(err: &ForwardError) -> bool {
+    if err.setup_error {
+        return false;
+    }
     match err.upstream_status {
         // nothing sent (refused, DNS): retry; possibly executed: never
         None => !err.outcome_unknown,
@@ -92,6 +100,7 @@ async fn build_request(
                 upstream_body: None,
                 circuit_already_recorded: false,
                 outcome_unknown: false,
+                setup_error: false,
             });
         }
     }
@@ -99,7 +108,7 @@ async fn build_request(
     let credential = match get_credential_checked(state, &route.credential_key, org_id, end_user_id).await {
         Ok(c) => c,
         Err(message) => {
-            return Err(ForwardError { message, upstream_status: None, upstream_body: None, circuit_already_recorded: false, outcome_unknown: false })
+            return Err(ForwardError { message, upstream_status: None, upstream_body: None, circuit_already_recorded: false, outcome_unknown: false, setup_error: false })
         }
     };
 
@@ -114,6 +123,7 @@ async fn build_request(
             upstream_body: None,
             circuit_already_recorded: false,
             outcome_unknown: false,
+            setup_error: true,
         });
     }
 
@@ -132,6 +142,7 @@ async fn build_request(
             upstream_body: None,
             circuit_already_recorded: false,
             outcome_unknown: false,
+            setup_error: false,
         })?
     };
     let payload = &body;
@@ -217,6 +228,7 @@ pub async fn forward_action(
                 upstream_body: None,
                 circuit_already_recorded: false,
                 outcome_unknown: false,
+                setup_error: false,
             });
         }
     }
@@ -237,6 +249,7 @@ pub async fn forward_action(
             upstream_body: Some(body),
             circuit_already_recorded: false,
             outcome_unknown: false,
+            setup_error: false,
         });
     }
 
@@ -253,6 +266,7 @@ pub async fn forward_action(
             upstream_body: Some(body),
             circuit_already_recorded: false,
             outcome_unknown: false,
+            setup_error: false,
         });
     }
 
@@ -325,13 +339,14 @@ pub async fn forward_mcp_tool_call(
             upstream_body: None,
             circuit_already_recorded: false,
             outcome_unknown: false,
+            setup_error: false,
         });
     }
 
     let credential = match get_credential_checked(state, &route.credential_key, org_id, end_user_id).await {
         Ok(c) => c,
         Err(message) => {
-            return Err(ForwardError { message, upstream_status: None, upstream_body: None, circuit_already_recorded: false, outcome_unknown: false })
+            return Err(ForwardError { message, upstream_status: None, upstream_body: None, circuit_already_recorded: false, outcome_unknown: false, setup_error: false })
         }
     };
     if route.auth_type != "none" && credential.is_none() {
@@ -345,6 +360,7 @@ pub async fn forward_mcp_tool_call(
             upstream_body: None,
             circuit_already_recorded: false,
             outcome_unknown: false,
+            setup_error: true,
         });
     }
 
@@ -373,13 +389,13 @@ pub async fn forward_mcp_tool_call(
 
     if status.as_u16() >= 400 {
         let message = extract_upstream_error_message(&body).unwrap_or_else(|| format!("HTTP {}", status.as_u16()));
-        return Err(ForwardError { message, upstream_status: Some(status.as_u16()), upstream_body: Some(body), circuit_already_recorded: false, outcome_unknown: false });
+        return Err(ForwardError { message, upstream_status: Some(status.as_u16()), upstream_body: Some(body), circuit_already_recorded: false, outcome_unknown: false, setup_error: false });
     }
     // JSON-RPC-level error — a 200 with an "error" field, distinct from a
     // transport-level 4xx/5xx above.
     if body.get("error").is_some() {
         let message = extract_upstream_error_message(&body).unwrap_or_else(|| "MCP server returned a JSON-RPC error".to_string());
-        return Err(ForwardError { message, upstream_status: Some(status.as_u16()), upstream_body: Some(body), circuit_already_recorded: false, outcome_unknown: false });
+        return Err(ForwardError { message, upstream_status: Some(status.as_u16()), upstream_body: Some(body), circuit_already_recorded: false, outcome_unknown: false, setup_error: false });
     }
     let result = body.get("result").cloned().unwrap_or(Value::Null);
     // MCP's own convention: a successful JSON-RPC envelope whose result
@@ -395,7 +411,7 @@ pub async fn forward_mcp_tool_call(
             .and_then(Value::as_str)
             .unwrap_or("MCP tool call failed")
             .to_string();
-        return Err(ForwardError { message, upstream_status: Some(status.as_u16()), upstream_body: Some(body), circuit_already_recorded: false, outcome_unknown: false });
+        return Err(ForwardError { message, upstream_status: Some(status.as_u16()), upstream_body: Some(body), circuit_already_recorded: false, outcome_unknown: false, setup_error: false });
     }
 
     Ok(json!({
@@ -456,6 +472,7 @@ pub async fn forward_action_streaming(
             upstream_body: Some(body),
             circuit_already_recorded: false,
             outcome_unknown: false,
+            setup_error: false,
         });
     }
 
@@ -493,7 +510,7 @@ pub async fn forward_with_retry_streaming(
             Ok(result) => return Ok(result),
             Err(mut err) => {
                 err.circuit_already_recorded = true;
-                if let Ok(mut conn) = state.redis_conn_result() {
+                if let (false, Ok(mut conn)) = (err.setup_error, state.redis_conn_result()) {
                     if let Ok(Some(transition)) = circuit_breaker::record_failure(&mut conn, circuit_key).await {
                         log_circuit_transition(state, transition).await;
                     }
@@ -685,7 +702,7 @@ pub async fn forward_with_retry(
             }
             Err(mut err) => {
                 err.circuit_already_recorded = true;
-                if let Ok(mut conn) = state.redis_conn_result() {
+                if let (false, Ok(mut conn)) = (err.setup_error, state.redis_conn_result()) {
                     if let Ok(Some(transition)) = circuit_breaker::record_failure(&mut conn, circuit_key).await {
                         log_circuit_transition(state, transition).await;
                     }
@@ -785,7 +802,7 @@ pub async fn forward_mcp_with_retry(
             }
             Err(mut err) => {
                 err.circuit_already_recorded = true;
-                if let Ok(mut conn) = state.redis_conn_result() {
+                if let (false, Ok(mut conn)) = (err.setup_error, state.redis_conn_result()) {
                     if let Ok(Some(transition)) = circuit_breaker::record_failure(&mut conn, circuit_key).await {
                         log_circuit_transition(state, transition).await;
                     }
@@ -916,7 +933,7 @@ mod tests {
     use super::*;
 
     fn err(upstream_status: Option<u16>, outcome_unknown: bool) -> ForwardError {
-        ForwardError { message: String::new(), upstream_status, upstream_body: None, circuit_already_recorded: false, outcome_unknown }
+        ForwardError { message: String::new(), upstream_status, upstream_body: None, circuit_already_recorded: false, outcome_unknown, setup_error: false }
     }
 
     #[test]
@@ -926,5 +943,11 @@ mod tests {
         assert!(is_retryable(&err(Some(503), false)));
         assert!(is_retryable(&err(Some(429), false)));
         assert!(!is_retryable(&err(Some(402), false)), "card declined");
+    }
+
+    #[test]
+    fn a_missing_key_is_not_retried() {
+        let missing_key = ForwardError { setup_error: true, ..err(None, false) };
+        assert!(!is_retryable(&missing_key), "nothing was sent, but a retry can't find the key either");
     }
 }

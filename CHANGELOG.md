@@ -15,6 +15,16 @@ safe to re-run.
 
 ## [Unreleased]
 
+## [0.24.1] - 2026-10-26
+
+### Fixed
+
+- A call to a service with no key saved for the org now answers 424 with the
+  real message ("No credentials configured for slack...") at once. Before, it
+  was retried as if the provider had failed, answered 500 "An internal error
+  occurred", and counted against that service's circuit breaker, which every
+  org shares: one org without a Slack key could open Slack's breaker for all.
+
 ## [0.24.0] - 2026-10-26
 
 No new migration. No change in behavior.
@@ -569,7 +579,8 @@ server's `/health` response now includes its version.
 - Up to `050_known_destinations.sql`. On an existing install, apply any of
   `046` to `050` you have not run yet.
 
-[Unreleased]: https://github.com/agentraas/agentraas/compare/v0.24.0...HEAD
+[Unreleased]: https://github.com/agentraas/agentraas/compare/v0.24.1...HEAD
+[0.24.1]: https://github.com/agentraas/agentraas/compare/v0.24.0...v0.24.1
 [0.24.0]: https://github.com/agentraas/agentraas/compare/v0.23.1...v0.24.0
 [0.23.1]: https://github.com/agentraas/agentraas/compare/v0.23.0...v0.23.1
 [0.23.0]: https://github.com/agentraas/agentraas/compare/v0.22.1...v0.23.0

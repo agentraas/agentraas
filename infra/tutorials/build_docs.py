@@ -1,12 +1,17 @@
-"""Write the Tutorials part of public/docs.html from tutorials.json (the cases
-recorded by run_server.py and run_tools.py against a local server).
+"""Write public/tutorials.html (agentraas.io/tutorials) from tutorials.json (the
+cases recorded by run_server.py and run_tools.py against a local server) and
+dashboard.json (run_dashboard.py). The first run creates the page from
+docs.html's layout; after that only the parts between markers change, and the
+shared nav/footer/meta come from infra/scripts/sync-site-chrome.py.
 Run from anywhere: python3 infra/tutorials/build_docs.py. A second run changes nothing."""
 import html, json, os, re
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DOCS = os.path.join(HERE, '../../src/api-gateway-rs/public/docs.html')
+PUBLIC = os.path.join(HERE, '../../src/api-gateway-rs/public')
+DOCS, PAGE = os.path.join(PUBLIC, 'docs.html'), os.path.join(PUBLIC, 'tutorials.html')
 E = html.escape
 TUTS = json.load(open(os.path.join(HERE, 'tutorials.json')))
+CATALOG = json.load(open(os.path.join(HERE, '../../config/services.json')))
 DASH = json.load(open(os.path.join(HERE, 'dashboard.json')))  # run_dashboard.py: real dashboard steps with screenshots
 DROPPED_NOTE = 'Responses are shortened to the fields that matter (no timestamps or idempotency keys).'
 
@@ -101,6 +106,72 @@ def section(t):
             f'      {dash_html(t)}{setup_html(t)}\n      <h3>Every case</h3>\n      <p>Click a case to see the request and the real response.</p>\n'
             + ''.join(f'      {case_html(c)}\n' for c in t['cases']) + '    </section>\n')
 
+# First rules per real service. Each rule body was saved against a local server
+# (2026-10-26); keys, actions and required fields come from config/services.json.
+RECIPES = [
+    {'service': 'stripe', 'why': 'Charge cards, refund, manage customers and subscriptions.',
+     'call': ('charge.create', {'amount': 2500, 'currency': 'usd', 'customer': 'cus_123'}),
+     'rule': ('hitl-rules', {'service': 'stripe', 'action': 'charge.create', 'field': 'amount', 'operator': 'gt', 'threshold': 50000},
+              'Hold charges above 50000 for a person. Stripe counts in cents, so that is 500.00 USD.'),
+     'note': 'A charge can be undone (refunded) from Undo actions.'},
+    {'service': 'slack', 'why': 'Post and delete messages.',
+     'call': ('message.post', {'channel': '#support', 'text': 'Ticket 4182 was refunded.'}),
+     'rule': ('action-policies', {'service': 'slack', 'action': 'message.post', 'effect': 'require', 'fields': {'channel': {'enum': ['#support', '#alerts']}}},
+              'Post only to #support and #alerts. Any other channel is blocked, and the error names the rule.'),
+     'note': 'Invite the bot to each channel first. A posted message can be undone (deleted).'},
+    {'service': 'resend', 'why': 'Send email.',
+     'call': ('email.send', {'from': 'help@acme.com', 'to': 'jo@acme.com', 'subject': 'Your refund', 'text': 'It is on its way.'}),
+     'rule': ('action-policies', {'service': 'resend', 'action': 'email.send', 'effect': 'require', 'fields': {'to': {'domains': ['acme.com']}}},
+              'Send only to addresses at acme.com, so an agent can never email outside the company.'),
+     'note': 'Send from a domain you verified in Resend. An email cannot be undone, so this is a good place for a rule.'},
+    {'service': 'github', 'why': 'Open, comment on and update issues.',
+     'call': ('issue.create', {'owner': 'your-org', 'repo': 'your-repo', 'title': 'Checkout fails on Safari'}),
+     'rule': ('spend-cap-rules', {'service': 'github', 'action': 'issue.create', 'window': 'day', 'max_calls': 20, 'on_exceed': 'block'},
+              'At most 20 new issues a day, so an agent stuck in a loop cannot flood the repository.'),
+     'note': 'A fine-grained token with Issues: read and write on just the repositories the agent uses.'},
+    {'service': 'razorpay', 'why': 'Create payment orders (India).',
+     'call': ('payment.create', {'amount': 49900, 'currency': 'INR'}),
+     'rule': ('hitl-rules', {'service': 'razorpay', 'action': 'payment.create', 'field': 'amount', 'operator': 'gt', 'threshold': 500000},
+              'Hold orders above 500000 for a person. Razorpay counts in paise, so that is 5,000 rupees.'),
+     'note': 'Razorpay takes two values: the Key ID and the Key secret. Use test mode keys while you try it.'},
+    {'service': 'paypal', 'why': 'Create checkout orders.',
+     'call': ('order.create', {'intent': 'CAPTURE', 'purchase_units': [{'amount': {'currency_code': 'USD', 'value': '25.00'}}]}),
+     'rule': ('hitl-rules', {'service': 'paypal', 'action': 'order.create'},
+              'Hold every order for a person. The amount sits inside purchase_units, where amount rules cannot reach it, so this rule has no threshold.'),
+     'note': 'PayPal is not in Connect a service yet: save an access token under Setup, Credentials (service paypal). PayPal access tokens expire, so it has to be replaced when it does.'},
+]
+
+def recipe_html(r):
+    svc = CATALOG[r['service']]
+    setup = svc.get('setup', {})
+    name = setup.get('label', r['service'].title())
+    if setup.get('username'):
+        key = f'{setup["username"]} and {setup["password"]}'
+    else:
+        key = setup.get('key', 'access token')
+    acts = []
+    for a, spec in svc['actions'].items():
+        req = [f for f, v in spec.get('validation', {}).items() if v.get('required')]
+        acts.append(f'<li><code>{E(a)}</code>' + (f': needs {E(", ".join(req))}' if req else '') + (' (can be undone)' if spec.get('undo') else '') + '</li>')
+    path, body, label = r['rule']
+    action, payload = r['call']
+    find = f' <a href="{E(setup["keyUrl"])}" target="_blank" rel="noopener">Where to find it</a>.' if setup.get('keyUrl') else ''
+    hint = f' {E(setup["keyHint"])}' if setup.get('keyHint') else ''
+    return (f'\n    <section id="recipe-{r["service"]}">\n      <h2>{E(name)}</h2>\n      <p>{E(r["why"])}</p>\n'
+            f'      <h3>Connect it</h3>\n      <p>Setup tab, <b>Connect a service</b>, pick {E(name)} and paste the <b>{E(key)}</b>.{hint}{find}</p>\n'
+            f'      <p>{E(r["note"])}</p>\n'
+            f'      <h3>What your agent can call</h3>\n      <ul>{"".join(acts)}</ul>\n'
+            f'      <h3>A first rule</h3>\n      <p>{E(label)} In the dashboard: Rules tab. With the API:</p>\n'
+            f'      {pre("POST /api/v1/" + path + chr(10) + json.dumps({"org_id": "org_acme", **body}, indent=2))}\n'
+            f'      <h3>A call</h3>\n      {pre(curl({"body": {"service": r["service"], "action": action, "payload": payload}, "headers": {}}))}\n'
+            '    </section>\n')
+
+RECIPES_HTML = ('    <section id="recipes">\n      <h2>Recipes for real services</h2>\n'
+                '      <p>How to connect a service people already use, what an agent can do with it, and one rule worth adding first. '
+                'The rule bodies were saved against a real server; the calls need your own key, so they show no response.</p>\n'
+                '      <ul class="tut-list">' + ''.join(f'<li><a href="#recipe-{r["service"]}">{E(CATALOG[r["service"]].get("setup", {}).get("label", r["service"].title()))}</a></li>' for r in RECIPES) + '</ul>\n'
+                '    </section>\n' + ''.join(recipe_html(r) for r in RECIPES))
+
 PLAIN = (
     '    <section id="tut-start">\n      <h2>Start here if you don\'t write code</h2>\n'
     '      <p>AgentRaaS sits between your AI agent and the services it uses (Stripe, email, Slack and others). Before anything happens, it checks the action: '
@@ -128,7 +199,7 @@ PLAIN = (
     '</dl>\n    </section>\n')
 
 content = ('<!-- tutorials:start (generated by infra/tutorials/build_docs.py; edit tutorials.json there) -->\n'
-           '    <section id="tutorials">\n      <h2>Tutorials</h2>\n'
+           '    <section id="tutorials">\n      <h1>Tutorials</h1>\n'
            '      <p>One feature at a time: how to set it up, then every case you can run into, each with the real request and the real response. '
            'Every example was run against a self-hosted server: <code>$AGENTRAAS_URL</code> is <code>http://localhost:13000</code> there, or <code>https://agentraas.io</code> on Cloud, '
            'and <code>$AGENTRAAS_KEY</code> is the agent\'s key from <b>Connect agent</b>.</p>\n'
@@ -137,13 +208,26 @@ content = ('<!-- tutorials:start (generated by infra/tutorials/build_docs.py; ed
            '      <h3>The whole loop in two minutes</h3>\n'
            '      <video class="tut-video" controls preload="none" poster="/videos/tutorial-overview.jpg" src="/videos/tutorial-overview.mp4"></video>\n'
            '      <ul class="tut-list">' + ''.join(f'<li><a href="#tut-{t["id"]}">{E(t["title"])}</a></li>' for t in TUTS) + '</ul>\n'
-           '    </section>\n' + PLAIN + ''.join(section(t) for t in TUTS) + '    <!-- tutorials:end -->')
+           '    </section>\n' + PLAIN + ''.join(section(t) for t in TUTS) + RECIPES_HTML + '    <!-- tutorials:end -->')
 
-nav = ('<!-- tutorials-nav:start -->\n    <div class="group">\n      <div class="group-label">Tutorials</div>\n      <a href="#tutorials">Overview</a>\n      <a href="#tut-start">Start here (no code)</a>\n'
-       + ''.join(f'      <a href="#tut-{t["id"]}">{E(t["title"])}</a>\n' for t in TUTS) + '    </div>\n    <!-- tutorials-nav:end -->')
+nav = ('<!-- tutorials-nav:start -->\n    <div class="group">\n      <a href="/docs">&larr; All docs</a>\n    </div>\n    <div class="group">\n      <div class="group-label">Tutorials</div>\n      <a href="#tutorials">Overview</a>\n      <a href="#tut-start">Start here (no code)</a>\n'
+       + ''.join(f'      <a href="#tut-{t["id"]}">{E(t["title"])}</a>\n' for t in TUTS) + '    </div>\n    <div class="group">\n      <div class="group-label">Recipes</div>\n'
+       + ''.join(f'      <a href="#recipe-{r["service"]}">{E(CATALOG[r["service"]].get("setup", {}).get("label", r["service"].title()))}</a>\n' for r in RECIPES) + '    </div>\n    <!-- tutorials-nav:end -->')
 
-doc = open(DOCS).read()
-before = doc
+def skeleton():
+    """tutorials.html's first version: docs.html's head, nav and footer around empty markers."""
+    doc = open(DOCS).read()
+    head, rest = doc.split('<div class="docs-layout">', 1)
+    tail = rest[rest.index('<script src="/js/docs.js"></script>'):]
+    head = head.replace('<title>Documentation | AgentRaaS</title>', '<title>Tutorials | AgentRaaS</title>')
+    head = re.sub(r'(<meta (?:name="description"|property="og:description") content=")[^"]*"',
+                  r'\1Step-by-step AgentRaaS tutorials: every feature in the dashboard with pictures, and every case with the real request and response."', head)
+    head = head.replace('<meta property="og:title" content="Documentation | AgentRaaS">', '<meta property="og:title" content="Tutorials | AgentRaaS">')
+    return (head + '<div class="docs-layout">\n  <aside class="docs-sidebar">\n    <!-- tutorials-nav:start -->\n    <!-- tutorials-nav:end -->\n  </aside>\n\n'
+            '  <main class="docs-content">\n    <!-- tutorials:start -->\n    <!-- tutorials:end -->\n  </main>\n</div>\n\n' + tail)
+
+doc = open(PAGE).read() if os.path.exists(PAGE) else skeleton()
+before = doc if os.path.exists(PAGE) else ''
 
 def put(doc, start, end, new, anchor):
     pat = re.compile(re.escape(start) + r'.*?' + re.escape(end), re.S)
@@ -154,9 +238,8 @@ def put(doc, start, end, new, anchor):
     return doc[:i] + new + '\n' + indent + doc[i:]
 
 doc = put(doc, '  /* tutorials:start', '/* tutorials:end */\n', CSS, '  /* site-chrome:start')
-doc = put(doc, '<!-- tutorials-nav:start -->', '<!-- tutorials-nav:end -->', nav,
-          '<div class="group">\n      <div class="group-label">No server</div>')
-doc = put(doc, '<!-- tutorials:start', '<!-- tutorials:end -->', content, '<section id="library-mode">')
+doc = put(doc, '<!-- tutorials-nav:start -->', '<!-- tutorials-nav:end -->', nav, None)
+doc = put(doc, '<!-- tutorials:start', '<!-- tutorials:end -->', content, None)
 if doc != before:
-    open(DOCS, 'w').write(doc)
+    open(PAGE, 'w').write(doc)
 print('updated' if doc != before else 'nothing to change')

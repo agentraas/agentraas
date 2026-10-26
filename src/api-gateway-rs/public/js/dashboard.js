@@ -573,7 +573,7 @@
         <span class="time">${escapeHtml(rowTime(row.created_at))}</span>
         <span class="desc">${escapeHtml(row.service)}.${escapeHtml(row.action)} <span class="agent">— ${escapeHtml(row.org_id)}/${escapeHtml(row.agent_id)}</span>${runBadge}</span>
         <span class="dur">${formatDuration(row.duration_ms)}</span>
-        <span class="status-word">${escapeHtml(row.status)}</span>`;
+        <span class="status-word">${escapeHtml(row.status.replace(/_/g, ' '))}</span>`;
       const badgeEl = div.querySelector('.run-badge');
       if (badgeEl) {
         badgeEl.addEventListener('click', () => {
@@ -604,6 +604,7 @@
     hitl_forward_failed: 'It was approved, but forwarding it afterwards failed.',
     hitl_quota_exceeded: 'Too many calls were waiting for approval at once.',
     idempotency_key_reused: 'The same idempotency key was sent with a different payload.',
+    policy_violation: 'An action policy does not allow this call: which agent may do it, where it may send data, or when. The error the agent got names the policy.',
     outcome_unknown: 'An earlier identical call timed out after it was sent, so it may have run. This copy was not run again. See Failed requests.',
     resource_locked: 'Another call held the lock on the same resource.',
     spend_cap_exceeded: 'A spend cap for this agent or service was reached.',
@@ -647,7 +648,7 @@
     add('End user', row.end_user_id);
     add('Duration', formatDuration(row.duration_ms));
     add('Request ID', row.req_id);
-    add('Dedup hash', row.payload_hash);
+    add('Fingerprint (dedup hash)', row.payload_hash);
     add('Run / step', row.run_id ? `${row.run_id}${row.step_id ? ` / ${row.step_id}` : ''}` : '');
     box.appendChild(dl);
     if (row.payload_preview) {

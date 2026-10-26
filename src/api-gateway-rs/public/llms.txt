@@ -45,6 +45,8 @@ Measured overhead: 2.1 to 2.4 ms added per call at the median (one machine, Inte
 ## Links
 
 - [Documentation](https://agentraas.io/docs): API, SDKs, MCP, self-hosting, troubleshooting
+- [Tutorials](https://agentraas.io/tutorials): every feature step by step in the dashboard and through the API, with real responses; recipes for Stripe, Slack, Resend, GitHub, Razorpay and PayPal
+- [OpenAPI spec](https://agentraas.io/openapi.json): every endpoint of the server
 - [Self-hosting](https://agentraas.io/self-host): editions, install, license keys
 - [Cloud](https://agentraas.io/cloud): hosted trial and plans
 - [Trading agents](https://agentraas.io/trading): a safety layer for agents that already trade (Alpaca, Upstox, Dhan): orders run once, with limits, hours and approvals

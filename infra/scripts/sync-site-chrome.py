@@ -16,7 +16,7 @@ import sys
 PUBLIC = os.path.join(os.path.dirname(__file__), "..", "..", "src", "api-gateway-rs", "public")
 # page file -> its URL path (for aria-current)
 PAGES = {
-    "landing.html": "/", "about.html": "/about", "docs.html": "/docs", "guide.html": "/guide",
+    "landing.html": "/", "about.html": "/about", "docs.html": "/docs", "tutorials.html": "/tutorials", "guide.html": "/guide",
     "status.html": "/status", "webhook-audit.html": "/webhook-audit",
     "postmortem-2026-09.html": "/postmortem-2026-09",
     "chaos.html": "/chaos", "mcp-scan.html": "/mcp-scan",
@@ -26,7 +26,7 @@ PAGES = {
     "doc-template.html": None, "404.html": None,
 }
 # pages built on the older theme variables: the theme layer repoints them at the site palette
-THEMED = {"about.html", "docs.html", "guide.html", "status.html", "webhook-audit.html"}
+THEMED = {"about.html", "docs.html", "tutorials.html", "guide.html", "status.html", "webhook-audit.html"}
 
 FONTS = '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">'
 MARK = ('<span class="sn-mark"><svg width="18" height="18" viewBox="0 0 24 24" fill="none">'
