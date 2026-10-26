@@ -11,7 +11,7 @@ SDK headers or MCP. The core is open source and free to self-host.
 
 Look first: [live read-only demo](https://agentraas.io/api/v1/demo/session),
 no signup. Built-in services include Stripe, Slack, GitHub, HubSpot, Resend,
-SendGrid, Notion, Zendesk, Jira, Twilio, Shopify and Alpaca (trading); any other HTTP API works as a
+SendGrid, Notion, Zendesk, Jira, Twilio, Shopify, Razorpay, Cashfree, RazorpayX, Gupshup and Alpaca (trading); any other HTTP API works as a
 Custom Action and any MCP tool through `agentraas wrap`.
 
 ## The problem
@@ -97,8 +97,9 @@ rather than `restart`.
   step checkpoints, a cross-agent resource lock.
 - **Policies:** what each agent may call and where it may send data,
   allowed hours in any time zone, validation rules, call and money caps per
-  hour or day, loop limits. Quoted numbers (`"5000"`) are held to the same
-  limits.
+  hour or day, loop limits, and limits read from the provider right before
+  the call (a refund at most half of what the order really cost). Quoted
+  numbers (`"5000"`) are held to the same limits.
 - **One key per agent:** works for every service you connect; switch
   services off per key.
 - **Human approval:** risky calls wait for approve or deny from the
@@ -118,10 +119,12 @@ rather than `restart`.
   them fetched per call ([docs](https://agentraas.io/docs#kms)).
 - **Teams:** OIDC SSO, roles, client tenants with white-label branding.
 
-Curated services (Stripe, Twilio, HubSpot, Shopify, Slack, PayPal, Alpaca
+Curated services (Stripe, Razorpay, Cashfree, RazorpayX, Gupshup, Twilio, HubSpot, Shopify, Slack, PayPal, Alpaca
 paper and live trading and more in `config/services.json`), or register any
 URL as a Custom Action, SSRF-guarded. Guardrails for trading agents:
-[agentraas.io/trading](https://agentraas.io/trading).
+[agentraas.io/trading](https://agentraas.io/trading); for agents that refund
+orders, message customers and pay riders:
+[agentraas.io/commerce](https://agentraas.io/commerce).
 
 ## Why not just idempotency keys?
 
@@ -158,8 +161,12 @@ MIT; the Team and Enterprise features are source-available (see
 ```bash
 cd src/api-gateway-rs
 cargo test --workspace --features enterprise          # unit tests
-TEST_BASE_URL=http://localhost:13000 npm test         # integration tests, real server
+TEST_BASE_URL=http://localhost:13000 test/run-each.sh # integration tests against a real server, one file at a time (env vars in its header)
 ```
+
+`infra/tutorials/check_docs.py` re-runs every tutorial case and fails if a
+documented response no longer matches the server (CI runs it too); load
+test numbers and how to reproduce them are in `infra/bench/README.md`.
 
 The integration tests send concurrent duplicates, replays and failures
 through the built-in `mockpay` service, so no real API keys are needed.
@@ -167,13 +174,17 @@ through the built-in `mockpay` service, so no real API keys are needed.
 ## Next
 
 - Verify the undo log against real Stripe and Slack accounts (tested with `mockpay` so far).
-- The n8n node in n8n's community directory (in review).
+- A real test-mode call to Cashfree and RazorpayX (wiring checked with made-up keys only).
+- PhonePe, Paytm, Shiprocket, Delhivery and MSG91 as built-in services (custom actions today).
 
 ## Docs and license
 
 [agentraas.io/docs](https://agentraas.io/docs) has the API, the
 [troubleshooting guide](https://agentraas.io/docs#troubleshooting) and
-self-hosting details. Questions: [agentraas.io/community](https://agentraas.io/community)
+self-hosting details. [agentraas.io/tutorials](https://agentraas.io/tutorials)
+walks through every feature, in the dashboard and through the API, with real
+responses. Every endpoint as OpenAPI:
+[openapi.json](https://agentraas.io/openapi.json). Questions: [agentraas.io/community](https://agentraas.io/community)
 (GitHub Discussions).
 
 The server core and the SDKs are MIT. The Team and Enterprise features

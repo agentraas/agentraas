@@ -737,6 +737,20 @@
     }
    }
   },
+  "/api/v1/auth/resend-verification": {
+   "post": {
+    "tags": [
+     "Account"
+    ],
+    "summary": "Send the email confirmation link again.",
+    "security": [],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
   "/api/v1/auth/reset-password": {
    "post": {
     "tags": [

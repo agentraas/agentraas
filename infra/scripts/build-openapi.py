@@ -132,6 +132,7 @@ SUMMARY = {
     ("POST", "/api/v1/auth/logout-all"): ("Account", "Log out every session.", "session"),
     ("GET", "/api/v1/auth/me"): ("Account", "The logged-in user, org and plan.", "session"),
     ("POST", "/api/v1/auth/password"): ("Account", "Change the password.", "session"),
+    ("POST", "/api/v1/auth/resend-verification"): ("Account", "Send the email confirmation link again.", "none"),
     ("POST", "/api/v1/auth/forgot-password"): ("Account", "Email a reset link.", "none"),
     ("POST", "/api/v1/auth/reset-password"): ("Account", "Set a new password from a reset link.", "none"),
     ("GET", "/api/v1/auth/verify-email"): ("Account", "Confirm an email address (link from the email).", "none"),
@@ -196,7 +197,7 @@ EXAMPLES = {
 def routes():
     found = set()
     for f in glob.glob(os.path.join(SRC, "**", "*.rs"), recursive=True):
-        for m in re.finditer(r'\.route\(\s*"([^"]+)",\s*((?:[a-z_:]+\([^()]*\)\s*\.?\s*)+)\)', open(f).read()):
+        for m in re.finditer(r'\.route\(\s*"([^"]+)",\s*((?:[a-z_:]+\([^()]*\)\s*\.?\s*)+),?\s*\)', open(f).read()):
             for meth in re.findall(r"\b(get|post|put|delete|patch)\([a-z_:]+\)", m.group(2)):
                 if not SKIP.match(m.group(1)):
                     found.add((meth.upper(), m.group(1)))
