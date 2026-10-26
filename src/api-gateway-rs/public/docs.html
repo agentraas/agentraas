@@ -664,6 +664,25 @@ const result = await client.call("stripe", "charge.create", { amount: 5000, curr
         <tr><td><code>on_violation</code></td><td><code>block</code> (default), or <code>hitl</code> to send the call for approval instead. A block always wins over an approval.</td></tr>
         <tr><td><code>hours</code></td><td>Optional, on a <code>require</code> policy: the call is allowed only inside these hours, e.g. <code>{"tz": "America/New_York", "days": ["mon", "tue", "wed", "thu", "fri"], "from": "09:30", "to": "16:00"}</code>. <code>tz</code> is an IANA time zone (daylight saving is handled), <code>days</code> defaults to every day. A policy can have hours, fields or both.</td></tr>
       </table>
+          <h3 id="lookup-limits">Limits the server looks up (max_from)</h3>
+      <p>A limit like <code>max</code> or <code>maxField</code> is checked against the call itself, so an agent that is wrong or was talked into it can send any number it likes. <code>max_from</code> reads the number from the provider instead, with your saved key, right before the call runs. A support agent's refund can then be held to half of what the order really cost:</p>
+      <pre><code>POST /api/v1/action-policies
+{ "org_id": "org_acme", "agent_id": "support-bot",
+  "service": "cashfree", "action": "refund.create", "effect": "require",
+  "fields": { "refund_amount": { "max_from": {
+      "action": "order.get", "with": { "order_id": "order_id" },
+      "field": "order_amount", "factor": 0.5 } } },
+  "on_violation": "hitl" }</code></pre>
+      <table>
+        <tr><th>Key</th><th>What it does</th></tr>
+        <tr><td><code>action</code></td><td>The read call to make, such as <code>order.get</code> (Cashfree) or <code>payment.get</code> (Razorpay).</td></tr>
+        <tr><td><code>with</code></td><td>Which fields of the call feed the read: <code>{"order_id": "order_id"}</code> sends the call's <code>order_id</code> as the read's <code>order_id</code>.</td></tr>
+        <tr><td><code>field</code></td><td>Where the number is in the answer, a dotted path such as <code>order_amount</code> or <code>data.total</code>.</td></tr>
+        <tr><td><code>factor</code></td><td>Optional. <code>0.5</code> allows half of it; the default allows all of it.</td></tr>
+        <tr><td><code>minus</code></td><td>Optional. Subtracts a second number from the answer, such as Razorpay's <code>amount_refunded</code>, so earlier partial refunds count.</td></tr>
+        <tr><td><code>service</code></td><td>Optional. Read from another service, such as a <a href="#custom-actions">custom action</a> on your own order API (<code>"service": "custom"</code>), when credits or wallet top-ups have no provider to ask.</td></tr>
+      </table>
+      <p>Anything that can't be checked is not let through: a missing amount (which for many providers means "refund everything"), a missing order id, a read that fails, or an answer with no number at <code>field</code> all count as a violation, and <code>on_violation</code> decides whether that blocks the call or sends it for approval. The agent's error gives the numbers: <code>refund_amount 700 is more than the 600 allowed (50% of order_amount, read from cashfree.order.get)</code>. Each matching call makes one extra read call to the provider. To try it without a provider, the sandbox service <code>mockpay</code> has <code>order.get</code>: an order id ends in its amount, so <code>order_1200</code> is an order of 1200.</p>
     </section>
 
     <section id="apply">
@@ -844,6 +863,16 @@ histogram_quantile(0.95, sum by (le) (rate(agentraas_call_duration_ms_bucket[5m]
         <tr><td>Retried duplicate (answered from cache, upstream never called)</td><td>2.1 to 2.3 ms total</td><td>3.0 to 3.5 ms total</td></tr>
       </table>
       <p>Network distance between your agent and AgentRaaS comes on top of this. Self-hosting next to your agent keeps that near zero. Reproduce it with <code>python3 infra/scripts/bench-overhead.py</code> against your own instance.</p>
+      <h3 id="throughput">Under load</h3>
+      <p>Same machine, k6 at a fixed rate for 30 seconds, every call new so each one takes the full path (0.24.1, 2026-10-26; k6, the server, Postgres and Redis all on that one 4-core box, so this is a floor, not a ceiling):</p>
+      <table>
+        <tr><th>Calls per second</th><th>p50</th><th>p99</th><th>Errors</th></tr>
+        <tr><td>500</td><td>2.5 ms</td><td>24 ms</td><td>0</td></tr>
+        <tr><td>800</td><td>2.7 ms</td><td>101 ms</td><td>0</td></tr>
+        <tr><td>1000</td><td>3.0 ms</td><td>142 ms</td><td>0</td></tr>
+        <tr><td>300 refunds with a <a href="#lookup-limits">lookup limit</a> (two upstream calls each)</td><td>2.3 ms</td><td>3.4 ms</td><td>0</td></tr>
+      </table>
+      <p>Two server instances sharing one Redis and Postgres, with every call sent twice at the same moment, once to each instance: 8,784 different calls, 8,784 ran, none twice. The server keeps no state of its own, so more instances can share the load; the speedup on separate machines is not measured yet. Every number, and how to run it: <code>infra/bench/README.md</code>.</p>
     </section>
 
     <section id="plans">
@@ -1161,7 +1190,7 @@ redis-cli --scan --pattern 'dedup:local:*' | xargs -r redis-cli del</code></pre>
         <p>Stops AI agents from running the same API call twice, holds risky calls for human approval, and records every action.</p>
         <a href="https://github.com/agentraas/agentraas" target="_blank" rel="noopener" class="sn-btn s"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.5 0-.24-.01-.87-.01-1.71-2.78.62-3.37-1.37-3.37-1.37-.46-1.2-1.11-1.52-1.11-1.52-.91-.64.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05a9.3 9.3 0 0 1 2.5-.35c.85 0 1.71.12 2.5.35 1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.46.1 2.72.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.79-4.57 5.05.36.32.68.95.68 1.92 0 1.39-.01 2.51-.01 2.85 0 .28.18.61.69.5A10.26 10.26 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>&nbsp;Star on GitHub</a>
       </div>
-      <div class="sf-col"><h4>Product</h4><a href="/#features">Platform</a><a href="/#open-source">Open source</a><a href="/#pricing">Pricing</a><a href="/self-host">Self-host</a><a href="/cloud">Cloud</a><a href="/trading">Trading agents</a><a href="/dashboard">Dashboard</a><a href="/status">Status</a><a href="/postmortem-2026-09">Postmortems</a></div>
+      <div class="sf-col"><h4>Product</h4><a href="/#features">Platform</a><a href="/#open-source">Open source</a><a href="/#pricing">Pricing</a><a href="/self-host">Self-host</a><a href="/cloud">Cloud</a><a href="/trading">Trading agents</a><a href="/commerce">Shopping and quick commerce</a><a href="/dashboard">Dashboard</a><a href="/status">Status</a><a href="/postmortem-2026-09">Postmortems</a></div>
       <div class="sf-col"><h4>Docs</h4><a href="/guide">Getting started</a><a href="/docs">Documentation</a><a href="/webhook-audit">Free webhook audit</a><a href="/chaos">Chaos tester</a><a href="/mcp-scan">MCP safety scan</a><a href="https://github.com/agentraas/agentraas" target="_blank" rel="noopener">GitHub</a></div>
       <div class="sf-col"><h4>Legal</h4><a href="/license">License</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/terms#refunds">Refunds</a><a href="/security">Security</a></div>
       <div class="sf-col"><h4>Company</h4><a href="/about">About</a><a href="/community">Community</a><a href="mailto:hello@agentraas.io">hello@agentraas.io</a></div>

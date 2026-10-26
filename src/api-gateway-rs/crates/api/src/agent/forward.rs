@@ -163,8 +163,13 @@ async fn build_request(
     if let Some(extra) = &route.extra_headers {
         if let Some(obj) = extra.as_object() {
             for (k, v) in obj {
-                if let Some(s) = v.as_str() {
-                    builder = builder.header(k, s);
+                match (v.as_str(), upstream_key) {
+                    // A provider with its own idempotency header (RazorpayX
+                    // X-Payout-Idempotency) gets the same stable key.
+                    (Some("{idempotency_key}"), Some(key)) => builder = builder.header(k, key),
+                    (Some("{idempotency_key}"), None) => {}
+                    (Some(s), _) => builder = builder.header(k, s),
+                    _ => {}
                 }
             }
         }
@@ -189,7 +194,12 @@ async fn build_request(
         builder = apply_auth(builder, &route.auth_type, route.auth_header.as_deref(), cred);
     }
 
-    let builder = if route.content_type == "application/x-www-form-urlencoded" {
+    let builder = if route.method.eq_ignore_ascii_case("GET") {
+        // A read sends what is left of the payload (after {path} fields) as a query string, never a body.
+        let mut form = Vec::new();
+        flatten_form("", payload, &mut form);
+        builder.query(&form)
+    } else if route.content_type == "application/x-www-form-urlencoded" {
         // Stripe-style services expect form-encoded bodies — flatten the
         // (already-validated) JSON payload into form fields, same as
         // axios's `application/x-www-form-urlencoded` content type would

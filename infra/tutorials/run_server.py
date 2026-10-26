@@ -8,7 +8,8 @@ REDIS = ['redis-cli', '-u', os.environ['REDIS_URL']] if os.environ.get('REDIS_UR
 def redis_del(pattern):
     # test stacks only: reset cached results and counters so a re-run starts clean
     keys = subprocess.run([*REDIS, '--scan', '--pattern', pattern], capture_output=True, text=True).stdout.split()
-    if keys: subprocess.run([*REDIS, 'del', *keys], capture_output=True)
+    for i in range(0, len(keys), 500):  # in batches: a load test leaves too many for one command line
+        subprocess.run([*REDIS, 'del', *keys[i:i + 500]], capture_output=True)
 
 for p in ['dedup:*', 'spendcap:org_acme*', 'replay:org_acme*', 'circuit:mockpay', 'circuit-notified:org_acme*', 'hitl_usage:org_acme*']: redis_del(p)
 
@@ -206,6 +207,30 @@ rh = {'X-AgentRaaS-Replay': 'checkout-flow', 'X-AgentRaaS-Run-Id': 'ci-run-1'}
 case(t, 'Replay call 1', 'Answered from the recording: same payment id, nothing sent.', {'customer': 'cus_901', 'amount': 2100, 'fail': False}, headers=rh, expect=200)
 case(t, 'Replay call 2 with a changed payload', 'Still answered, but payload_matches is false, so a test can fail on it.', {'customer': 'cus_901', 'amount': 9999, 'fail': False}, headers=rh, expect=200)
 case(t, 'A call the recording does not have', '404: the agent now makes more calls than it did when recorded.', {'customer': 'cus_901', 'amount': 2300, 'fail': False}, headers=rh, expect=404)
+
+# 10. A support agent's refunds (online shopping, quick commerce)
+for p in ['spendcap:org_acme*', 'hitl_usage:org_acme*']: redis_del(p)
+t = tut('refund-agent', 'A support agent that refunds orders',
+        'A customer says an item was missing. The support agent refunds it, but never more than half of what the order really cost, and never more than a day\'s budget. AgentRaaS reads the order itself, so the agent can\'t talk its way past the limit.',
+        {'dashboard': ['Rules › Action policies: support-agent, the refund action, "Only allow when", limits {"amount": {"max_from": {...}}}, When broken: Route to approval',
+                       'Rules › Spend caps: support-agent, the refund action, per day, add up amount, max total 1500, time zone Asia/Kolkata',
+                       'Monitor › Waiting for approval shows the refunds that went over'],
+         'notes': ['The examples use the sandbox: an order id ends in its amount (order_1200 is an order of 1200). With Cashfree the read is cashfree order.get and the field is order_amount; with Razorpay it is payment.get, field amount, minus amount_refunded',
+                   'A refund with no amount, a missing order id or an order the provider can\'t find is never sent unchecked: it goes to approval too']})
+rule(t, 'action-policies', {'agent_id': OTHER, 'service': 'mockpay', 'action': 'payment.refund', 'effect': 'require',
+     'fields': {'amount': {'max_from': {'action': 'order.get', 'with': {'order_id': 'order_id'}, 'field': 'order_amount', 'factor': 0.5}}}, 'on_violation': 'hitl'},
+     'support-agent: up to half the order runs; more goes to a person')
+rule(t, 'spend-cap-rules', {'agent_id': OTHER, 'service': 'mockpay', 'action': 'payment.refund', 'window': 'day', 'amount_field': 'amount', 'max_amount': 1500, 'timezone': 'Asia/Kolkata', 'on_exceed': 'block'},
+     'support-agent: at most 1500 in refunds a day (India time)')
+R = {'action': 'payment.refund', 'agent': OTHER}
+first = {'payment': 'mockpay_ord1200', 'order_id': 'order_1200', 'amount': 150}
+case(t, 'A missing item: refund 150 of a 1200 order', 'AgentRaaS reads the order itself (1200). 150 is under half, so the refund runs.', first, expect=200, **R)
+case(t, 'The same refund, retried', 'The agent timed out and asked again: answered from the record, the customer is refunded once.', first, expect=200, **R)
+case(t, 'More than half the order waits for a person', '700 of a 1200 order is over the limit: held, 202 and a status URL. Nothing is refunded until someone approves.', {'payment': 'mockpay_ord1200', 'order_id': 'order_1200', 'amount': 700}, expect=202, **R)
+case(t, 'No amount is not a full refund', 'Leaving the amount out means "refund everything" to many providers. It can\'t be checked, so it is held too.', {'payment': 'mockpay_ord800', 'order_id': 'order_800'}, expect=202, **R)
+case(t, 'An order that does not exist', 'The read fails, so the refund is held instead of sent unchecked.', {'payment': 'mockpay_ordx', 'order_id': 'order_unknown', 'amount': 50}, expect=202, **R)
+case(t, 'A second refund today', '600 of a 1300 order is under half; 750 refunded today so far.', {'payment': 'mockpay_ord1300', 'order_id': 'order_1300', 'amount': 600}, expect=200, **R)
+case(t, "Over the day's refund total", '900 is under half of a 1900 order, but 750 + 900 passes the 1500 a day, so it is blocked.', {'payment': 'mockpay_ord1900', 'order_id': 'order_1900', 'amount': 900}, expect=429, **R)
 
 clear_rules()
 json.dump(tuts, open(sys.argv[2], 'w'), indent=1)

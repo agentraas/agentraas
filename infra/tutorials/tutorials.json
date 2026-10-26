@@ -1594,6 +1594,239 @@
   ]
  },
  {
+  "id": "refund-agent",
+  "title": "A support agent that refunds orders",
+  "summary": "A customer says an item was missing. The support agent refunds it, but never more than half of what the order really cost, and never more than a day's budget. AgentRaaS reads the order itself, so the agent can't talk its way past the limit.",
+  "setup": {
+   "dashboard": [
+    "Rules \u203a Action policies: support-agent, the refund action, \"Only allow when\", limits {\"amount\": {\"max_from\": {...}}}, When broken: Route to approval",
+    "Rules \u203a Spend caps: support-agent, the refund action, per day, add up amount, max total 1500, time zone Asia/Kolkata",
+    "Monitor \u203a Waiting for approval shows the refunds that went over"
+   ],
+   "notes": [
+    "The examples use the sandbox: an order id ends in its amount (order_1200 is an order of 1200). With Cashfree the read is cashfree order.get and the field is order_amount; with Razorpay it is payment.get, field amount, minus amount_refunded",
+    "A refund with no amount, a missing order id or an order the provider can't find is never sent unchecked: it goes to approval too"
+   ],
+   "rules": [
+    {
+     "label": "support-agent: up to half the order runs; more goes to a person",
+     "method": "POST",
+     "path": "/api/v1/action-policies",
+     "body": {
+      "org_id": "org_acme",
+      "agent_id": "support-agent",
+      "service": "mockpay",
+      "action": "payment.refund",
+      "effect": "require",
+      "fields": {
+       "amount": {
+        "max_from": {
+         "action": "order.get",
+         "with": {
+          "order_id": "order_id"
+         },
+         "field": "order_amount",
+         "factor": 0.5
+        }
+       }
+      },
+      "on_violation": "hitl"
+     }
+    },
+    {
+     "label": "support-agent: at most 1500 in refunds a day (India time)",
+     "method": "POST",
+     "path": "/api/v1/spend-cap-rules",
+     "body": {
+      "org_id": "org_acme",
+      "agent_id": "support-agent",
+      "service": "mockpay",
+      "action": "payment.refund",
+      "window": "day",
+      "amount_field": "amount",
+      "max_amount": 1500,
+      "timezone": "Asia/Kolkata",
+      "on_exceed": "block"
+     }
+    }
+   ]
+  },
+  "cases": [
+   {
+    "title": "A missing item: refund 150 of a 1200 order",
+    "why": "AgentRaaS reads the order itself (1200). 150 is under half, so the refund runs.",
+    "agent": "support-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.refund",
+     "payload": {
+      "payment": "mockpay_ord1200",
+      "order_id": "order_1200",
+      "amount": 150
+     }
+    },
+    "status": 200,
+    "response": {
+     "forwarded": true,
+     "upstream_id": "mockrefund_b1025b2d7afd3ca9",
+     "upstream_response": {
+      "id": "mockrefund_b1025b2d7afd3ca9",
+      "payment": "mockpay_ord1200",
+      "status": "refunded"
+     },
+     "reqId": "req_0684a4a6cbf550ff"
+    }
+   },
+   {
+    "title": "The same refund, retried",
+    "why": "The agent timed out and asked again: answered from the record, the customer is refunded once.",
+    "agent": "support-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.refund",
+     "payload": {
+      "payment": "mockpay_ord1200",
+      "order_id": "order_1200",
+      "amount": 150
+     }
+    },
+    "status": 200,
+    "response": {
+     "forwarded": true,
+     "upstream_id": "mockrefund_b1025b2d7afd3ca9",
+     "upstream_response": {
+      "id": "mockrefund_b1025b2d7afd3ca9",
+      "payment": "mockpay_ord1200",
+      "status": "refunded"
+     },
+     "cached": true,
+     "reqId": "req_51dd572bf3efdc01"
+    }
+   },
+   {
+    "title": "More than half the order waits for a person",
+    "why": "700 of a 1200 order is over the limit: held, 202 and a status URL. Nothing is refunded until someone approves.",
+    "agent": "support-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.refund",
+     "payload": {
+      "payment": "mockpay_ord1200",
+      "order_id": "order_1200",
+      "amount": 700
+     }
+    },
+    "status": 202,
+    "response": {
+     "pending_approval": true,
+     "reqId": "req_293bf54eb4a8916e"
+    }
+   },
+   {
+    "title": "No amount is not a full refund",
+    "why": "Leaving the amount out means \"refund everything\" to many providers. It can't be checked, so it is held too.",
+    "agent": "support-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.refund",
+     "payload": {
+      "payment": "mockpay_ord800",
+      "order_id": "order_800"
+     }
+    },
+    "status": 202,
+    "response": {
+     "pending_approval": true,
+     "reqId": "req_ea6e67489fd810d7"
+    }
+   },
+   {
+    "title": "An order that does not exist",
+    "why": "The read fails, so the refund is held instead of sent unchecked.",
+    "agent": "support-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.refund",
+     "payload": {
+      "payment": "mockpay_ordx",
+      "order_id": "order_unknown",
+      "amount": 50
+     }
+    },
+    "status": 202,
+    "response": {
+     "pending_approval": true,
+     "reqId": "req_75f92ab573622fe4"
+    }
+   },
+   {
+    "title": "A second refund today",
+    "why": "600 of a 1300 order is under half; 750 refunded today so far.",
+    "agent": "support-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.refund",
+     "payload": {
+      "payment": "mockpay_ord1300",
+      "order_id": "order_1300",
+      "amount": 600
+     }
+    },
+    "status": 200,
+    "response": {
+     "forwarded": true,
+     "upstream_id": "mockrefund_ce3cb27d7c46fe98",
+     "upstream_response": {
+      "id": "mockrefund_ce3cb27d7c46fe98",
+      "payment": "mockpay_ord1300",
+      "status": "refunded"
+     },
+     "reqId": "req_b383d67465eb5af3"
+    }
+   },
+   {
+    "title": "Over the day's refund total",
+    "why": "900 is under half of a 1900 order, but 750 + 900 passes the 1500 a day, so it is blocked.",
+    "agent": "support-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.refund",
+     "payload": {
+      "payment": "mockpay_ord1900",
+      "order_id": "order_1900",
+      "amount": 900
+     }
+    },
+    "status": 429,
+    "response": {
+     "error": "Spend cap exceeded for mockpay.payment.refund: amount 900 would bring this day's total to 1650, above 1500 (rule #307).",
+     "reqId": "req_595ddb5582e6b1f9"
+    }
+   }
+  ]
+ },
+ {
   "id": "apply",
   "title": "Rules as code",
   "summary": "Keep rules in a YAML file in your repo, review changes like code, and apply them from CI. agentraas apply makes the server match the file; running it twice changes nothing.",

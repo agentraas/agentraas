@@ -15,6 +15,35 @@ safe to re-run.
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-10-26
+
+No new migration.
+
+### Added
+
+- **Limits the server looks up (`max_from`).** An action policy field can be
+  held to a number AgentRaaS reads from the provider right before the call,
+  with the org's own key, instead of one the agent sends: "a refund at most
+  half of what the order cost". Optional `factor`, `minus` (such as Razorpay's
+  `amount_refunded`) and `service` (read from another service, such as a
+  custom action on the platform's own order API). A missing amount, a missing
+  id, a failed read or an answer without the number is a violation, so it
+  blocks or goes to approval like any other: nothing unchecked is let through.
+  Blocked calls are logged as `policy_lookup_limit`.
+- **Services for India:** Cashfree Payments (orders, refunds; a separate
+  `cashfree_sandbox` for test keys), RazorpayX Payouts, Gupshup (WhatsApp),
+  and `payment.get` / `payment.refund` for Razorpay.
+- The sandbox `mockpay` has `order.get`, stateless: an order id ends in its
+  amount (`order_1200` is an order of 1200).
+
+### Changed
+
+- A curated `GET` action sends what is left of the payload as a query string
+  instead of a JSON body.
+- A service's `extraHeaders` value `{idempotency_key}` is replaced by the same
+  stable key sent as `Idempotency-Key`, for providers with their own header
+  (RazorpayX requires `X-Payout-Idempotency` on every payout).
+
 ## [0.24.1] - 2026-10-26
 
 ### Fixed
@@ -579,7 +608,8 @@ server's `/health` response now includes its version.
 - Up to `050_known_destinations.sql`. On an existing install, apply any of
   `046` to `050` you have not run yet.
 
-[Unreleased]: https://github.com/agentraas/agentraas/compare/v0.24.1...HEAD
+[Unreleased]: https://github.com/agentraas/agentraas/compare/v0.25.0...HEAD
+[0.25.0]: https://github.com/agentraas/agentraas/compare/v0.24.1...v0.25.0
 [0.24.1]: https://github.com/agentraas/agentraas/compare/v0.24.0...v0.24.1
 [0.24.0]: https://github.com/agentraas/agentraas/compare/v0.23.1...v0.24.0
 [0.23.1]: https://github.com/agentraas/agentraas/compare/v0.23.0...v0.23.1

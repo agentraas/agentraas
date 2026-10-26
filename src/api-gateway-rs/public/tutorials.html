@@ -241,6 +241,7 @@
       <a href="#tut-failures">Failures and the dead-letter queue</a>
       <a href="#tut-undo">Undo an action</a>
       <a href="#tut-record-replay">Record and replay</a>
+      <a href="#tut-refund-agent">A support agent that refunds orders</a>
       <a href="#tut-apply">Rules as code</a>
       <a href="#tut-library">Library mode and the chaos tester</a>
       <a href="#tut-langchain">LangChain and LangGraph tools</a>
@@ -253,6 +254,9 @@
       <a href="#recipe-resend">Resend</a>
       <a href="#recipe-github">GitHub</a>
       <a href="#recipe-razorpay">Razorpay</a>
+      <a href="#recipe-cashfree">Cashfree Payments</a>
+      <a href="#recipe-razorpayx">RazorpayX Payouts</a>
+      <a href="#recipe-gupshup">Gupshup (WhatsApp)</a>
       <a href="#recipe-paypal">Paypal</a>
     </div>
     <!-- tutorials-nav:end -->
@@ -266,14 +270,14 @@
       <p>The payment examples use <code>mockpay</code>, the built-in sandbox service, so nothing real is charged. It fails about one call in ten at random unless the payload says <code>"fail": false</code>, which is why the examples send it (the Failures tutorial sends <code>"fail": true</code>). Responses are shortened to the fields that matter (no timestamps or idempotency keys).</p>
       <h3>The whole loop in two minutes</h3>
       <video class="tut-video" controls preload="none" poster="/videos/tutorial-overview.jpg" src="/videos/tutorial-overview.mp4"></video>
-      <ul class="tut-list"><li><a href="#tut-connect">Connect an agent and send an action</a></li><li><a href="#tut-retries">Safe retries (exactly once)</a></li><li><a href="#tut-validation">Validation rules</a></li><li><a href="#tut-approvals">Human approval</a></li><li><a href="#tut-spend-caps">Spend caps and money caps</a></li><li><a href="#tut-policies">Action policies and allowed hours</a></li><li><a href="#tut-failures">Failures and the dead-letter queue</a></li><li><a href="#tut-undo">Undo an action</a></li><li><a href="#tut-record-replay">Record and replay</a></li><li><a href="#tut-apply">Rules as code</a></li><li><a href="#tut-library">Library mode and the chaos tester</a></li><li><a href="#tut-langchain">LangChain and LangGraph tools</a></li><li><a href="#tut-mcp">MCP: scan and wrap a server</a></li></ul>
+      <ul class="tut-list"><li><a href="#tut-connect">Connect an agent and send an action</a></li><li><a href="#tut-retries">Safe retries (exactly once)</a></li><li><a href="#tut-validation">Validation rules</a></li><li><a href="#tut-approvals">Human approval</a></li><li><a href="#tut-spend-caps">Spend caps and money caps</a></li><li><a href="#tut-policies">Action policies and allowed hours</a></li><li><a href="#tut-failures">Failures and the dead-letter queue</a></li><li><a href="#tut-undo">Undo an action</a></li><li><a href="#tut-record-replay">Record and replay</a></li><li><a href="#tut-refund-agent">A support agent that refunds orders</a></li><li><a href="#tut-apply">Rules as code</a></li><li><a href="#tut-library">Library mode and the chaos tester</a></li><li><a href="#tut-langchain">LangChain and LangGraph tools</a></li><li><a href="#tut-mcp">MCP: scan and wrap a server</a></li></ul>
     </section>
     <section id="tut-start">
       <h2>Start here if you don't write code</h2>
       <p>AgentRaaS sits between your AI agent and the services it uses (Stripe, email, Slack and others). Before anything happens, it checks the action: it stops repeats, keeps to the limits you set, asks a person before big actions, and keeps a record you can read and undo.</p>
       <p><b>What needs a developer, once:</b> pointing the agent at AgentRaaS. If your agent runs in Make, Zapier or n8n, you can do it yourself: <b>+ Connect agent</b>, pick <b>Make, Zapier or another HTTP tool</b>, and paste the settings it shows (see <a href="#tut-connect">Connect and send</a>).</p>
       <p><b>Everything else is in the dashboard</b>, no code:</p>
-      <ul><li>Set limits an action must meet, like "amount at most 10000": <a href="#tut-validation">Validation rules</a></li><li>Approve big actions before they run, also from your phone through a Slack, Teams, Telegram, Discord or email link: <a href="#tut-approvals">Human approval</a></li><li>Cap how much an agent can spend or do per day: <a href="#tut-spend-caps">Spend and money caps</a></li><li>Say what each agent may never do, or only do for your own email domains or office hours: <a href="#tut-policies">Action policies</a></li><li>See every action and why it ran or stopped: Recent activity, click a row</li><li>Send a failed action again once the cause is fixed: <a href="#tut-failures">Failed requests</a></li><li>Reverse an action, like refunding a charge: <a href="#tut-undo">Undo</a></li></ul>
+      <ul><li>Set limits an action must meet, like "amount at most 10000": <a href="#tut-validation">Validation rules</a></li><li>Approve big actions before they run, also from your phone through a Slack, Teams, Telegram, Discord or email link: <a href="#tut-approvals">Human approval</a></li><li>Cap how much an agent can spend or do per day: <a href="#tut-spend-caps">Spend and money caps</a></li><li>Say what each agent may never do, or only do for your own email domains or office hours: <a href="#tut-policies">Action policies</a></li><li>See every action and why it ran or stopped: Recent activity, click a row</li><li>Send a failed action again once the cause is fixed: <a href="#tut-failures">Failed requests</a></li><li>Reverse an action, like refunding a charge: <a href="#tut-undo">Undo</a></li><li>Let a support agent refund orders, but never more than half the order or a daily budget: <a href="#tut-refund-agent">A support agent that refunds orders</a></li></ul>
       <p>Each of those tutorials starts with <b>In the dashboard, step by step</b>: a recording and a picture for every click. You can skip the code boxes below it.</p>
       <h3>Words you will see</h3>
       <dl class="plain"><dt>Agent</dt><dd>The AI program doing the work. Each one gets its own key.</dd><dt>Service and action</dt><dd>Where it acts and what it does there, like Stripe and charge.create (charge a card).</dd><dt>Payload</dt><dd>The details of one action, like the amount and the customer.</dd><dt>Success</dt><dd>It ran.</dd><dt>Deduplicated</dt><dd>A repeat of something that already ran, so it was not run again. The agent got the first answer back.</dd><dt>Blocked</dt><dd>One of your rules stopped it before it reached the service. Click the row to see which rule.</dd><dt>Pending approval</dt><dd>Waiting for a person to approve or deny it.</dd><dt>Error</dt><dd>The service itself refused it, for example a wrong key. It is listed in Failed requests.</dd></dl>
@@ -1038,6 +1042,111 @@
 }</code></pre></div></details>
     </section>
 
+    <section id="tut-refund-agent">
+      <h2>A support agent that refunds orders</h2>
+      <p>A customer says an item was missing. The support agent refunds it, but never more than half of what the order really cost, and never more than a day&#x27;s budget. AgentRaaS reads the order itself, so the agent can&#x27;t talk its way past the limit.</p>
+      <video class="tut-video" controls preload="none" poster="/videos/tutorial-refund-agent.jpg" src="/videos/tutorial-refund-agent.mp4"></video>
+      <h3>In the dashboard, step by step</h3>
+      <p>No code needed. A recording of these exact clicks, then each step with a picture:</p>
+      <video class="tut-video" controls preload="none" poster="/videos/dash-refund-agent.jpg" src="/videos/dash-refund-agent.mp4"></video>
+      <ol class="dash-steps"><li>Rules tab, Action policies. A refund by support-agent may be at most half the order. AgentRaaS reads the order itself (order.get), so the agent cannot send a bigger order amount. Over the limit: Route to approval.<a href="/videos/dash-refund-agent-1.jpg"><img src="/videos/dash-refund-agent-1.jpg" alt="Rules tab, Action policies. A refund by support-agent may be at most half the order. AgentRaaS reads the order itself (order.get), so the agent cannot send a bigger order amount. Over the limit: Route to approval." loading="lazy" width="1280" height="800"></a></li><li>Spend caps: at most 1500 in refunds a day for support-agent, counted in India time.<a href="/videos/dash-refund-agent-2.jpg"><img src="/videos/dash-refund-agent-2.jpg" alt="Spend caps: at most 1500 in refunds a day for support-agent, counted in India time." loading="lazy" width="1280" height="800"></a></li><li>The 150 refund ran. The 700 one is over half the order, so it waits here for a person: Monitor tab, Waiting for approval.<a href="/videos/dash-refund-agent-3.jpg"><img src="/videos/dash-refund-agent-3.jpg" alt="The 150 refund ran. The 700 one is over half the order, so it waits here for a person: Monitor tab, Waiting for approval." loading="lazy" width="1280" height="800"></a></li><li>Later that day: 600 more ran, then 900 would pass the 1500 a day, so it was blocked. The row says which cap stopped it.<a href="/videos/dash-refund-agent-4.jpg"><img src="/videos/dash-refund-agent-4.jpg" alt="Later that day: 600 more ran, then 900 would pass the 1500 a day, so it was blocked. The row says which cap stopped it." loading="lazy" width="1280" height="800"></a></li></ol>
+      <h3>With the API or in code</h3><p>Rule used below: support-agent: up to half the order runs; more goes to a person.</p><pre><code>POST /api/v1/action-policies
+{
+  &quot;org_id&quot;: &quot;org_acme&quot;,
+  &quot;agent_id&quot;: &quot;support-agent&quot;,
+  &quot;service&quot;: &quot;mockpay&quot;,
+  &quot;action&quot;: &quot;payment.refund&quot;,
+  &quot;effect&quot;: &quot;require&quot;,
+  &quot;fields&quot;: {
+    &quot;amount&quot;: {
+      &quot;max_from&quot;: {
+        &quot;action&quot;: &quot;order.get&quot;,
+        &quot;with&quot;: {
+          &quot;order_id&quot;: &quot;order_id&quot;
+        },
+        &quot;field&quot;: &quot;order_amount&quot;,
+        &quot;factor&quot;: 0.5
+      }
+    }
+  },
+  &quot;on_violation&quot;: &quot;hitl&quot;
+}</code></pre><p>Rule used below: support-agent: at most 1500 in refunds a day (India time).</p><pre><code>POST /api/v1/spend-cap-rules
+{
+  &quot;org_id&quot;: &quot;org_acme&quot;,
+  &quot;agent_id&quot;: &quot;support-agent&quot;,
+  &quot;service&quot;: &quot;mockpay&quot;,
+  &quot;action&quot;: &quot;payment.refund&quot;,
+  &quot;window&quot;: &quot;day&quot;,
+  &quot;amount_field&quot;: &quot;amount&quot;,
+  &quot;max_amount&quot;: 1500,
+  &quot;timezone&quot;: &quot;Asia/Kolkata&quot;,
+  &quot;on_exceed&quot;: &quot;block&quot;
+}</code></pre><ul><li>The examples use the sandbox: an order id ends in its amount (order_1200 is an order of 1200). With Cashfree the read is cashfree order.get and the field is order_amount; with Razorpay it is payment.get, field amount, minus amount_refunded</li><li>A refund with no amount, a missing order id or an order the provider can&#x27;t find is never sent unchecked: it goes to approval too</li></ul>
+      <h3>Every case</h3>
+      <p>Click a case to see the request and the real response.</p>
+      <details class="case"><summary>A missing item: refund 150 of a 1200 order<span class="st-code st-ok">200</span></summary><div><p>AgentRaaS reads the order itself (1200). 150 is under half, so the refund runs.</p><pre><code>curl -X POST &quot;$AGENTRAAS_URL/v1/webhook/org_acme/support-agent&quot; \
+  -H &quot;Authorization: Bearer $AGENTRAAS_KEY&quot; -H &quot;Content-Type: application/json&quot; \
+  -d &#x27;{&quot;service&quot;: &quot;mockpay&quot;, &quot;action&quot;: &quot;payment.refund&quot;, &quot;payload&quot;: {&quot;payment&quot;: &quot;mockpay_ord1200&quot;, &quot;order_id&quot;: &quot;order_1200&quot;, &quot;amount&quot;: 150}}&#x27;</code></pre><pre><code>{
+  &quot;forwarded&quot;: true,
+  &quot;upstream_id&quot;: &quot;mockrefund_b1025b2d7afd3ca9&quot;,
+  &quot;upstream_response&quot;: {
+    &quot;id&quot;: &quot;mockrefund_b1025b2d7afd3ca9&quot;,
+    &quot;payment&quot;: &quot;mockpay_ord1200&quot;,
+    &quot;status&quot;: &quot;refunded&quot;
+  },
+  &quot;reqId&quot;: &quot;req_0684a4a6cbf550ff&quot;
+}</code></pre></div></details>
+      <details class="case"><summary>The same refund, retried<span class="st-code st-ok">200</span></summary><div><p>The agent timed out and asked again: answered from the record, the customer is refunded once.</p><pre><code>curl -X POST &quot;$AGENTRAAS_URL/v1/webhook/org_acme/support-agent&quot; \
+  -H &quot;Authorization: Bearer $AGENTRAAS_KEY&quot; -H &quot;Content-Type: application/json&quot; \
+  -d &#x27;{&quot;service&quot;: &quot;mockpay&quot;, &quot;action&quot;: &quot;payment.refund&quot;, &quot;payload&quot;: {&quot;payment&quot;: &quot;mockpay_ord1200&quot;, &quot;order_id&quot;: &quot;order_1200&quot;, &quot;amount&quot;: 150}}&#x27;</code></pre><pre><code>{
+  &quot;forwarded&quot;: true,
+  &quot;upstream_id&quot;: &quot;mockrefund_b1025b2d7afd3ca9&quot;,
+  &quot;upstream_response&quot;: {
+    &quot;id&quot;: &quot;mockrefund_b1025b2d7afd3ca9&quot;,
+    &quot;payment&quot;: &quot;mockpay_ord1200&quot;,
+    &quot;status&quot;: &quot;refunded&quot;
+  },
+  &quot;cached&quot;: true,
+  &quot;reqId&quot;: &quot;req_51dd572bf3efdc01&quot;
+}</code></pre></div></details>
+      <details class="case"><summary>More than half the order waits for a person<span class="st-code st-held">202</span></summary><div><p>700 of a 1200 order is over the limit: held, 202 and a status URL. Nothing is refunded until someone approves.</p><pre><code>curl -X POST &quot;$AGENTRAAS_URL/v1/webhook/org_acme/support-agent&quot; \
+  -H &quot;Authorization: Bearer $AGENTRAAS_KEY&quot; -H &quot;Content-Type: application/json&quot; \
+  -d &#x27;{&quot;service&quot;: &quot;mockpay&quot;, &quot;action&quot;: &quot;payment.refund&quot;, &quot;payload&quot;: {&quot;payment&quot;: &quot;mockpay_ord1200&quot;, &quot;order_id&quot;: &quot;order_1200&quot;, &quot;amount&quot;: 700}}&#x27;</code></pre><pre><code>{
+  &quot;pending_approval&quot;: true,
+  &quot;reqId&quot;: &quot;req_293bf54eb4a8916e&quot;
+}</code></pre></div></details>
+      <details class="case"><summary>No amount is not a full refund<span class="st-code st-held">202</span></summary><div><p>Leaving the amount out means &quot;refund everything&quot; to many providers. It can&#x27;t be checked, so it is held too.</p><pre><code>curl -X POST &quot;$AGENTRAAS_URL/v1/webhook/org_acme/support-agent&quot; \
+  -H &quot;Authorization: Bearer $AGENTRAAS_KEY&quot; -H &quot;Content-Type: application/json&quot; \
+  -d &#x27;{&quot;service&quot;: &quot;mockpay&quot;, &quot;action&quot;: &quot;payment.refund&quot;, &quot;payload&quot;: {&quot;payment&quot;: &quot;mockpay_ord800&quot;, &quot;order_id&quot;: &quot;order_800&quot;}}&#x27;</code></pre><pre><code>{
+  &quot;pending_approval&quot;: true,
+  &quot;reqId&quot;: &quot;req_ea6e67489fd810d7&quot;
+}</code></pre></div></details>
+      <details class="case"><summary>An order that does not exist<span class="st-code st-held">202</span></summary><div><p>The read fails, so the refund is held instead of sent unchecked.</p><pre><code>curl -X POST &quot;$AGENTRAAS_URL/v1/webhook/org_acme/support-agent&quot; \
+  -H &quot;Authorization: Bearer $AGENTRAAS_KEY&quot; -H &quot;Content-Type: application/json&quot; \
+  -d &#x27;{&quot;service&quot;: &quot;mockpay&quot;, &quot;action&quot;: &quot;payment.refund&quot;, &quot;payload&quot;: {&quot;payment&quot;: &quot;mockpay_ordx&quot;, &quot;order_id&quot;: &quot;order_unknown&quot;, &quot;amount&quot;: 50}}&#x27;</code></pre><pre><code>{
+  &quot;pending_approval&quot;: true,
+  &quot;reqId&quot;: &quot;req_75f92ab573622fe4&quot;
+}</code></pre></div></details>
+      <details class="case"><summary>A second refund today<span class="st-code st-ok">200</span></summary><div><p>600 of a 1300 order is under half; 750 refunded today so far.</p><pre><code>curl -X POST &quot;$AGENTRAAS_URL/v1/webhook/org_acme/support-agent&quot; \
+  -H &quot;Authorization: Bearer $AGENTRAAS_KEY&quot; -H &quot;Content-Type: application/json&quot; \
+  -d &#x27;{&quot;service&quot;: &quot;mockpay&quot;, &quot;action&quot;: &quot;payment.refund&quot;, &quot;payload&quot;: {&quot;payment&quot;: &quot;mockpay_ord1300&quot;, &quot;order_id&quot;: &quot;order_1300&quot;, &quot;amount&quot;: 600}}&#x27;</code></pre><pre><code>{
+  &quot;forwarded&quot;: true,
+  &quot;upstream_id&quot;: &quot;mockrefund_ce3cb27d7c46fe98&quot;,
+  &quot;upstream_response&quot;: {
+    &quot;id&quot;: &quot;mockrefund_ce3cb27d7c46fe98&quot;,
+    &quot;payment&quot;: &quot;mockpay_ord1300&quot;,
+    &quot;status&quot;: &quot;refunded&quot;
+  },
+  &quot;reqId&quot;: &quot;req_b383d67465eb5af3&quot;
+}</code></pre></div></details>
+      <details class="case"><summary>Over the day&#x27;s refund total<span class="st-code st-err">429</span></summary><div><p>900 is under half of a 1900 order, but 750 + 900 passes the 1500 a day, so it is blocked.</p><pre><code>curl -X POST &quot;$AGENTRAAS_URL/v1/webhook/org_acme/support-agent&quot; \
+  -H &quot;Authorization: Bearer $AGENTRAAS_KEY&quot; -H &quot;Content-Type: application/json&quot; \
+  -d &#x27;{&quot;service&quot;: &quot;mockpay&quot;, &quot;action&quot;: &quot;payment.refund&quot;, &quot;payload&quot;: {&quot;payment&quot;: &quot;mockpay_ord1900&quot;, &quot;order_id&quot;: &quot;order_1900&quot;, &quot;amount&quot;: 900}}&#x27;</code></pre><pre><code>{
+  &quot;error&quot;: &quot;Spend cap exceeded for mockpay.payment.refund: amount 900 would bring this day&#x27;s total to 1650, above 1500 (rule #307).&quot;,
+  &quot;reqId&quot;: &quot;req_595ddb5582e6b1f9&quot;
+}</code></pre></div></details>
+    </section>
+
     <section id="tut-apply">
       <h2>Rules as code</h2>
       <p>Keep rules in a YAML file in your repo, review changes like code, and apply them from CI. agentraas apply makes the server match the file; running it twice changes nothing.</p>
@@ -1281,7 +1390,7 @@ get_invoice ran (time #2)</code></pre></div></details>
     <section id="recipes">
       <h2>Recipes for real services</h2>
       <p>How to connect a service people already use, what an agent can do with it, and one rule worth adding first. The rule bodies were saved against a real server; the calls need your own key, so they show no response.</p>
-      <ul class="tut-list"><li><a href="#recipe-stripe">Stripe</a></li><li><a href="#recipe-slack">Slack</a></li><li><a href="#recipe-resend">Resend</a></li><li><a href="#recipe-github">GitHub</a></li><li><a href="#recipe-razorpay">Razorpay</a></li><li><a href="#recipe-paypal">Paypal</a></li></ul>
+      <ul class="tut-list"><li><a href="#recipe-stripe">Stripe</a></li><li><a href="#recipe-slack">Slack</a></li><li><a href="#recipe-resend">Resend</a></li><li><a href="#recipe-github">GitHub</a></li><li><a href="#recipe-razorpay">Razorpay</a></li><li><a href="#recipe-cashfree">Cashfree Payments</a></li><li><a href="#recipe-razorpayx">RazorpayX Payouts</a></li><li><a href="#recipe-gupshup">Gupshup (WhatsApp)</a></li><li><a href="#recipe-paypal">Paypal</a></li></ul>
     </section>
 
     <section id="recipe-stripe">
@@ -1400,9 +1509,9 @@ get_invoice ran (time #2)</code></pre></div></details>
       <p>Create payment orders (India).</p>
       <h3>Connect it</h3>
       <p>Setup tab, <b>Connect a service</b>, pick Razorpay and paste the <b>Key ID and Key secret</b>. <a href="https://dashboard.razorpay.com/app/website-app-settings/api-keys" target="_blank" rel="noopener">Where to find it</a>.</p>
-      <p>Razorpay takes two values: the Key ID and the Key secret. Use test mode keys while you try it.</p>
+      <p>Razorpay takes two values: the Key ID and the Key secret. Use test mode keys while you try it. For refunds, payment.refund can be held to what is left of the payment: max_from with action payment.get, field amount, minus amount_refunded.</p>
       <h3>What your agent can call</h3>
-      <ul><li><code>payment.create</code>: needs currency</li></ul>
+      <ul><li><code>payment.create</code>: needs currency</li><li><code>payment.get</code>: needs payment_id</li><li><code>payment.refund</code>: needs payment_id</li></ul>
       <h3>A first rule</h3>
       <p>Hold orders above 500000 for a person. Razorpay counts in paise, so that is 5,000 rupees. In the dashboard: Rules tab. With the API:</p>
       <pre><code>POST /api/v1/hitl-rules
@@ -1418,6 +1527,97 @@ get_invoice ran (time #2)</code></pre></div></details>
       <pre><code>curl -X POST &quot;$AGENTRAAS_URL/v1/webhook/org_acme/billing-agent&quot; \
   -H &quot;Authorization: Bearer $AGENTRAAS_KEY&quot; -H &quot;Content-Type: application/json&quot; \
   -d &#x27;{&quot;service&quot;: &quot;razorpay&quot;, &quot;action&quot;: &quot;payment.create&quot;, &quot;payload&quot;: {&quot;amount&quot;: 49900, &quot;currency&quot;: &quot;INR&quot;}}&#x27;</code></pre>
+    </section>
+
+    <section id="recipe-cashfree">
+      <h2>Cashfree Payments</h2>
+      <p>Take payments and refund orders (India).</p>
+      <h3>Connect it</h3>
+      <p>Setup tab, <b>Connect a service</b>, pick Cashfree Payments and paste the <b>App ID and Secret key</b>. <a href="https://merchant.cashfree.com" target="_blank" rel="noopener">Where to find it</a>.</p>
+      <p>Cashfree takes two values: the App ID and the Secret key. Pick Cashfree Payments (test) for sandbox keys. Every refund carries an idempotency key, so a retried refund runs once.</p>
+      <h3>What your agent can call</h3>
+      <ul><li><code>order.create</code>: needs order_amount, order_currency, customer_details</li><li><code>order.get</code>: needs order_id</li><li><code>refund.create</code>: needs order_id, refund_amount, refund_id</li></ul>
+      <h3>A first rule</h3>
+      <p>A refund up to half of what the order really cost runs; more goes to a person. AgentRaaS reads the order from Cashfree itself, so the agent cannot send a bigger order amount (see Limits the server looks up in the docs). In the dashboard: Rules tab. With the API:</p>
+      <pre><code>POST /api/v1/action-policies
+{
+  &quot;org_id&quot;: &quot;org_acme&quot;,
+  &quot;service&quot;: &quot;cashfree&quot;,
+  &quot;action&quot;: &quot;refund.create&quot;,
+  &quot;effect&quot;: &quot;require&quot;,
+  &quot;fields&quot;: {
+    &quot;refund_amount&quot;: {
+      &quot;max_from&quot;: {
+        &quot;action&quot;: &quot;order.get&quot;,
+        &quot;with&quot;: {
+          &quot;order_id&quot;: &quot;order_id&quot;
+        },
+        &quot;field&quot;: &quot;order_amount&quot;,
+        &quot;factor&quot;: 0.5
+      }
+    }
+  },
+  &quot;on_violation&quot;: &quot;hitl&quot;
+}</code></pre>
+      <h3>A call</h3>
+      <pre><code>curl -X POST &quot;$AGENTRAAS_URL/v1/webhook/org_acme/billing-agent&quot; \
+  -H &quot;Authorization: Bearer $AGENTRAAS_KEY&quot; -H &quot;Content-Type: application/json&quot; \
+  -d &#x27;{&quot;service&quot;: &quot;cashfree&quot;, &quot;action&quot;: &quot;refund.create&quot;, &quot;payload&quot;: {&quot;order_id&quot;: &quot;order_1001&quot;, &quot;refund_amount&quot;: 150, &quot;refund_id&quot;: &quot;rf_1001_missing_milk&quot;}}&#x27;</code></pre>
+    </section>
+
+    <section id="recipe-razorpayx">
+      <h2>RazorpayX Payouts</h2>
+      <p>Pay riders, sellers and vendors from your RazorpayX account.</p>
+      <h3>Connect it</h3>
+      <p>Setup tab, <b>Connect a service</b>, pick RazorpayX Payouts and paste the <b>Key ID and Key secret</b>. <a href="https://x.razorpay.com" target="_blank" rel="noopener">Where to find it</a>.</p>
+      <p>RazorpayX requires an idempotency key on every payout. AgentRaaS sends one (X-Payout-Idempotency) that stays the same when the agent retries, so a timed-out payout is not paid twice.</p>
+      <h3>What your agent can call</h3>
+      <ul><li><code>payout.create</code>: needs account_number, fund_account_id, amount, currency, mode, purpose</li><li><code>payout.get</code>: needs payout_id</li></ul>
+      <h3>A first rule</h3>
+      <p>At most 5000000 in payouts a day (paise, so 50,000 rupees), counted in India time; past that, a person approves each one. In the dashboard: Rules tab. With the API:</p>
+      <pre><code>POST /api/v1/spend-cap-rules
+{
+  &quot;org_id&quot;: &quot;org_acme&quot;,
+  &quot;service&quot;: &quot;razorpayx&quot;,
+  &quot;action&quot;: &quot;payout.create&quot;,
+  &quot;window&quot;: &quot;day&quot;,
+  &quot;amount_field&quot;: &quot;amount&quot;,
+  &quot;max_amount&quot;: 5000000,
+  &quot;timezone&quot;: &quot;Asia/Kolkata&quot;,
+  &quot;on_exceed&quot;: &quot;hitl&quot;
+}</code></pre>
+      <h3>A call</h3>
+      <pre><code>curl -X POST &quot;$AGENTRAAS_URL/v1/webhook/org_acme/billing-agent&quot; \
+  -H &quot;Authorization: Bearer $AGENTRAAS_KEY&quot; -H &quot;Content-Type: application/json&quot; \
+  -d &#x27;{&quot;service&quot;: &quot;razorpayx&quot;, &quot;action&quot;: &quot;payout.create&quot;, &quot;payload&quot;: {&quot;account_number&quot;: &quot;7878780080316316&quot;, &quot;fund_account_id&quot;: &quot;fa_00000000000001&quot;, &quot;amount&quot;: 50000, &quot;currency&quot;: &quot;INR&quot;, &quot;mode&quot;: &quot;IMPS&quot;, &quot;purpose&quot;: &quot;payout&quot;, &quot;reference_id&quot;: &quot;rider-4182-oct-26&quot;}}&#x27;</code></pre>
+    </section>
+
+    <section id="recipe-gupshup">
+      <h2>Gupshup (WhatsApp)</h2>
+      <p>Send WhatsApp messages: order updates, delivery and support.</p>
+      <h3>Connect it</h3>
+      <p>Setup tab, <b>Connect a service</b>, pick Gupshup (WhatsApp) and paste the <b>API key</b>. From your Gupshup account. Send from the WhatsApp number and app registered there. <a href="https://www.gupshup.io" target="_blank" rel="noopener">Where to find it</a>.</p>
+      <p>message is a JSON string, as Gupshup expects it. source is your WhatsApp Business number and src.name the app name registered with it.</p>
+      <h3>What your agent can call</h3>
+      <ul><li><code>message.send</code>: needs channel, source, destination, src.name, message</li></ul>
+      <h3>A first rule</h3>
+      <p>Only between 09:00 and 21:00 India time, so an agent stuck in a loop never messages customers at night. The same message to the same number is sent once anyway. In the dashboard: Rules tab. With the API:</p>
+      <pre><code>POST /api/v1/action-policies
+{
+  &quot;org_id&quot;: &quot;org_acme&quot;,
+  &quot;service&quot;: &quot;gupshup&quot;,
+  &quot;action&quot;: &quot;message.send&quot;,
+  &quot;effect&quot;: &quot;require&quot;,
+  &quot;hours&quot;: {
+    &quot;tz&quot;: &quot;Asia/Kolkata&quot;,
+    &quot;from&quot;: &quot;09:00&quot;,
+    &quot;to&quot;: &quot;21:00&quot;
+  }
+}</code></pre>
+      <h3>A call</h3>
+      <pre><code>curl -X POST &quot;$AGENTRAAS_URL/v1/webhook/org_acme/billing-agent&quot; \
+  -H &quot;Authorization: Bearer $AGENTRAAS_KEY&quot; -H &quot;Content-Type: application/json&quot; \
+  -d &#x27;{&quot;service&quot;: &quot;gupshup&quot;, &quot;action&quot;: &quot;message.send&quot;, &quot;payload&quot;: {&quot;channel&quot;: &quot;whatsapp&quot;, &quot;source&quot;: &quot;917834811114&quot;, &quot;destination&quot;: &quot;919876543210&quot;, &quot;src.name&quot;: &quot;YourApp&quot;, &quot;message&quot;: &quot;{\&quot;type\&quot;:\&quot;text\&quot;,\&quot;text\&quot;:\&quot;Your order is on its way.\&quot;}&quot;}}&#x27;</code></pre>
     </section>
 
     <section id="recipe-paypal">
@@ -1455,7 +1655,7 @@ get_invoice ran (time #2)</code></pre></div></details>
         <p>Stops AI agents from running the same API call twice, holds risky calls for human approval, and records every action.</p>
         <a href="https://github.com/agentraas/agentraas" target="_blank" rel="noopener" class="sn-btn s"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.5 0-.24-.01-.87-.01-1.71-2.78.62-3.37-1.37-3.37-1.37-.46-1.2-1.11-1.52-1.11-1.52-.91-.64.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05a9.3 9.3 0 0 1 2.5-.35c.85 0 1.71.12 2.5.35 1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.46.1 2.72.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.79-4.57 5.05.36.32.68.95.68 1.92 0 1.39-.01 2.51-.01 2.85 0 .28.18.61.69.5A10.26 10.26 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>&nbsp;Star on GitHub</a>
       </div>
-      <div class="sf-col"><h4>Product</h4><a href="/#features">Platform</a><a href="/#open-source">Open source</a><a href="/#pricing">Pricing</a><a href="/self-host">Self-host</a><a href="/cloud">Cloud</a><a href="/trading">Trading agents</a><a href="/dashboard">Dashboard</a><a href="/status">Status</a><a href="/postmortem-2026-09">Postmortems</a></div>
+      <div class="sf-col"><h4>Product</h4><a href="/#features">Platform</a><a href="/#open-source">Open source</a><a href="/#pricing">Pricing</a><a href="/self-host">Self-host</a><a href="/cloud">Cloud</a><a href="/trading">Trading agents</a><a href="/commerce">Shopping and quick commerce</a><a href="/dashboard">Dashboard</a><a href="/status">Status</a><a href="/postmortem-2026-09">Postmortems</a></div>
       <div class="sf-col"><h4>Docs</h4><a href="/guide">Getting started</a><a href="/docs">Documentation</a><a href="/webhook-audit">Free webhook audit</a><a href="/chaos">Chaos tester</a><a href="/mcp-scan">MCP safety scan</a><a href="https://github.com/agentraas/agentraas" target="_blank" rel="noopener">GitHub</a></div>
       <div class="sf-col"><h4>Legal</h4><a href="/license">License</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/terms#refunds">Refunds</a><a href="/security">Security</a></div>
       <div class="sf-col"><h4>Company</h4><a href="/about">About</a><a href="/community">Community</a><a href="mailto:hello@agentraas.io">hello@agentraas.io</a></div>

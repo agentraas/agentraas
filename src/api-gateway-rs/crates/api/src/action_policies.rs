@@ -71,7 +71,7 @@ async fn create_policy(State(state): State<SharedState>, user: AuthUser, Json(bo
         ("deny", None | Some(Value::Null)) => None,
         ("deny", Some(_)) => return Err(unprocessable("A deny policy has no fields; use effect \"require\" to limit what a call may contain.")),
         ("require", Some(f)) => {
-            if let Some(err) = is_valid_rule_definition(f) {
+            if let Some(err) = is_valid_rule_definition(f).or_else(|| invalid_lookup(f)) {
                 return Err(unprocessable(&err));
             }
             Some(f.clone())
@@ -200,8 +200,8 @@ pub struct Policy {
 }
 
 pub struct Violation {
-    /// "policy_denied", "policy_violation", "policy_new_destination" or
-    /// "policy_outside_hours", the audit log's reason.
+    /// "policy_denied", "policy_violation", "policy_new_destination",
+    /// "policy_outside_hours" or "policy_lookup_limit", the audit log's reason.
     pub reason: &'static str,
     pub hitl: bool,
     pub message: String,
@@ -278,6 +278,92 @@ async fn matching_policies(state: &SharedState, org_id: &str, agent_id: Option<&
     .await
 }
 
+/// `max_from`: a limit read from the provider before the call runs, so the
+/// agent can't supply the number it is checked against. "A refund at most
+/// half the order" on Cashfree:
+/// `{"refund_amount": {"max_from": {"action": "order.get", "with": {"order_id": "order_id"},
+///   "field": "order_amount", "factor": 0.5}}}`. `service` (default: the
+/// call's own) can name another service, such as a custom action reading the
+/// platform's own order API; `minus` subtracts a second field (Razorpay's
+/// `amount_refunded`). A lookup that fails or an amount it can't read blocks
+/// the call: an unchecked refund is not a pass.
+fn lookups(fields: &Value) -> Vec<(&str, &Value)> {
+    fields.as_object().map(|o| o.iter().filter_map(|(k, r)| r.get("max_from").map(|m| (k.as_str(), m))).collect()).unwrap_or_default()
+}
+
+fn invalid_lookup(fields: &Value) -> Option<String> {
+    for (field, m) in lookups(fields) {
+        let ok = m.get("action").and_then(Value::as_str).is_some_and(|a| is_valid_action_name(a))
+            && m.get("field").and_then(Value::as_str).is_some_and(|f| !f.is_empty() && f.len() <= 200)
+            && m.get("with").and_then(Value::as_object).is_some_and(|w| w.values().all(Value::is_string))
+            && m.get("service").map_or(true, |v| v.as_str().is_some_and(is_valid_identifier))
+            && m.get("minus").map_or(true, |v| v.as_str().is_some_and(|f| !f.is_empty()))
+            && m.get("factor").map_or(true, |v| v.as_f64().is_some_and(|f| f > 0.0));
+        if !ok {
+            return Some(format!("Field \"{field}\": max_from needs action, field and with (an object of field names); service and minus are names, factor a number above 0."));
+        }
+    }
+    None
+}
+
+/// A number at a dotted path ("order_amount", "data.total"); numeric strings count.
+fn number_at(v: &Value, path: &str) -> Option<f64> {
+    let found = path.split('.').try_fold(v, |cur, key| cur.get(key))?;
+    found.as_f64().or_else(|| found.as_str().and_then(|s| s.trim().parse().ok())).filter(|n: &f64| n.is_finite())
+}
+
+async fn check_lookups(state: &SharedState, org_id: &str, service: &str, payload: &Value, p: &Policy) -> Option<Violation> {
+    let fields = p.fields.as_ref().filter(|_| p.effect == "require")?;
+    for (field, m) in lookups(fields) {
+        let lookup_service = m.get("service").and_then(Value::as_str).unwrap_or(service);
+        let lookup_action = m.get("action").and_then(Value::as_str).unwrap_or_default();
+        let source = m.get("field").and_then(Value::as_str).unwrap_or_default();
+        let factor = m.get("factor").and_then(Value::as_f64).unwrap_or(1.0);
+        let fail = |message: String| Some(Violation { reason: "policy_lookup_limit", hitl: p.on_violation == "hitl", message: format!("{message} (action policy #{})", p.id) });
+
+        let Some(asked) = number_at(payload, field) else {
+            return fail(format!("{field} is missing, so it can't be checked against {lookup_service}.{lookup_action}; send it explicitly"));
+        };
+        let mut query = serde_json::Map::new();
+        for (to, from) in m.get("with").and_then(Value::as_object).into_iter().flatten() {
+            let from = from.as_str().unwrap_or_default();
+            match payload.get(from) {
+                Some(v) if !v.is_null() => { query.insert(to.clone(), v.clone()); }
+                _ => return fail(format!("{from} is missing, so {field} can't be checked against {lookup_service}.{lookup_action}")),
+            }
+        }
+        let route = match crate::agent::db::resolve_route(state, lookup_service, lookup_action, org_id).await {
+            Ok(Some(r)) => r,
+            _ => return fail(format!("{lookup_service}.{lookup_action} is not an action AgentRaaS knows, so {field} can't be checked")),
+        };
+        let answer = match crate::agent::forward::forward_action(state, &route, lookup_service, lookup_action, org_id, &Value::Object(query), "policy-lookup", None, None).await {
+            Ok(a) => a,
+            Err(e) => return fail(format!("Couldn't check {field} against {lookup_service}.{lookup_action}: {}. Nothing was sent", e.message)),
+        };
+        let body = answer.get("upstream_response").unwrap_or(&answer);
+        let Some(total) = number_at(body, source) else {
+            return fail(format!("{lookup_service}.{lookup_action} answered without a number at {source}, so {field} can't be checked"));
+        };
+        let minus = m.get("minus").and_then(Value::as_str);
+        let base = total - minus.and_then(|f| number_at(body, f)).unwrap_or(0.0);
+        let limit = base * factor;
+        if asked > limit + 1e-9 {
+            let of = match (factor != 1.0, minus) {
+                (true, Some(mf)) => format!("{}% of {source} minus {mf}", fmt(factor * 100.0)),
+                (true, None) => format!("{}% of {source}", fmt(factor * 100.0)),
+                (false, Some(mf)) => format!("{source} minus {mf}"),
+                (false, None) => source.to_string(),
+            };
+            return fail(format!("{field} {} is more than the {} allowed ({of}, read from {lookup_service}.{lookup_action})", fmt(asked), fmt(limit)));
+        }
+    }
+    None
+}
+
+fn fmt(n: f64) -> String {
+    if n.fract() == 0.0 { format!("{n:.0}") } else { format!("{n:.2}") }
+}
+
 pub async fn check(state: &SharedState, org_id: &str, agent_id: &str, service: &str, action: &str, payload: &Value) -> Result<Option<Violation>, sqlx::Error> {
     let policies = matching_policies(state, org_id, Some(agent_id), service, action).await?;
     let wanted: Vec<(String, String)> = policies.iter().flat_map(|p| policy_destinations(p, payload)).collect();
@@ -295,7 +381,21 @@ pub async fn check(state: &SharedState, org_id: &str, agent_id: &str, service: &
         .await?;
         unknown = wanted.into_iter().filter(|d| !known.contains(d)).collect();
     }
-    Ok(evaluate(&policies, service, action, payload, &unknown, chrono::Utc::now()))
+    let found = evaluate(&policies, service, action, payload, &unknown, chrono::Utc::now());
+    // A block already decides; lookups (a network call each) only run when it could still change the answer.
+    if found.as_ref().is_some_and(|v| !v.hitl) {
+        return Ok(found);
+    }
+    let mut hitl = found;
+    for p in &policies {
+        if let Some(v) = check_lookups(state, org_id, service, payload, p).await {
+            if !v.hitl {
+                return Ok(Some(v));
+            }
+            hitl.get_or_insert(v);
+        }
+    }
+    Ok(hitl)
 }
 
 /// Called once a human approved a call: its destinations become known, so
@@ -330,6 +430,26 @@ mod tests {
 
     fn p(id: i32, effect: &str, fields: Option<Value>, on_violation: &str) -> Policy {
         Policy { id, effect: effect.into(), fields, on_violation: on_violation.into(), hours: None }
+    }
+
+    #[test]
+    fn max_from_reads_numbers_by_path_and_checks_its_spec() {
+        let body = json!({"order_amount": 1200, "data": {"total": "99.5"}, "note": "x"});
+        assert_eq!(number_at(&body, "order_amount"), Some(1200.0));
+        assert_eq!(number_at(&body, "data.total"), Some(99.5), "numeric strings count");
+        assert_eq!(number_at(&body, "note"), None);
+        assert_eq!(number_at(&body, "missing.path"), None);
+
+        let ok = json!({"refund_amount": {"max_from": {"action": "order.get", "with": {"order_id": "order_id"}, "field": "order_amount", "factor": 0.5}}});
+        assert_eq!(invalid_lookup(&ok), None);
+        assert!(lookups(&json!({"amount": {"max": 5}})).is_empty(), "a plain rule is not a lookup");
+        for bad in [
+            json!({"amount": {"max_from": {"with": {"id": "id"}, "field": "amount"}}}),
+            json!({"amount": {"max_from": {"action": "payment.get", "with": {"id": 5}, "field": "amount"}}}),
+            json!({"amount": {"max_from": {"action": "payment.get", "with": {}, "field": "amount", "factor": 0}}}),
+        ] {
+            assert!(invalid_lookup(&bad).is_some(), "{bad}");
+        }
     }
 
     #[test]

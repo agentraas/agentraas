@@ -133,7 +133,22 @@ RECIPES = [
      'call': ('payment.create', {'amount': 49900, 'currency': 'INR'}),
      'rule': ('hitl-rules', {'service': 'razorpay', 'action': 'payment.create', 'field': 'amount', 'operator': 'gt', 'threshold': 500000},
               'Hold orders above 500000 for a person. Razorpay counts in paise, so that is 5,000 rupees.'),
-     'note': 'Razorpay takes two values: the Key ID and the Key secret. Use test mode keys while you try it.'},
+     'note': 'Razorpay takes two values: the Key ID and the Key secret. Use test mode keys while you try it. For refunds, payment.refund can be held to what is left of the payment: max_from with action payment.get, field amount, minus amount_refunded.'},
+    {'service': 'cashfree', 'why': 'Take payments and refund orders (India).',
+     'call': ('refund.create', {'order_id': 'order_1001', 'refund_amount': 150, 'refund_id': 'rf_1001_missing_milk'}),
+     'rule': ('action-policies', {'service': 'cashfree', 'action': 'refund.create', 'effect': 'require', 'fields': {'refund_amount': {'max_from': {'action': 'order.get', 'with': {'order_id': 'order_id'}, 'field': 'order_amount', 'factor': 0.5}}}, 'on_violation': 'hitl'},
+              'A refund up to half of what the order really cost runs; more goes to a person. AgentRaaS reads the order from Cashfree itself, so the agent cannot send a bigger order amount (see Limits the server looks up in the docs).'),
+     'note': 'Cashfree takes two values: the App ID and the Secret key. Pick Cashfree Payments (test) for sandbox keys. Every refund carries an idempotency key, so a retried refund runs once.'},
+    {'service': 'razorpayx', 'why': 'Pay riders, sellers and vendors from your RazorpayX account.',
+     'call': ('payout.create', {'account_number': '7878780080316316', 'fund_account_id': 'fa_00000000000001', 'amount': 50000, 'currency': 'INR', 'mode': 'IMPS', 'purpose': 'payout', 'reference_id': 'rider-4182-oct-26'}),
+     'rule': ('spend-cap-rules', {'service': 'razorpayx', 'action': 'payout.create', 'window': 'day', 'amount_field': 'amount', 'max_amount': 5000000, 'timezone': 'Asia/Kolkata', 'on_exceed': 'hitl'},
+              'At most 5000000 in payouts a day (paise, so 50,000 rupees), counted in India time; past that, a person approves each one.'),
+     'note': 'RazorpayX requires an idempotency key on every payout. AgentRaaS sends one (X-Payout-Idempotency) that stays the same when the agent retries, so a timed-out payout is not paid twice.'},
+    {'service': 'gupshup', 'why': 'Send WhatsApp messages: order updates, delivery and support.',
+     'call': ('message.send', {'channel': 'whatsapp', 'source': '917834811114', 'destination': '919876543210', 'src.name': 'YourApp', 'message': '{"type":"text","text":"Your order is on its way."}'}),
+     'rule': ('action-policies', {'service': 'gupshup', 'action': 'message.send', 'effect': 'require', 'hours': {'tz': 'Asia/Kolkata', 'from': '09:00', 'to': '21:00'}},
+              'Only between 09:00 and 21:00 India time, so an agent stuck in a loop never messages customers at night. The same message to the same number is sent once anyway.'),
+     'note': 'message is a JSON string, as Gupshup expects it. source is your WhatsApp Business number and src.name the app name registered with it.'},
     {'service': 'paypal', 'why': 'Create checkout orders.',
      'call': ('order.create', {'intent': 'CAPTURE', 'purchase_units': [{'amount': {'currency_code': 'USD', 'value': '25.00'}}]}),
      'rule': ('hitl-rules', {'service': 'paypal', 'action': 'order.create'},
@@ -185,7 +200,8 @@ PLAIN = (
     '<li>Say what each agent may never do, or only do for your own email domains or office hours: <a href="#tut-policies">Action policies</a></li>'
     '<li>See every action and why it ran or stopped: Recent activity, click a row</li>'
     '<li>Send a failed action again once the cause is fixed: <a href="#tut-failures">Failed requests</a></li>'
-    '<li>Reverse an action, like refunding a charge: <a href="#tut-undo">Undo</a></li></ul>\n'
+    '<li>Reverse an action, like refunding a charge: <a href="#tut-undo">Undo</a></li>'
+    '<li>Let a support agent refund orders, but never more than half the order or a daily budget: <a href="#tut-refund-agent">A support agent that refunds orders</a></li></ul>\n'
     '      <p>Each of those tutorials starts with <b>In the dashboard, step by step</b>: a recording and a picture for every click. You can skip the code boxes below it.</p>\n'
     '      <h3>Words you will see</h3>\n      <dl class="plain">'
     '<dt>Agent</dt><dd>The AI program doing the work. Each one gets its own key.</dd>'

@@ -1007,6 +1007,7 @@
       </div>
       <div class="field" id="policy-fields-wrap"><label for="policy-fields">Limits (JSON)</label>
         <textarea id="policy-fields" rows="3" placeholder='{"amount": {"max": 50}, "to": {"domains": ["acme.com"]}}' style="width:100%;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-family:ui-monospace,monospace;font-size:12.5px;resize:vertical;"></textarea>
+        <div class="sub" style="font-size:12px;margin-top:4px;">A limit AgentRaaS looks up itself, so the agent can't send the number it is checked against (refund at most half the order): <code>{"refund_amount": {"max_from": {"action": "order.get", "with": {"order_id": "order_id"}, "field": "order_amount", "factor": 0.5}}}</code>. <a href="/docs#lookup-limits" target="_blank" rel="noopener">How it works</a></div>
         <label style="margin-top:10px;">Allowed hours (optional)</label>
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
           <input type="text" id="policy-hours-tz" placeholder="Time zone, e.g. America/New_York" style="flex:2 1 180px;">

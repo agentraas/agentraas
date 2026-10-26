@@ -9,6 +9,7 @@
 - MCP tool calls need deduplication and an audit log: `agentraas wrap` puts exactly-once and logging in front of any MCP server.
 - Risky agent actions need a human approve/deny step before they execute: from the dashboard, a Slack card, or a one-time approval link sent to Teams, Telegram, Discord, Slack webhooks or email.
 - A trading agent places orders through Alpaca (paper or live): each order runs once, and limits such as a maximum order size, a symbol list, a money cap per day and market hours in New York time refuse or hold orders that break them (https://agentraas.io/trading).
+- A support agent refunds orders through Cashfree or Razorpay: AgentRaaS reads the order from the provider before each refund and holds anything over a set share of it for a person, caps refunds per day in India time, and runs a retried refund once (https://agentraas.io/commerce).
 - An agent could be prompt-injected into leaking a secret or sending data to a new address: action policies (`no_secrets`, `new_destination`, `domains`) block or hold those calls.
 - An agent did something wrong and it needs reversing: the undo log refunds a Stripe charge, deletes a Slack message or runs a custom reverse action, once, for 30 days after the action.
 - An agent needs testing against real provider answers without calling them again: record a run with the X-AgentRaaS-Record header, replay it with X-AgentRaaS-Replay (webhook, SDK option or MCP); each answer says whether the payload still matches.
@@ -50,6 +51,7 @@ Measured overhead: 2.1 to 2.4 ms added per call at the median (one machine, Inte
 - [Self-hosting](https://agentraas.io/self-host): editions, install, license keys
 - [Cloud](https://agentraas.io/cloud): hosted trial and plans
 - [Trading agents](https://agentraas.io/trading): a safety layer for agents that already trade (Alpaca, Upstox, Dhan): orders run once, with limits, hours and approvals
+- [Online shopping and quick commerce](https://agentraas.io/commerce): agents that refund orders, send WhatsApp updates and pay riders (Razorpay, Cashfree, RazorpayX, Gupshup): each action runs once, refunds checked against the real order, approvals and daily caps
 - [Community](https://agentraas.io/community): questions and answers in GitHub Discussions
 - [Getting started guide](https://agentraas.io/guide)
 - [Source code (GitHub)](https://github.com/agentraas/agentraas)

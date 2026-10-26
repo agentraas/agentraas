@@ -604,6 +604,7 @@
     hitl_forward_failed: 'It was approved, but forwarding it afterwards failed.',
     hitl_quota_exceeded: 'Too many calls were waiting for approval at once.',
     idempotency_key_reused: 'The same idempotency key was sent with a different payload.',
+    policy_lookup_limit: 'Over a limit AgentRaaS looked up itself before the call (for example more than half the order\'s amount), or the lookup failed. The error the agent got gives the numbers.',
     policy_violation: 'An action policy does not allow this call: which agent may do it, where it may send data, or when. The error the agent got names the policy.',
     outcome_unknown: 'An earlier identical call timed out after it was sent, so it may have run. This copy was not run again. See Failed requests.',
     resource_locked: 'Another call held the lock on the same resource.',

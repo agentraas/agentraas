@@ -124,7 +124,7 @@ def build(t):
 {body}{why}''')
     scene(5.6, f'''<div class="logo pop" style="--d:0"><i class="ring"></i><i class="disc"></i></div>
 <h2 class="a" style="--d:.3;font-size:84px">{E(t["title"])}</h2>
-<div class="row" style="gap:24px"><span class="chip a" style="--d:.8;font-size:30px">agentraas.io/docs#tut-{t["id"]}</span><span class="chip a" style="--d:1;font-size:30px">pip install agentraas</span></div>''', 'justify-content:center;gap:32px')
+<div class="row" style="gap:24px"><span class="chip a" style="--d:.8;font-size:30px">agentraas.io/tutorials#tut-{t["id"]}</span><span class="chip a" style="--d:1;font-size:30px">pip install agentraas</span></div>''', 'justify-content:center;gap:32px')
     total = now
     return f'''<!doctype html><html><head><meta charset="utf-8">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=block" rel="stylesheet">

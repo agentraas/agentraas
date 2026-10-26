@@ -14,7 +14,8 @@ W, H = 1280, 800
 
 def redis_del(pattern):
     keys = subprocess.run(['podman', 'exec', 'ar-redis', 'redis-cli', '--scan', '--pattern', pattern], capture_output=True, text=True).stdout.split()
-    if keys: subprocess.run(['podman', 'exec', 'ar-redis', 'redis-cli', 'del', *keys], capture_output=True)
+    for i in range(0, len(keys), 500):
+        subprocess.run(['podman', 'exec', 'ar-redis', 'redis-cli', 'del', *keys[i:i + 500]], capture_output=True)
 
 # A made-up Stripe test key: Stripe answers 401 to anything forwarded with it, so
 # these tours only forward to Stripe where that failure is the point (Failures).
@@ -110,7 +111,10 @@ class Tour:
 
     def open_row(self, cls, caption):
         self.refresh()
+        self.pg.wait_for_timeout(4000)  # the live feed redraws the list once new calls arrive; click after that
         self.click(f'#activity-body .log-row.{cls}', wait=1500)
+        if not self.pg.locator('#activity-body .log-detail').count():  # the list refreshed under the click
+            self.click(f'#activity-body .log-row.{cls}', wait=1500)
         self.shot(caption)
 
     def finish(self):
@@ -254,8 +258,42 @@ def record_replay(t):
     t.click('.rec-view', wait=1500)
     t.shot('Click View to see every call and its answer. A replay is answered from here, so nothing reaches the real service.')
 
+def refund_agent(t):
+    for p in ('spendcap:org_acme*', 'hitl_usage:org_acme*'):
+        redis_del(p)
+    for p in dash.get(f'{B}/api/v1/hitl/pending').json().get('pending', []):  # leftovers from earlier runs
+        dash.post(f'{B}/api/v1/hitl/{p["req_id"]}/decide', json={'decision': 'deny'})
+    t.tab('rules')
+    t.click('#policy-rules-btn')
+    t.type('#policy-agent', 'support-agent'); t.type('#policy-service', 'mockpay'); t.type('#policy-action', 'payment.refund')
+    t.pick('#policy-effect', 'require')
+    t.type('#policy-fields', '{"amount": {"max_from": {"action": "order.get", "with": {"order_id": "order_id"}, "field": "order_amount", "factor": 0.5}}}')
+    t.pick('#policy-violation', 'hitl')
+    t.shot('Rules tab, Action policies. A refund by support-agent may be at most half the order. AgentRaaS reads the order itself (order.get), so the agent cannot send a bigger order amount. Over the limit: Route to approval.')
+    t.click('#policy-submit', wait=1500)
+    t.close_modal()
+    t.click('#spendcap-rules-btn')
+    t.type('#spendcap-agent', 'support-agent'); t.type('#spendcap-service', 'mockpay'); t.type('#spendcap-action', 'payment.refund')
+    t.pick('#spendcap-window', 'day'); t.type('#spendcap-amount-field', 'amount'); t.type('#spendcap-amount-max', 1500)
+    t.type('#spendcap-tz', 'Asia/Kolkata'); t.pick('#spendcap-exceed', 'block')
+    t.shot('Spend caps: at most 1500 in refunds a day for support-agent, counted in India time.')
+    t.click('#spendcap-submit', wait=1500)
+    t.close_modal()
+    refund = lambda order, amount: agent_call({'payment': f'mockpay_{order}', 'order_id': order, 'amount': amount}, agent='support-agent', action='payment.refund')
+    refund('order_1200', 150)
+    refund('order_1200', 700)
+    t.say('A customer reports a missing item. The agent refunds 150 of a 1200 order, then tries 700 on the same order.', 3000)
+    t.tab('monitor')
+    t.click('#approvals-btn', wait=1500)
+    t.shot('The 150 refund ran. The 700 one is over half the order, so it waits here for a person: Monitor tab, Waiting for approval.')
+    t.click('[data-deny]', wait=2000)
+    t.close_modal()
+    refund('order_1300', 600)
+    refund('order_1900', 900)
+    t.open_row('blocked', "Later that day: 600 more ran, then 900 would pass the 1500 a day, so it was blocked. The row says which cap stopped it.")
+
 FLOWS = {'connect': connect, 'retries': retries, 'validation': validation, 'approvals': approvals, 'spend-caps': spend_caps,
-         'policies': policies, 'failures': failures, 'undo': undo, 'record-replay': record_replay}
+         'policies': policies, 'failures': failures, 'undo': undo, 'record-replay': record_replay, 'refund-agent': refund_agent}
 
 out = json.load(open(OUT)) if os.path.exists(OUT) else {}
 with sync_playwright() as p:

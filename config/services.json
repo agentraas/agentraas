@@ -239,6 +239,16 @@
             "required": true
           }
         }
+      },
+      "order.get": {
+        "method": "GET",
+        "path": "/mockpay/orders/{order_id}",
+        "validation": {
+          "order_id": {
+            "type": "string",
+            "required": true
+          }
+        }
       }
     }
   },
@@ -367,6 +377,30 @@
           "currency": {
             "type": "string",
             "required": true
+          }
+        }
+      },
+      "payment.get": {
+        "method": "GET",
+        "path": "/payments/{payment_id}",
+        "validation": {
+          "payment_id": {
+            "type": "string",
+            "required": true
+          }
+        }
+      },
+      "payment.refund": {
+        "method": "POST",
+        "path": "/payments/{payment_id}/refund",
+        "validation": {
+          "payment_id": {
+            "type": "string",
+            "required": true
+          },
+          "amount": {
+            "type": "number",
+            "min": 100
           }
         }
       }
@@ -1723,6 +1757,301 @@
           "securityId": "11536",
           "quantity": 1,
           "price": 3500
+        }
+      }
+    }
+  },
+  "cashfree": {
+    "baseUrl": "https://api.cashfree.com/pg",
+    "authHeader": "x-client-id, x-client-secret",
+    "authType": "header-pair",
+    "contentType": "application/json",
+    "extraHeaders": {
+      "x-api-version": "2026-01-01",
+      "x-idempotency-key": "{idempotency_key}"
+    },
+    "setup": {
+      "label": "Cashfree Payments",
+      "category": "Payments",
+      "username": "App ID",
+      "usernameHint": "From the Cashfree merchant dashboard, Developers, API keys (production).",
+      "password": "Secret key",
+      "keyUrl": "https://merchant.cashfree.com",
+      "example": {
+        "action": "order.get",
+        "payload": {
+          "order_id": "order_1001"
+        }
+      }
+    },
+    "actions": {
+      "order.create": {
+        "method": "POST",
+        "path": "/orders",
+        "validation": {
+          "order_amount": {
+            "type": "number",
+            "required": true,
+            "min": 1
+          },
+          "order_currency": {
+            "type": "string",
+            "required": true
+          },
+          "customer_details": {
+            "type": "object",
+            "required": true
+          }
+        }
+      },
+      "order.get": {
+        "method": "GET",
+        "path": "/orders/{order_id}",
+        "validation": {
+          "order_id": {
+            "type": "string",
+            "required": true
+          }
+        }
+      },
+      "refund.create": {
+        "method": "POST",
+        "path": "/orders/{order_id}/refunds",
+        "validation": {
+          "order_id": {
+            "type": "string",
+            "required": true
+          },
+          "refund_amount": {
+            "type": "number",
+            "required": true,
+            "min": 0.01
+          },
+          "refund_id": {
+            "type": "string",
+            "required": true,
+            "minLength": 3,
+            "maxLength": 40
+          }
+        }
+      }
+    }
+  },
+  "cashfree_sandbox": {
+    "baseUrl": "https://sandbox.cashfree.com/pg",
+    "authHeader": "x-client-id, x-client-secret",
+    "authType": "header-pair",
+    "contentType": "application/json",
+    "extraHeaders": {
+      "x-api-version": "2026-01-01",
+      "x-idempotency-key": "{idempotency_key}"
+    },
+    "setup": {
+      "label": "Cashfree Payments (test)",
+      "category": "Payments",
+      "username": "App ID",
+      "usernameHint": "Test-mode keys from the Cashfree merchant dashboard. Nothing real is charged or refunded.",
+      "password": "Secret key",
+      "keyUrl": "https://merchant.cashfree.com",
+      "example": {
+        "action": "order.get",
+        "payload": {
+          "order_id": "order_1001"
+        }
+      }
+    },
+    "actions": {
+      "order.create": {
+        "method": "POST",
+        "path": "/orders",
+        "validation": {
+          "order_amount": {
+            "type": "number",
+            "required": true,
+            "min": 1
+          },
+          "order_currency": {
+            "type": "string",
+            "required": true
+          },
+          "customer_details": {
+            "type": "object",
+            "required": true
+          }
+        }
+      },
+      "order.get": {
+        "method": "GET",
+        "path": "/orders/{order_id}",
+        "validation": {
+          "order_id": {
+            "type": "string",
+            "required": true
+          }
+        }
+      },
+      "refund.create": {
+        "method": "POST",
+        "path": "/orders/{order_id}/refunds",
+        "validation": {
+          "order_id": {
+            "type": "string",
+            "required": true
+          },
+          "refund_amount": {
+            "type": "number",
+            "required": true,
+            "min": 0.01
+          },
+          "refund_id": {
+            "type": "string",
+            "required": true,
+            "minLength": 3,
+            "maxLength": 40
+          }
+        }
+      }
+    }
+  },
+  "razorpayx": {
+    "baseUrl": "https://api.razorpay.com/v1",
+    "authType": "basic",
+    "contentType": "application/json",
+    "extraHeaders": {
+      "X-Payout-Idempotency": "{idempotency_key}"
+    },
+    "setup": {
+      "label": "RazorpayX Payouts",
+      "category": "Payouts",
+      "username": "Key ID",
+      "password": "Key secret",
+      "usernameHint": "API keys from RazorpayX (test keys start with rzp_test_). Every payout gets an idempotency key, which RazorpayX requires.",
+      "keyUrl": "https://x.razorpay.com",
+      "example": {
+        "action": "payout.create",
+        "payload": {
+          "account_number": "7878780080316316",
+          "fund_account_id": "fa_00000000000001",
+          "amount": 50000,
+          "currency": "INR",
+          "mode": "IMPS",
+          "purpose": "payout",
+          "reference_id": "rider-4182-oct-26"
+        }
+      }
+    },
+    "actions": {
+      "payout.create": {
+        "method": "POST",
+        "path": "/payouts",
+        "validation": {
+          "account_number": {
+            "type": "string",
+            "required": true
+          },
+          "fund_account_id": {
+            "type": "string",
+            "required": true
+          },
+          "amount": {
+            "type": "number",
+            "required": true,
+            "min": 100
+          },
+          "currency": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "INR"
+            ]
+          },
+          "mode": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "NEFT",
+              "RTGS",
+              "IMPS",
+              "UPI"
+            ]
+          },
+          "purpose": {
+            "type": "string",
+            "required": true
+          },
+          "reference_id": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "narration": {
+            "type": "string",
+            "maxLength": 30
+          }
+        }
+      },
+      "payout.get": {
+        "method": "GET",
+        "path": "/payouts/{payout_id}",
+        "validation": {
+          "payout_id": {
+            "type": "string",
+            "required": true
+          }
+        }
+      }
+    }
+  },
+  "gupshup": {
+    "baseUrl": "https://api.gupshup.io/wa/api/v1",
+    "authHeader": "apikey",
+    "authType": "custom-header",
+    "contentType": "application/x-www-form-urlencoded",
+    "setup": {
+      "label": "Gupshup (WhatsApp)",
+      "category": "Messaging",
+      "key": "API key",
+      "keyHint": "From your Gupshup account. Send from the WhatsApp number and app registered there.",
+      "keyUrl": "https://www.gupshup.io",
+      "example": {
+        "action": "message.send",
+        "payload": {
+          "channel": "whatsapp",
+          "source": "917834811114",
+          "destination": "919876543210",
+          "src.name": "YourApp",
+          "message": "{\"type\":\"text\",\"text\":\"Your order is on its way.\"}"
+        }
+      }
+    },
+    "actions": {
+      "message.send": {
+        "method": "POST",
+        "path": "/msg",
+        "validation": {
+          "channel": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "whatsapp"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "required": true
+          },
+          "destination": {
+            "type": "string",
+            "required": true
+          },
+          "src.name": {
+            "type": "string",
+            "required": true
+          },
+          "message": {
+            "type": "string",
+            "required": true,
+            "maxLength": 5000
+          }
         }
       }
     }

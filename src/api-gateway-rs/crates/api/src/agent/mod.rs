@@ -36,6 +36,7 @@ pub fn router() -> Router<SharedState> {
         .route("/api/v1/demo/live-test", post(demo_live_test))
         .route("/internal/mockpay", post(internal_mockpay))
         .route("/internal/mockpay/refund", post(internal_mockpay_refund))
+        .route("/internal/mockpay/orders/:order_id", get(internal_mockpay_order))
 }
 
 /// Internal mock payment processor — `config/services.json`'s `mockpay`
@@ -87,6 +88,17 @@ fn generate_request_id() -> String {
     let mut buf = [0u8; 8];
     rand::thread_rng().fill_bytes(&mut buf);
     format!("req_{}", hex::encode(buf))
+}
+
+/// mockpay's order lookup (`order.get`), stateless: an order's amount is
+/// the number at the end of its id (`order_1200` is an order of 1200), so a
+/// lookup limit can be tried without a real provider or any stored orders.
+async fn internal_mockpay_order(Path(order_id): Path<String>) -> Response {
+    let digits: String = order_id.chars().rev().take_while(char::is_ascii_digit).collect::<Vec<_>>().into_iter().rev().collect();
+    match digits.parse::<u64>() {
+        Ok(amount) if amount > 0 => (StatusCode::OK, Json(json!({ "order_id": order_id, "order_amount": amount, "order_status": "PAID" }))).into(),
+        _ => (StatusCode::NOT_FOUND, Json(json!({ "error": "No such order. In the sandbox an order id ends in its amount, like order_1200." }))).into(),
+    }
 }
 
 /// mockpay's refund (`payment.refund`): the reverse of `payment.create`, so

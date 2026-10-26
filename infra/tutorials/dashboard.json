@@ -136,5 +136,23 @@
    "caption": "Click View to see every call and its answer. A replay is answered from here, so nothing reaches the real service.",
    "img": "/videos/dash-record-replay-2.jpg"
   }
+ ],
+ "refund-agent": [
+  {
+   "caption": "Rules tab, Action policies. A refund by support-agent may be at most half the order. AgentRaaS reads the order itself (order.get), so the agent cannot send a bigger order amount. Over the limit: Route to approval.",
+   "img": "/videos/dash-refund-agent-1.jpg"
+  },
+  {
+   "caption": "Spend caps: at most 1500 in refunds a day for support-agent, counted in India time.",
+   "img": "/videos/dash-refund-agent-2.jpg"
+  },
+  {
+   "caption": "The 150 refund ran. The 700 one is over half the order, so it waits here for a person: Monitor tab, Waiting for approval.",
+   "img": "/videos/dash-refund-agent-3.jpg"
+  },
+  {
+   "caption": "Later that day: 600 more ran, then 900 would pass the 1500 a day, so it was blocked. The row says which cap stopped it.",
+   "img": "/videos/dash-refund-agent-4.jpg"
+  }
  ]
 }
