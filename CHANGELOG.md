@@ -15,6 +15,10 @@ safe to re-run.
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-10-26
+
+No new migration. No change in behavior.
+
 ### Changed
 - **License.** The server core is now MIT (was AGPL-3.0), and the SDKs and
   everything else are MIT only (was MIT or Apache-2.0). The Team/Enterprise
@@ -565,7 +569,8 @@ server's `/health` response now includes its version.
 - Up to `050_known_destinations.sql`. On an existing install, apply any of
   `046` to `050` you have not run yet.
 
-[Unreleased]: https://github.com/agentraas/agentraas/compare/v0.23.1...HEAD
+[Unreleased]: https://github.com/agentraas/agentraas/compare/v0.24.0...HEAD
+[0.24.0]: https://github.com/agentraas/agentraas/compare/v0.23.1...v0.24.0
 [0.23.1]: https://github.com/agentraas/agentraas/compare/v0.23.0...v0.23.1
 [0.23.0]: https://github.com/agentraas/agentraas/compare/v0.22.1...v0.23.0
 [0.22.1]: https://github.com/agentraas/agentraas/compare/v0.22.0...v0.22.1
