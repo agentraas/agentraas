@@ -38,3 +38,6 @@ target/
 cookies.txt
 .claude/settings.local.json
 agentraas-dedup.db
+
+# local copies of the tutorial videos (the published ones are in src/api-gateway-rs/public/videos)
+docs/videos/

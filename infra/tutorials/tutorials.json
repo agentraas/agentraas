@@ -1,0 +1,1820 @@
+[
+ {
+  "id": "connect",
+  "title": "Connect an agent and send an action",
+  "summary": "Every agent gets its own key. It sends each action to AgentRaaS, which checks it, runs it once and records it.",
+  "setup": {
+   "dashboard": [
+    "Click + Connect agent",
+    "Pick where the agent runs and give it a name",
+    "Click Connect, then copy its key and URL"
+   ],
+   "api": {
+    "method": "POST",
+    "path": "/api/v1/agents/connect",
+    "body": {
+     "org_id": "org_acme",
+     "agent_id": "billing-agent",
+     "label": "Billing agent"
+    }
+   },
+   "returns": {
+    "api_key": "ar_live_...",
+    "webhook_url": "$AGENTRAAS_URL/v1/webhook/org_acme/billing-agent",
+    "mcp_url": "$AGENTRAAS_URL/mcp"
+   }
+  },
+  "cases": [
+   {
+    "title": "A normal call runs",
+    "why": "The key matches the agent, so the call is checked, sent to the payment API once and recorded.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_101",
+      "amount": 1500,
+      "fail": false
+     }
+    },
+    "status": 200,
+    "response": {
+     "forwarded": true,
+     "upstream_id": "mockpay_5ccb9571edaaa7e5",
+     "upstream_response": {
+      "id": "mockpay_5ccb9571edaaa7e5",
+      "amount": 1500,
+      "status": "completed"
+     },
+     "reqId": "req_0057c6722f9baf6a"
+    }
+   },
+   {
+    "title": "A wrong key is refused",
+    "why": "Nothing is sent. Check the key in Connect agent, or regenerate it.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer ar_live_wrong"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_101",
+      "amount": 1500
+     }
+    },
+    "status": 401,
+    "response": {
+     "error": "Invalid or missing API key for this agent. Generate one from the dashboard's Connect Agent panel.",
+     "reqId": "req_8d48b38526ebb8b3"
+    }
+   },
+   {
+    "title": "A key can't act as another agent",
+    "why": "Each key belongs to one agent. The support agent's key is refused on the billing agent's URL.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $SUPPORT_AGENT_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_102",
+      "amount": 900
+     }
+    },
+    "status": 401,
+    "response": {
+     "error": "Invalid or missing API key for this agent. Generate one from the dashboard's Connect Agent panel.",
+     "reqId": "req_1bc28d81db487a81"
+    }
+   },
+   {
+    "title": "An unknown action is refused",
+    "why": "Only actions the service has, or custom actions you registered, can run.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.teleport",
+     "payload": {
+      "customer": "cus_103"
+     }
+    },
+    "status": 400,
+    "response": {
+     "error": "Unknown service.action: mockpay.payment.teleport",
+     "reqId": "req_fac48a8552f52481"
+    }
+   }
+  ]
+ },
+ {
+  "id": "retries",
+  "title": "Safe retries (exactly once)",
+  "summary": "An agent retries after a timeout, a crash or a loop. AgentRaaS recognises the same call and answers from its record, so the action runs once.",
+  "setup": {
+   "dashboard": [
+    "Nothing to set up: every call is deduplicated",
+    "Monitor \u203a Recent activity shows retries as deduplicated"
+   ],
+   "notes": [
+    "Same agent, same service and action, same payload = the same call",
+    "Or send x-agentraas-idempotency-key: one key per action, never reused for a different payload"
+   ]
+  },
+  "cases": [
+   {
+    "title": "First call runs",
+    "why": "The call is new, so it runs and the result is stored.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_201",
+      "amount": 2500,
+      "fail": false
+     }
+    },
+    "status": 200,
+    "response": {
+     "forwarded": true,
+     "upstream_id": "mockpay_ca2bcc5e68218dc6",
+     "upstream_response": {
+      "id": "mockpay_ca2bcc5e68218dc6",
+      "amount": 2500,
+      "status": "completed"
+     },
+     "reqId": "req_bcb0cf24471610e6"
+    }
+   },
+   {
+    "title": "The retry is answered from the record",
+    "why": "\"cached\": true and the same payment id: the payment API was not called again.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_201",
+      "amount": 2500,
+      "fail": false
+     }
+    },
+    "status": 200,
+    "response": {
+     "forwarded": true,
+     "upstream_id": "mockpay_ca2bcc5e68218dc6",
+     "upstream_response": {
+      "id": "mockpay_ca2bcc5e68218dc6",
+      "amount": 2500,
+      "status": "completed"
+     },
+     "cached": true,
+     "reqId": "req_48dab712c37896f2"
+    }
+   },
+   {
+    "title": "A different payload is a new call",
+    "why": "Another amount is another action, so it runs.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_201",
+      "amount": 3000,
+      "fail": false
+     }
+    },
+    "status": 200,
+    "response": {
+     "forwarded": true,
+     "upstream_id": "mockpay_18687154eba8aa7d",
+     "upstream_response": {
+      "id": "mockpay_18687154eba8aa7d",
+      "amount": 3000,
+      "status": "completed"
+     },
+     "reqId": "req_2f8286d9bd0ed0ec"
+    }
+   },
+   {
+    "title": "Your own idempotency key",
+    "why": "With x-agentraas-idempotency-key you name the action yourself, for example by your order id.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY",
+     "x-agentraas-idempotency-key": "order-5531"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_202",
+      "amount": 700,
+      "fail": false
+     }
+    },
+    "status": 200,
+    "response": {
+     "forwarded": true,
+     "upstream_id": "mockpay_fbae3ca493558359",
+     "upstream_response": {
+      "id": "mockpay_fbae3ca493558359",
+      "amount": 700,
+      "status": "completed"
+     },
+     "reqId": "req_c4888769c1b4f441"
+    }
+   },
+   {
+    "title": "Same key, same body: answered from the record",
+    "why": "The retry carries the same key, so it is the same action.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY",
+     "x-agentraas-idempotency-key": "order-5531"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_202",
+      "amount": 700,
+      "fail": false
+     }
+    },
+    "status": 200,
+    "response": {
+     "forwarded": true,
+     "upstream_id": "mockpay_fbae3ca493558359",
+     "upstream_response": {
+      "id": "mockpay_fbae3ca493558359",
+      "amount": 700,
+      "status": "completed"
+     },
+     "cached": true,
+     "reqId": "req_8d7b9a38c31b9db6"
+    }
+   },
+   {
+    "title": "Same key, different body: refused",
+    "why": "A key stands for one exact action. Reusing it for something else is a bug in the caller, so it gets 422 and nothing runs.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY",
+     "x-agentraas-idempotency-key": "order-5531"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_202",
+      "amount": 9900,
+      "fail": false
+     }
+    },
+    "status": 422,
+    "response": {
+     "error": "This Idempotency-Key was already used with a different payload. Use a new key for a different request.",
+     "reqId": "req_2afbde93e7f10218"
+    }
+   }
+  ]
+ },
+ {
+  "id": "validation",
+  "title": "Validation rules",
+  "summary": "Check every payload before it is sent. A call that breaks a rule is refused with 422, nothing reaches the provider, and the answer tells the agent how to fix it.",
+  "setup": {
+   "dashboard": [
+    "Rules \u203a Validation rules",
+    "Pick the service and action",
+    "Add a rule per field: type, min, max, or not more than another field"
+   ],
+   "rules": [
+    {
+     "label": "amount: a number from 100 to 10000, never above balance",
+     "method": "POST",
+     "path": "/api/v1/validation-rules",
+     "body": {
+      "org_id": "org_acme",
+      "service": "mockpay",
+      "action": "payment.create",
+      "fields": {
+       "amount": {
+        "type": "number",
+        "min": 100,
+        "max": 10000,
+        "maxField": "balance"
+       }
+      }
+     }
+    }
+   ]
+  },
+  "cases": [
+   {
+    "title": "A good payload runs",
+    "why": "Every field passes.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_301",
+      "amount": 4000,
+      "balance": 9000,
+      "fail": false
+     }
+    },
+    "status": 200,
+    "response": {
+     "forwarded": true,
+     "upstream_id": "mockpay_de7d3b2cafeeb257",
+     "upstream_response": {
+      "id": "mockpay_de7d3b2cafeeb257",
+      "amount": 4000,
+      "status": "completed"
+     },
+     "reqId": "req_490edabf61d390e6"
+    }
+   },
+   {
+    "title": "Too big",
+    "why": "Above max: refused, nothing sent.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_302",
+      "amount": 50000,
+      "balance": 90000
+     }
+    },
+    "status": 422,
+    "response": {
+     "error": "amount must be at most 10000",
+     "reqId": "req_b77b85156f18c45c",
+     "validation_errors": [
+      {
+       "field": "amount",
+       "rule": "max",
+       "message": "amount must be at most 10000",
+       "hint": "Use a value of 10000 or less for \"amount\"."
+      }
+     ],
+     "next_step": "Nothing was sent. Fix every field listed in validation_errors, following each hint, and send the call again."
+    }
+   },
+   {
+    "title": "Too small",
+    "why": "Below min.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_303",
+      "amount": 5,
+      "balance": 9000
+     }
+    },
+    "status": 422,
+    "response": {
+     "error": "amount must be at least 100",
+     "reqId": "req_0eb6f0cad08c05b2",
+     "validation_errors": [
+      {
+       "field": "amount",
+       "rule": "min",
+       "message": "amount must be at least 100",
+       "hint": "Use a value of 100 or more for \"amount\"."
+      }
+     ],
+     "next_step": "Nothing was sent. Fix every field listed in validation_errors, following each hint, and send the call again."
+    }
+   },
+   {
+    "title": "Wrong type",
+    "why": "A string where a number belongs. The hint says what to send instead.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_304",
+      "amount": "forty",
+      "balance": 9000
+     }
+    },
+    "status": 422,
+    "response": {
+     "error": "amount must be number, got string",
+     "reqId": "req_b6a0703342901678",
+     "validation_errors": [
+      {
+       "field": "amount",
+       "rule": "type",
+       "message": "amount must be number, got string",
+       "hint": "Send \"amount\" as a number."
+      }
+     ],
+     "next_step": "Nothing was sent. Fix every field listed in validation_errors, following each hint, and send the call again."
+    }
+   },
+   {
+    "title": "More than the balance",
+    "why": "amount may not be above the payload's own balance field.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_305",
+      "amount": 6000,
+      "balance": 2000
+     }
+    },
+    "status": 422,
+    "response": {
+     "error": "amount (6000) must not exceed balance (2000)",
+     "reqId": "req_73533228ce2ec5c9",
+     "validation_errors": [
+      {
+       "field": "amount",
+       "rule": "maxField",
+       "message": "amount (6000) must not exceed balance (2000)",
+       "hint": "Lower \"amount\" to 2000 or less, the current \"balance\"."
+      }
+     ],
+     "next_step": "Nothing was sent. Fix every field listed in validation_errors, following each hint, and send the call again."
+    }
+   }
+  ]
+ },
+ {
+  "id": "approvals",
+  "title": "Human approval",
+  "summary": "Hold risky calls until a person says yes. The agent gets 202 and a status URL; the call runs once when approved, or never when denied.",
+  "setup": {
+   "dashboard": [
+    "Rules \u203a Approval rules",
+    "Pick the service and action",
+    "Optional: only when a field passes a threshold (amount > 5000)",
+    "Approve in Monitor \u203a Waiting for approval, Slack, Teams, Telegram, Discord, email, or agtrs approve"
+   ],
+   "rules": [
+    {
+     "label": "hold payment.create when amount > 5000",
+     "method": "POST",
+     "path": "/api/v1/hitl-rules",
+     "body": {
+      "org_id": "org_acme",
+      "service": "mockpay",
+      "action": "payment.create",
+      "field": "amount",
+      "operator": "gt",
+      "threshold": 5000
+     }
+    }
+   ]
+  },
+  "cases": [
+   {
+    "title": "Under the threshold runs at once",
+    "why": "amount 3000 is not above 5000, so no approval is needed.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_401",
+      "amount": 3000,
+      "fail": false
+     }
+    },
+    "status": 200,
+    "response": {
+     "forwarded": true,
+     "upstream_id": "mockpay_c67428127ced4ca8",
+     "upstream_response": {
+      "id": "mockpay_c67428127ced4ca8",
+      "amount": 3000,
+      "status": "completed"
+     },
+     "reqId": "req_ecdc84ae3d625258"
+    }
+   },
+   {
+    "title": "Over the threshold is held",
+    "why": "The agent gets 202 and a status URL. Nothing has run yet.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_402",
+      "amount": 8000,
+      "fail": false
+     }
+    },
+    "status": 202,
+    "response": {
+     "pending_approval": true,
+     "reqId": "req_40ec2fe909bc7bb7"
+    }
+   },
+   {
+    "title": "A retry while it waits is not a second request",
+    "why": "The same call again gets 409 until someone decides.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_402",
+      "amount": 8000,
+      "fail": false
+     }
+    },
+    "status": 409,
+    "response": {
+     "error": "An identical request is already being processed. Retry shortly.",
+     "reqId": "req_655f70425b67fcd2"
+    }
+   },
+   {
+    "title": "Approve: the call runs once",
+    "why": "In the dashboard, Slack, an approval link, or agtrs approve. The held call runs now.",
+    "method": "POST",
+    "path": "/api/v1/hitl/req_40ec2fe909bc7bb7/decide",
+    "body": {
+     "decision": "approve"
+    },
+    "status": 200,
+    "response": {
+     "reqId": "req_40ec2fe909bc7bb7",
+     "status": "approved"
+    },
+    "shown": "or: agtrs approve req_40ec2fe909bc7bb7"
+   },
+   {
+    "title": "The agent checks its status URL",
+    "why": "The status URL now carries the result.",
+    "method": "GET",
+    "path": "/v1/hitl/req_40ec2fe909bc7bb7",
+    "body": null,
+    "status": 200,
+    "response": {
+     "reqId": "req_40ec2fe909bc7bb7",
+     "status": "approved",
+     "result": {
+      "forwarded": true,
+      "upstream_id": "mockpay_d15a4f6b6f6360fe",
+      "upstream_response": {
+       "id": "mockpay_d15a4f6b6f6360fe",
+       "amount": 8000,
+       "status": "completed"
+      }
+     },
+     "error": null
+    },
+    "shown": null
+   },
+   {
+    "title": "Another big charge is held",
+    "why": "A second request over the threshold.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_403",
+      "amount": 9500,
+      "fail": false
+     }
+    },
+    "status": 202,
+    "response": {
+     "pending_approval": true,
+     "reqId": "req_dece4fb358d5c279"
+    }
+   },
+   {
+    "title": "Deny: it never runs",
+    "why": "The call is dropped. Nothing reaches the payment API.",
+    "method": "POST",
+    "path": "/api/v1/hitl/req_dece4fb358d5c279/decide",
+    "body": {
+     "decision": "deny"
+    },
+    "status": 200,
+    "response": {
+     "reqId": "req_dece4fb358d5c279",
+     "status": "denied"
+    },
+    "shown": "or: agtrs deny req_dece4fb358d5c279"
+   },
+   {
+    "title": "The status URL says denied",
+    "why": "The agent can stop or ask for a smaller amount.",
+    "method": "GET",
+    "path": "/v1/hitl/req_dece4fb358d5c279",
+    "body": null,
+    "status": 200,
+    "response": {
+     "reqId": "req_dece4fb358d5c279",
+     "status": "denied",
+     "result": null,
+     "error": null
+    },
+    "shown": null
+   }
+  ]
+ },
+ {
+  "id": "spend-caps",
+  "title": "Spend caps and money caps",
+  "summary": "Limit how often an agent may act, or how much money it may move per day. Over the limit, the call is refused (429) or held for approval.",
+  "setup": {
+   "dashboard": [
+    "Rules \u203a Spend caps",
+    "Count calls (max calls per hour or day), or add up a money field (max amount per day, in your time zone)",
+    "Over the limit: block, or hold for approval"
+   ],
+   "rules": [
+    {
+     "label": "billing-agent: at most 2 payments an hour",
+     "method": "POST",
+     "path": "/api/v1/spend-cap-rules",
+     "body": {
+      "org_id": "org_acme",
+      "agent_id": "billing-agent",
+      "service": "mockpay",
+      "action": "payment.create",
+      "window": "hour",
+      "max_calls": 2,
+      "on_exceed": "block"
+     }
+    },
+    {
+     "label": "all agents: at most 10000 in amount per day (Asia/Kolkata)",
+     "method": "POST",
+     "path": "/api/v1/spend-cap-rules",
+     "body": {
+      "org_id": "org_acme",
+      "service": "mockpay",
+      "action": "payment.create",
+      "window": "day",
+      "amount_field": "amount",
+      "max_amount": 10000,
+      "timezone": "Asia/Kolkata",
+      "on_exceed": "block"
+     }
+    },
+    {
+     "label": "support-agent: 1 payment an hour, then ask a person",
+     "method": "POST",
+     "path": "/api/v1/spend-cap-rules",
+     "body": {
+      "org_id": "org_acme",
+      "agent_id": "support-agent",
+      "service": "mockpay",
+      "action": "payment.create",
+      "window": "hour",
+      "max_calls": 1,
+      "on_exceed": "hitl"
+     }
+    }
+   ]
+  },
+  "cases": [
+   {
+    "title": "Call 1 of 2 runs",
+    "why": "Inside the limit.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_501",
+      "amount": 100,
+      "fail": false
+     }
+    },
+    "status": 200,
+    "response": {
+     "forwarded": true,
+     "upstream_id": "mockpay_7fc536af91c1663c",
+     "upstream_response": {
+      "id": "mockpay_7fc536af91c1663c",
+      "amount": 100,
+      "status": "completed"
+     },
+     "reqId": "req_04b512c10c503762"
+    }
+   },
+   {
+    "title": "Call 2 of 2 runs",
+    "why": "Still inside.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_502",
+      "amount": 100,
+      "fail": false
+     }
+    },
+    "status": 200,
+    "response": {
+     "forwarded": true,
+     "upstream_id": "mockpay_ca8ad07069809af5",
+     "upstream_response": {
+      "id": "mockpay_ca8ad07069809af5",
+      "amount": 100,
+      "status": "completed"
+     },
+     "reqId": "req_0bc6d5a68cba1d61"
+    }
+   },
+   {
+    "title": "Call 3 is refused",
+    "why": "The cap is reached: 429, nothing sent, until the hour rolls over.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_503",
+      "amount": 100,
+      "fail": false
+     }
+    },
+    "status": 429,
+    "response": {
+     "error": "Spend cap exceeded for mockpay.payment.create: 3/2 calls this hour (rule #284).",
+     "reqId": "req_70bbf932f3911889"
+    }
+   },
+   {
+    "title": "Other agents are not affected",
+    "why": "The cap names billing-agent, so the support agent's call runs.",
+    "agent": "support-agent",
+    "headers": {
+     "Authorization": "Bearer $SUPPORT_AGENT_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_504",
+      "amount": 100,
+      "fail": false
+     }
+    },
+    "status": 200,
+    "response": {
+     "forwarded": true,
+     "upstream_id": "mockpay_5985aa6bbc218443",
+     "upstream_response": {
+      "id": "mockpay_5985aa6bbc218443",
+      "amount": 100,
+      "status": "completed"
+     },
+     "reqId": "req_74042e712a3d2385"
+    }
+   },
+   {
+    "title": "A money cap adds up the amounts",
+    "why": "6000 of the 10000 for today.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_505",
+      "amount": 6000,
+      "fail": false
+     }
+    },
+    "status": 200,
+    "response": {
+     "forwarded": true,
+     "upstream_id": "mockpay_b34401f1b1c794fb",
+     "upstream_response": {
+      "id": "mockpay_b34401f1b1c794fb",
+      "amount": 6000,
+      "status": "completed"
+     },
+     "reqId": "req_de7f06b4afbcfdd5"
+    }
+   },
+   {
+    "title": "Going over the daily total is refused",
+    "why": "6000 + 5000 would be 11000, above 10000. The refused call uses none of the budget.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_506",
+      "amount": 5000,
+      "fail": false
+     }
+    },
+    "status": 429,
+    "response": {
+     "error": "Spend cap exceeded for mockpay.payment.create: amount 5000 would bring this day's total to 11000, above 10000 (rule #285).",
+     "reqId": "req_8079e0032ae6103e"
+    }
+   },
+   {
+    "title": "A smaller amount still fits",
+    "why": "6000 + 3000 = 9000.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_507",
+      "amount": 3000,
+      "fail": false
+     }
+    },
+    "status": 200,
+    "response": {
+     "forwarded": true,
+     "upstream_id": "mockpay_cfbe6cd8ae2a063a",
+     "upstream_response": {
+      "id": "mockpay_cfbe6cd8ae2a063a",
+      "amount": 3000,
+      "status": "completed"
+     },
+     "reqId": "req_0c21892d04e5d238"
+    }
+   },
+   {
+    "title": "Inside the cap runs",
+    "why": "First payment this hour.",
+    "agent": "support-agent",
+    "headers": {
+     "Authorization": "Bearer $SUPPORT_AGENT_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_508",
+      "amount": 100,
+      "fail": false
+     }
+    },
+    "status": 200,
+    "response": {
+     "forwarded": true,
+     "upstream_id": "mockpay_960bb281b5faaac1",
+     "upstream_response": {
+      "id": "mockpay_960bb281b5faaac1",
+      "amount": 100,
+      "status": "completed"
+     },
+     "reqId": "req_c1d92d0ad2d4a70f"
+    }
+   },
+   {
+    "title": "Over the cap waits for a person",
+    "why": "on_exceed hitl: held for approval instead of refused.",
+    "agent": "support-agent",
+    "headers": {
+     "Authorization": "Bearer $SUPPORT_AGENT_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_509",
+      "amount": 100,
+      "fail": false
+     }
+    },
+    "status": 202,
+    "response": {
+     "pending_approval": true,
+     "reqId": "req_ed5901ec5a024335"
+    }
+   }
+  ]
+ },
+ {
+  "id": "policies",
+  "title": "Action policies and allowed hours",
+  "summary": "Decide what each agent may do at all: deny an action, require a field to match (an email domain), or allow it only during working hours. A refused call gets 403 naming the policy.",
+  "setup": {
+   "dashboard": [
+    "Rules \u203a Action policies",
+    "Pick an agent (or all), a service and an action (* for every action)",
+    "Effect: deny, or require fields / hours"
+   ],
+   "rules": [
+    {
+     "label": "support-agent may not use mockpay at all",
+     "method": "POST",
+     "path": "/api/v1/action-policies",
+     "body": {
+      "org_id": "org_acme",
+      "agent_id": "support-agent",
+      "service": "mockpay",
+      "action": "*",
+      "effect": "deny"
+     }
+    },
+    {
+     "label": "receipts only go to acme.com addresses",
+     "method": "POST",
+     "path": "/api/v1/action-policies",
+     "body": {
+      "org_id": "org_acme",
+      "service": "mockpay",
+      "action": "payment.create",
+      "effect": "require",
+      "fields": {
+       "receipt_email": {
+        "domains": [
+         "acme.com"
+        ]
+       }
+      }
+     }
+    },
+    {
+     "label": "refunds only on tue, wed, thu, fri, sat, sun, 09:00 to 17:00 UTC",
+     "method": "POST",
+     "path": "/api/v1/action-policies",
+     "body": {
+      "org_id": "org_acme",
+      "service": "mockpay",
+      "action": "payment.refund",
+      "effect": "require",
+      "hours": {
+       "tz": "UTC",
+       "days": [
+        "tue",
+        "wed",
+        "thu",
+        "fri",
+        "sat",
+        "sun"
+       ],
+       "from": "09:00",
+       "to": "17:00"
+      }
+     }
+    }
+   ]
+  },
+  "cases": [
+   {
+    "title": "Denied for this agent",
+    "why": "The support agent may not take payments. The answer names the policy.",
+    "agent": "support-agent",
+    "headers": {
+     "Authorization": "Bearer $SUPPORT_AGENT_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_601",
+      "amount": 100,
+      "receipt_email": "pat@acme.com",
+      "fail": false
+     }
+    },
+    "status": 403,
+    "response": {
+     "error": "This agent may not call mockpay.payment.create (action policy #171)",
+     "reqId": "req_0a6d56b005a3c592"
+    }
+   },
+   {
+    "title": "Allowed for the billing agent",
+    "why": "The deny names only the support agent.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_602",
+      "amount": 100,
+      "receipt_email": "pat@acme.com",
+      "fail": false
+     }
+    },
+    "status": 200,
+    "response": {
+     "forwarded": true,
+     "upstream_id": "mockpay_26846d81cc614c98",
+     "upstream_response": {
+      "id": "mockpay_26846d81cc614c98",
+      "amount": 100,
+      "status": "completed"
+     },
+     "reqId": "req_1e4e5d30d88e1995"
+    }
+   },
+   {
+    "title": "A subdomain is allowed too",
+    "why": "billing.acme.com is inside acme.com.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_603",
+      "amount": 100,
+      "receipt_email": "pat@billing.acme.com",
+      "fail": false
+     }
+    },
+    "status": 200,
+    "response": {
+     "forwarded": true,
+     "upstream_id": "mockpay_da7d5972c4ce1daf",
+     "upstream_response": {
+      "id": "mockpay_da7d5972c4ce1daf",
+      "amount": 100,
+      "status": "completed"
+     },
+     "reqId": "req_091edb3571207bad"
+    }
+   },
+   {
+    "title": "A look-alike domain is refused",
+    "why": "acme.com.evil.io is not acme.com: a prompt-injected address is stopped.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_604",
+      "amount": 100,
+      "receipt_email": "pat@acme.com.evil.io",
+      "fail": false
+     }
+    },
+    "status": 403,
+    "response": {
+     "error": "receipt_email (pat@acme.com.evil.io) is not in an allowed domain: acme.com (action policy #172)",
+     "reqId": "req_3a1aecfc4e462ad2"
+    }
+   },
+   {
+    "title": "Outside the allowed hours",
+    "why": "Refunds are not allowed today, so the call is refused with the hours it is allowed in.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.refund",
+     "payload": {
+      "payment": "mockpay_x1",
+      "fail": false
+     }
+    },
+    "status": 403,
+    "response": {
+     "error": "mockpay.payment.refund is only allowed on tue, wed, thu, fri, sat, sun from 09:00 to 17:00 (UTC) (action policy #173)",
+     "reqId": "req_92cd00aa6d5b0780"
+    }
+   }
+  ]
+ },
+ {
+  "id": "failures",
+  "title": "Failures and the dead-letter queue",
+  "summary": "When the provider fails, the agent gets the error and the call is kept in the dead-letter queue, with its payload, to replay later. Nothing is silently lost.",
+  "setup": {
+   "dashboard": [
+    "Monitor \u203a Failed requests lists every call that failed",
+    "Replay sends it again with the same Idempotency-Key, so it still runs at most once"
+   ]
+  },
+  "cases": [
+   {
+    "title": "The provider fails",
+    "why": "mockpay with fail: true always errors (it stands in for a provider outage). The agent gets the error.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_701",
+      "amount": 1200,
+      "fail": true
+     }
+    },
+    "status": 500,
+    "response": {
+     "error": "MockPay temporarily unavailable",
+     "reqId": "req_b285aba574f7e48b",
+     "agentraas_note": "Request blocked by AgentRaaS."
+    }
+   },
+   {
+    "title": "It is in the dead-letter queue",
+    "why": "Monitor \u203a Failed requests, or the API, lists it with the error.",
+    "method": "GET",
+    "path": "/api/v1/dead-letter-queue?org_id=org_acme",
+    "body": null,
+    "status": 200,
+    "response": {
+     "entries": [
+      {
+       "id": 417,
+       "req_id": "req_b285aba574f7e48b",
+       "org_id": "org_acme",
+       "agent_id": "billing-agent",
+       "service": "mockpay",
+       "action": "payment.create",
+       "error_message": "MockPay temporarily unavailable",
+       "created_at": "2026-10-26T09:14:11.784907Z",
+       "payload": {
+        "customer": "cus_701",
+        "amount": 1200,
+        "fail": true
+       }
+      }
+     ]
+    },
+    "shown": null
+   },
+   {
+    "title": "Replay it",
+    "why": "Sent again with the same Idempotency-Key, so it still runs at most once. This payload still says fail: true, so it fails again (\"replayed\": false); once a real provider is back, the replay runs it.",
+    "method": "POST",
+    "path": "/api/v1/dead-letter-queue/417/replay",
+    "body": null,
+    "status": 500,
+    "response": {
+     "error": "MockPay temporarily unavailable",
+     "replayed": false,
+     "reqId": "req_0b1139f08b54f626"
+    },
+    "shown": null
+   },
+   {
+    "title": "Repeated failures open the circuit breaker",
+    "why": "Calls to mockpay now get 503 at once, without being sent, so a broken provider is not hammered and the agent can back off.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_710",
+      "amount": 1200,
+      "fail": false
+     }
+    },
+    "status": 503,
+    "response": {
+     "error": "Circuit breaker open for mockpay. Try again later.",
+     "reqId": "req_a8daa75cdfbe5233"
+    }
+   },
+   {
+    "title": "After 30 seconds, one call is let through",
+    "why": "It works, so the breaker closes and calls flow again.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_711",
+      "amount": 1200,
+      "fail": false
+     }
+    },
+    "status": 200,
+    "response": {
+     "forwarded": true,
+     "upstream_id": "mockpay_e711d951ab5b8ea9",
+     "upstream_response": {
+      "id": "mockpay_e711d951ab5b8ea9",
+      "amount": 1200,
+      "status": "completed"
+     },
+     "reqId": "req_dce3332d7b95c756"
+    }
+   },
+   {
+    "title": "Back to normal",
+    "why": "The next call runs as usual.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_712",
+      "amount": 1200,
+      "fail": false
+     }
+    },
+    "status": 200,
+    "response": {
+     "forwarded": true,
+     "upstream_id": "mockpay_b84fafbdfff98f83",
+     "upstream_response": {
+      "id": "mockpay_b84fafbdfff98f83",
+      "amount": 1200,
+      "status": "completed"
+     },
+     "reqId": "req_e1592a116f983748"
+    }
+   }
+  ]
+ },
+ {
+  "id": "undo",
+  "title": "Undo an action",
+  "summary": "Reverse something an agent did: a charge is refunded, a Slack message deleted, your own action reversed by the action you named. Each one can be undone once, for 30 days.",
+  "setup": {
+   "dashboard": [
+    "Monitor \u203a Undo actions",
+    "Click Undo next to the action"
+   ]
+  },
+  "cases": [
+   {
+    "title": "A charge runs",
+    "why": "It has a known reverse (payment.refund), so it is recorded as undoable.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_801",
+      "amount": 4500,
+      "fail": false
+     }
+    },
+    "status": 200,
+    "response": {
+     "forwarded": true,
+     "upstream_id": "mockpay_591cb571360f9704",
+     "upstream_response": {
+      "id": "mockpay_591cb571360f9704",
+      "amount": 4500,
+      "status": "completed"
+     },
+     "reqId": "req_a8f37613d5851054"
+    }
+   },
+   {
+    "title": "It appears in Undo actions",
+    "why": "With what undoing it will run.",
+    "method": "GET",
+    "path": "/api/v1/undo-log?org_id=org_acme",
+    "body": null,
+    "status": 200,
+    "response": {
+     "entries": [
+      {
+       "id": 2264,
+       "req_id": "req_a8f37613d5851054",
+       "undo_action": "payment.refund",
+       "undo_payload": {
+        "payment": "mockpay_591cb571360f9704"
+       },
+       "status": "available",
+       "expires_at": "2026-11-25T09:14:44.207621Z"
+      }
+     ]
+    },
+    "shown": null
+   },
+   {
+    "title": "Undo: the charge is refunded",
+    "why": "The reverse runs once, with its own idempotency key.",
+    "method": "POST",
+    "path": "/api/v1/undo-log/2264/undo",
+    "body": null,
+    "status": 200,
+    "response": {
+     "undone": true,
+     "id": 2264,
+     "reqId": "undo_2264",
+     "result": {
+      "forwarded": true,
+      "upstream_id": "mockrefund_40a5349c239426ed",
+      "upstream_response": {
+       "id": "mockrefund_40a5349c239426ed",
+       "payment": "mockpay_591cb571360f9704",
+       "status": "refunded"
+      }
+     }
+    },
+    "shown": null
+   },
+   {
+    "title": "A second undo is refused",
+    "why": "Already undone: 409, the refund never runs twice.",
+    "method": "POST",
+    "path": "/api/v1/undo-log/2264/undo",
+    "body": null,
+    "status": 409,
+    "response": {
+     "error": "Can't undo: this entry is undone."
+    },
+    "shown": null
+   }
+  ]
+ },
+ {
+  "id": "record-replay",
+  "title": "Record and replay",
+  "summary": "Record a run against the real providers once, then replay it in tests: every call is answered from the recording and nothing reaches the provider.",
+  "setup": {
+   "dashboard": [
+    "Add X-AgentRaaS-Record: <name> to the calls of one run",
+    "Replay with X-AgentRaaS-Replay: <name> and a run id",
+    "Monitor \u203a Recordings lists them"
+   ],
+   "notes": [
+    "Python: Client(..., record=\"refund-flow\") or replay=\"refund-flow\", run_id=...",
+    "JS: record / replay / runId in the Client options"
+   ]
+  },
+  "cases": [
+   {
+    "title": "Record call 1",
+    "why": "Runs for real and is kept under the name checkout-flow.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY",
+     "X-AgentRaaS-Record": "checkout-flow"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_901",
+      "amount": 2100,
+      "fail": false
+     }
+    },
+    "status": 200,
+    "response": {
+     "forwarded": true,
+     "upstream_id": "mockpay_c94c922f46021634",
+     "upstream_response": {
+      "id": "mockpay_c94c922f46021634",
+      "amount": 2100,
+      "status": "completed"
+     },
+     "reqId": "req_8200590d1fbf9ba2"
+    }
+   },
+   {
+    "title": "Record call 2",
+    "why": "Also kept, in order.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY",
+     "X-AgentRaaS-Record": "checkout-flow"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_901",
+      "amount": 2200,
+      "fail": false
+     }
+    },
+    "status": 200,
+    "response": {
+     "forwarded": true,
+     "upstream_id": "mockpay_19624f21d4ca4e19",
+     "upstream_response": {
+      "id": "mockpay_19624f21d4ca4e19",
+      "amount": 2200,
+      "status": "completed"
+     },
+     "reqId": "req_5824d34e9c176d21"
+    }
+   },
+   {
+    "title": "Replay call 1",
+    "why": "Answered from the recording: same payment id, nothing sent.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY",
+     "X-AgentRaaS-Replay": "checkout-flow",
+     "X-AgentRaaS-Run-Id": "ci-run-1"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_901",
+      "amount": 2100,
+      "fail": false
+     }
+    },
+    "status": 200,
+    "response": {
+     "forwarded": true,
+     "upstream_id": "mockpay_c94c922f46021634",
+     "upstream_response": {
+      "id": "mockpay_c94c922f46021634",
+      "amount": 2100,
+      "status": "completed"
+     },
+     "reqId": "req_b212dceaf6a784d3",
+     "replay": {
+      "recording": "checkout-flow",
+      "position": 1,
+      "payload_matches": true
+     }
+    }
+   },
+   {
+    "title": "Replay call 2 with a changed payload",
+    "why": "Still answered, but payload_matches is false, so a test can fail on it.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY",
+     "X-AgentRaaS-Replay": "checkout-flow",
+     "X-AgentRaaS-Run-Id": "ci-run-1"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_901",
+      "amount": 9999,
+      "fail": false
+     }
+    },
+    "status": 200,
+    "response": {
+     "forwarded": true,
+     "upstream_id": "mockpay_19624f21d4ca4e19",
+     "upstream_response": {
+      "id": "mockpay_19624f21d4ca4e19",
+      "amount": 2200,
+      "status": "completed"
+     },
+     "reqId": "req_f33e1e56bed8911c",
+     "replay": {
+      "recording": "checkout-flow",
+      "position": 2,
+      "payload_matches": false
+     }
+    }
+   },
+   {
+    "title": "A call the recording does not have",
+    "why": "404: the agent now makes more calls than it did when recorded.",
+    "agent": "billing-agent",
+    "headers": {
+     "Authorization": "Bearer $AGENTRAAS_KEY",
+     "X-AgentRaaS-Replay": "checkout-flow",
+     "X-AgentRaaS-Run-Id": "ci-run-1"
+    },
+    "body": {
+     "service": "mockpay",
+     "action": "payment.create",
+     "payload": {
+      "customer": "cus_901",
+      "amount": 2300,
+      "fail": false
+     }
+    },
+    "status": 404,
+    "response": {
+     "error": "Recording \"checkout-flow\" has no call #3 to mockpay.payment.create. The agent made a call the recording doesn't have.",
+     "reqId": "req_05f0c9f8ebf6a47f"
+    }
+   }
+  ]
+ },
+ {
+  "id": "apply",
+  "title": "Rules as code",
+  "summary": "Keep rules in a YAML file in your repo, review changes like code, and apply them from CI. agentraas apply makes the server match the file; running it twice changes nothing.",
+  "setup": {
+   "install": "pip install \"agentraas[apply]\"",
+   "env": [
+    "AGENTRAAS_URL=http://localhost:13000",
+    "AGENTRAAS_EMAIL / AGENTRAAS_PASSWORD: a user who can change the org"
+   ],
+   "file": {
+    "name": "agentraas.yaml",
+    "text": "apiVersion: agentraas.io/v1alpha1\nkind: ValidationRule\nmetadata: {name: sane-amounts, org: org_acme}\nspec: {service: mockpay, action: payment.create, fields: {amount: {type: number, max: 10000}}}\n---\napiVersion: agentraas.io/v1alpha1\nkind: SpendCap\nmetadata: {name: refund-budget, org: org_acme}\nspec: {service: mockpay, action: payment.refund, window: day, maxCalls: 20, onExceed: block}\n"
+   }
+  },
+  "cases": [
+   {
+    "title": "Preview the plan",
+    "why": "--dry-run prints what would change and changes nothing.",
+    "cmd": "agtrs apply -f agentraas.yaml --dry-run",
+    "output": "+ ValidationRule org_acme mockpay.payment.create (sane-amounts)\n+ SpendCap org_acme mockpay.payment.refund (refund-budget)",
+    "exit": 0,
+    "file": null
+   },
+   {
+    "title": "Apply it",
+    "why": "Creates what is missing.",
+    "cmd": "agtrs apply -f agentraas.yaml",
+    "output": "+ ValidationRule org_acme mockpay.payment.create (sane-amounts)\n+ SpendCap org_acme mockpay.payment.refund (refund-budget)",
+    "exit": 0,
+    "file": null
+   },
+   {
+    "title": "Apply again: nothing to do",
+    "why": "The server already matches the file.",
+    "cmd": "agtrs apply -f agentraas.yaml",
+    "output": "no changes",
+    "exit": 0,
+    "file": null
+   },
+   {
+    "title": "Change a limit in the file",
+    "why": "max 10000 becomes 5000; apply replaces the rule that changed.",
+    "cmd": "agtrs apply -f agentraas.yaml   # after changing max: 10000 to max: 5000",
+    "output": "+ ValidationRule org_acme mockpay.payment.create (sane-amounts)",
+    "exit": 0,
+    "file": null
+   },
+   {
+    "title": "Remove a rule with --prune",
+    "why": "Without --prune, rules missing from the file are left alone. With it, they are deleted.",
+    "cmd": "agtrs apply -f agentraas.yaml --prune   # after deleting the SpendCap from the file",
+    "output": "- SpendCap org_acme mockpay.payment.refund (id 288)",
+    "exit": 0,
+    "file": null
+   },
+   {
+    "title": "A mistake fails the CI job",
+    "why": "An unknown kind is reported and the command exits non-zero, so the pipeline stops.",
+    "cmd": "agtrs apply -f agentraas.yaml   # with a typo: kind: SpendLimit",
+    "output": "agentraas.yaml document 2: kind must be one of DedupRule, ValidationRule, ActionPolicy, SpendCap",
+    "exit": 1,
+    "file": null
+   }
+  ],
+  "kind": "cli"
+ },
+ {
+  "id": "library",
+  "title": "Library mode and the chaos tester",
+  "summary": "No server at all: a decorator makes a function with side effects run once, even when it is retried, and the chaos tester finds the calls that would run twice.",
+  "setup": {
+   "install": "pip install agentraas"
+  },
+  "cases": [
+   {
+    "title": "Wrap a function: a retry runs it once",
+    "why": "The second call with the same arguments returns the stored result; the function body does not run.",
+    "cmd": "python lib_demo.py",
+    "output": "  charging cus_42 4200\nch_cus_42_4200\nch_cus_42_4200\n  charging cus_42 900\nch_cus_42_900\ntimes charged: 2",
+    "exit": 0,
+    "file": {
+     "name": "lib_demo.py",
+     "text": "from agentraas.local import exactly_once\n\ncalls = 0\n\n@exactly_once()                 # state in a local SQLite file\ndef charge(customer, amount):\n    global calls\n    calls += 1\n    print(f\"  charging {customer} {amount}\")\n    return f\"ch_{customer}_{amount}\"\n\nprint(charge(\"cus_42\", 4200))   # runs\nprint(charge(\"cus_42\", 4200))   # retry: cached, no second charge\nprint(charge(\"cus_42\", 900))    # different arguments: runs\nprint(\"times charged:\", calls)\n"
+    }
+   },
+   {
+    "title": "A failure is not cached",
+    "why": "If the function raises, nothing is stored, so the retry runs for real.",
+    "cmd": "python err_demo.py",
+    "output": "  failed: provider timed out (not cached, a retry runs again)\ninv_cus_77\nattempts: 2",
+    "exit": 0,
+    "file": {
+     "name": "err_demo.py",
+     "text": "from agentraas.local import exactly_once\n\nattempts = 0\n\n@exactly_once()\ndef send_invoice(customer):\n    global attempts\n    attempts += 1\n    if attempts == 1:\n        raise TimeoutError(\"provider timed out\")\n    return f\"inv_{customer}\"\n\nfor _ in range(2):\n    try:\n        print(send_invoice(\"cus_77\"))\n    except TimeoutError as e:\n        print(\"  failed:\", e, \"(not cached, a retry runs again)\")\nprint(\"attempts:\", attempts)\n"
+    }
+   },
+   {
+    "title": "The chaos tester finds a double charge",
+    "why": "It lets each write run, then drops the response. The agent retries without an idempotency key, and the charge runs twice.",
+    "cmd": "agentraas chaos --mock -- python agent.py",
+    "output": "agentraas-chaos listening on http://127.0.0.1:8787 -> mock (fault: lost-response)\nagentraas-chaos: 2 write requests, 1 responses dropped after execution\n\n  DUPLICATES: 1 action(s) executed more than once\n\n    2x  POST /v1/charges  (body sha256 a32934913660)\n\n  Fix: send an Idempotency-Key header that stays the same across retries, for\n  providers that honor one. With agentraas.local.exactly_once, give the function an\n  `idempotency_key` parameter and send it as that header; for providers without\n  idempotency support, route the call through an AgentRaaS server.",
+    "exit": 1,
+    "file": {
+     "name": "agent.py",
+     "text": "import os, requests\nAPI = os.environ[\"AGENTRAAS_CHAOS_URL\"]\n\ndef charge(customer, amount):\n    for attempt in range(3):          # retry on network errors\n        try:\n            return requests.post(f\"{API}/v1/charges\",\n                                 data={\"customer\": customer, \"amount\": amount}, timeout=5).json()\n        except requests.RequestException:\n            continue\n\ncharge(\"cus_42\", 4200)\n"
+    }
+   },
+   {
+    "title": "With exactly_once and an idempotency key it passes",
+    "why": "The retry carries the same key, so nothing doubles. Exit code 0, so CI passes.",
+    "cmd": "agentraas chaos --mock -- python agent_fixed.py",
+    "output": "agentraas-chaos listening on http://127.0.0.1:8787 -> mock (fault: lost-response)\nagentraas-chaos: 2 write requests, 1 responses dropped after execution\n\n  No duplicates: every retried write was deduplicated or never retried.\n\n  Protected by an idempotency key: 1 retry",
+    "exit": 0,
+    "file": {
+     "name": "agent_fixed.py",
+     "text": "import os, requests\nfrom agentraas.local import exactly_once\nAPI = os.environ[\"AGENTRAAS_CHAOS_URL\"]\n\n@exactly_once()\ndef charge(customer, amount, idempotency_key=None):\n    for attempt in range(3):\n        try:\n            return requests.post(f\"{API}/v1/charges\",\n                                 data={\"customer\": customer, \"amount\": amount},\n                                 headers={\"Idempotency-Key\": idempotency_key}, timeout=5).json()\n        except requests.RequestException:\n            continue\n\ncharge(\"cus_42\", 4200)\n"
+    }
+   }
+  ],
+  "kind": "cli"
+ },
+ {
+  "id": "langchain",
+  "title": "LangChain and LangGraph tools",
+  "summary": "Wrap the tools that have side effects. When the model calls one again with the same arguments, or the graph re-runs after a crash, the stored result comes back instead of a second action.",
+  "setup": {
+   "install": "pip install \"agentraas[langchain]\"",
+   "notes": [
+    "CrewAI: from agentraas.crewai import protect_tool, same idea",
+    "Vercel AI SDK: protectTools in the npm package"
+   ]
+  },
+  "cases": [
+   {
+    "title": "Protect a tool",
+    "why": "Use the protected tool wherever the agent takes its tools: create_react_agent, ToolNode, an AgentExecutor.",
+    "cmd": "python lc_demo.py",
+    "output": "refund 1 sent to cus_9\nrefund 1 sent to cus_9\nrefund 2 sent to cus_9\nrefunds actually sent: 2",
+    "exit": 0,
+    "file": {
+     "name": "lc_demo.py",
+     "text": "from langchain_core.tools import tool\nfrom agentraas.langchain import protect_tool\n\nsent = []\n\n@tool\ndef send_refund(customer: str, amount: int) -> str:\n    \"\"\"Refund a customer.\"\"\"\n    sent.append((customer, amount))\n    return f\"refund {len(sent)} sent to {customer}\"\n\nsafe = protect_tool(send_refund)\n\nprint(safe.invoke({\"customer\": \"cus_9\", \"amount\": 500}))   # runs\nprint(safe.invoke({\"customer\": \"cus_9\", \"amount\": 500}))   # model repeats itself: stored result\nprint(safe.invoke({\"customer\": \"cus_9\", \"amount\": 700}))   # different arguments: runs\nprint(\"refunds actually sent:\", len(sent))\n"
+    }
+   }
+  ],
+  "kind": "cli"
+ },
+ {
+  "id": "mcp",
+  "title": "MCP: scan and wrap a server",
+  "summary": "agentraas scan lists which tools of an MCP server can move money, delete data or send messages. agentraas wrap puts exactly-once in front of the server, so a retrying or looping model cannot run the same write twice.",
+  "setup": {
+   "install": "pip install agentraas",
+   "file": {
+    "name": "claude_desktop_config.json",
+    "text": "{\n  \"mcpServers\": {\n    \"billing\": {\n      \"command\": \"uvx\",\n      \"args\": [\n        \"agentraas\",\n        \"wrap\",\n        \"--\",\n        \"python\",\n        \"billing_server.py\"\n      ]\n    }\n  }\n}"
+   }
+  },
+  "cases": [
+   {
+    "title": "Scan the server",
+    "why": "Starts it, asks only for its tool list, and sorts the tools by risk. Nothing is called.",
+    "cmd": "agentraas scan -- python billing_server.py",
+    "output": "\nbilling_server.py  (python billing_server.py)\n  5 tools: 3 high risk, 1 write, 1 read-only\n    HIGH    deletes    delete_customer  (name: delete)\n    HIGH    money      create_refund  (name: refund)\n    HIGH    sends      send_receipt  (name: send)\n    MEDIUM  writes     update_note  (name: update)\n  Fix duplicates and get an audit log: agentraas wrap -- python billing_server.py\n\nHigh-risk tools can spend money, delete data or reach people. To block, cap or hold them for\nhuman approval before they run, route them through an AgentRaaS server: https://agentraas.io/mcp-scan\nscanning billing_server.py ...",
+    "exit": 0,
+    "file": {
+     "name": "billing_server.py",
+     "text": "import json, sys, collections\n# A small demo billing MCP server (stdio), written for this tutorial.\ncount = collections.Counter()\nTOOLS = [\n    {\"name\": \"get_invoice\", \"description\": \"Look up an invoice\", \"inputSchema\": {\"type\": \"object\"}},\n    {\"name\": \"update_note\", \"description\": \"Edit a customer note\", \"inputSchema\": {\"type\": \"object\"}},\n    {\"name\": \"send_receipt\", \"description\": \"Email a receipt\", \"inputSchema\": {\"type\": \"object\"}},\n    {\"name\": \"create_refund\", \"description\": \"Refund a payment\", \"inputSchema\": {\"type\": \"object\"}},\n    {\"name\": \"delete_customer\", \"description\": \"Delete a customer\", \"inputSchema\": {\"type\": \"object\"}},\n]\nfor line in sys.stdin:\n    msg = json.loads(line)\n    if \"id\" not in msg:\n        continue\n    m, rid = msg[\"method\"], msg[\"id\"]\n    if m == \"initialize\":\n        res = {\"protocolVersion\": \"2025-06-18\", \"capabilities\": {\"tools\": {}}, \"serverInfo\": {\"name\": \"billing-demo\", \"version\": \"1\"}}\n    elif m == \"tools/list\":\n        res = {\"tools\": TOOLS}\n    elif m == \"tools/call\":\n        name = msg[\"params\"][\"name\"]; count[name] += 1\n        res = {\"content\": [{\"type\": \"text\", \"text\": f\"{name} ran (time #{count[name]})\"}], \"isError\": False}\n    else:\n        res = {}\n    sys.stdout.write(json.dumps({\"jsonrpc\": \"2.0\", \"id\": rid, \"result\": res}) + \"\\n\"); sys.stdout.flush()\n"
+    }
+   },
+   {
+    "title": "Scan in CI",
+    "why": "--fail-on high exits non-zero when a high-risk tool is present, so a new dangerous tool needs a review.",
+    "cmd": "agentraas scan --fail-on high -- python billing_server.py; echo \"exit code: $?\"",
+    "output": "\nbilling_server.py  (python billing_server.py)\n  5 tools: 3 high risk, 1 write, 1 read-only\n    HIGH    deletes    delete_customer  (name: delete)\n    HIGH    money      create_refund  (name: refund)\n    HIGH    sends      send_receipt  (name: send)\n    MEDIUM  writes     update_note  (name: update)\n  Fix duplicates and get an audit log: agentraas wrap -- python billing_server.py\n\nHigh-risk tools can spend money, delete data or reach people. To block, cap or hold them for\nhuman approval before they run, route them through an AgentRaaS server: https://agentraas.io/mcp-scan\nexit code: 1\nscanning billing_server.py ...",
+    "exit": 0,
+    "file": null
+   },
+   {
+    "title": "A write tool runs",
+    "why": "Through agentraas wrap, the first refund runs.",
+    "cmd": "tools/call create_refund {\"payment\": \"pay_1\", \"amount\": 500}",
+    "output": "create_refund ran (time #1)",
+    "exit": 0
+   },
+   {
+    "title": "The model repeats it: answered from the record",
+    "why": "Same tool, same arguments inside the window (10 minutes by default): the stored result, marked deduplicated.",
+    "cmd": "tools/call create_refund {\"payment\": \"pay_1\", \"amount\": 500}",
+    "output": "create_refund ran (time #1)   _meta: {\"agentraas/deduplicated\": true}",
+    "exit": 0
+   },
+   {
+    "title": "Different arguments run",
+    "why": "Another refund is another action.",
+    "cmd": "tools/call create_refund {\"payment\": \"pay_2\", \"amount\": 500}",
+    "output": "create_refund ran (time #2)",
+    "exit": 0
+   },
+   {
+    "title": "Read tools always run",
+    "why": "get_* and other read-only tools are never deduplicated, so lookups stay fresh.",
+    "cmd": "tools/call get_invoice {\"id\": \"inv_1\"}",
+    "output": "get_invoice ran (time #1)",
+    "exit": 0
+   },
+   {
+    "title": "...every time",
+    "why": "",
+    "cmd": "tools/call get_invoice {\"id\": \"inv_1\"}",
+    "output": "get_invoice ran (time #2)",
+    "exit": 0
+   },
+   {
+    "title": "Every call is in the audit log",
+    "why": "~/.agentraas/mcp-audit.jsonl by default (--log to change it).",
+    "cmd": "tail -n 3 ~/.agentraas/mcp-audit.jsonl",
+    "output": "{\"ts\": \"2026-10-26T14:50:47+0530\", \"server\": \"/tmp/claude-1000/-home-sumedh-agentraas/a4302135-38e1-4e8f-b96b-f316713680b0/scratchpad/video/venv/bin/python billing_server.py\", \"tool\": \"create_refund\", \"args_sha256\": \"e7e3c81b9ab9325474baa6b5d497f8622bae2ed419742be95f77459f881d6601\", \"outcome\": \"executed\", \"ms\": 3.9}\n{\"ts\": \"2026-10-26T14:50:47+0530\", \"server\": \"/tmp/claude-1000/-home-sumedh-agentraas/a4302135-38e1-4e8f-b96b-f316713680b0/scratchpad/video/venv/bin/python billing_server.py\", \"tool\": \"get_invoice\", \"args_sha256\": \"5e777ee2baf1961980874ddb6a0d40b73e7d63d3db7e2d6760b6e88b625ab18d\", \"outcome\": \"passthrough\", \"ms\": 0.0}\n{\"ts\": \"2026-10-26T14:50:47+0530\", \"server\": \"/tmp/claude-1000/-home-sumedh-agentraas/a4302135-38e1-4e8f-b96b-f316713680b0/scratchpad/video/venv/bin/python billing_server.py\", \"tool\": \"get_invoice\", \"args_sha256\": \"5e777ee2baf1961980874ddb6a0d40b73e7d63d3db7e2d6760b6e88b625ab18d\", \"outcome\": \"passthrough\", \"ms\": 0.0}",
+    "exit": 0
+   }
+  ],
+  "kind": "cli"
+ }
+]
