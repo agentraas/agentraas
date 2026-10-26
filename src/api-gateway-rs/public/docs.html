@@ -53,6 +53,7 @@
   th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border-dark); }
   th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; }
   td code { white-space: nowrap; }
+  td + td code { white-space: normal; overflow-wrap: anywhere; }
 
   header.nav {
     position: sticky; top: 0; z-index: 40; backdrop-filter: blur(12px);
@@ -94,7 +95,8 @@
   .callout { background: var(--ink-2); border: 1px solid var(--border-dark); border-left: 3px solid var(--signal); border-radius: 8px; padding: 12px 16px; margin: 14px 0; font-size: 14px; }
   .callout p:last-child { margin-bottom: 0; }
   @media (max-width: 900px) {
-    .docs-layout { flex-direction: column; padding: 24px 20px 80px; gap: 8px; }
+    .docs-layout { flex-direction: column; align-items: stretch; padding: 24px 20px 80px; gap: 8px; }
+    .docs-content table { display: block; overflow-x: auto; }
     .docs-sidebar { position: static; width: 100%; max-height: none; margin-bottom: 8px; columns: 2; column-gap: 24px; }
     .docs-sidebar .group { margin-bottom: 16px; break-inside: avoid; }
   }
@@ -115,6 +117,12 @@
   .st-held { background: rgba(217,181,75,0.16); color: var(--dedup); }
   .st-err { background: rgba(192,57,43,0.12); color: #C0392B; }
   .tut-list { columns: 2; padding-left: 18px; }
+  ol.dash-steps { padding-left: 22px; }
+  ol.dash-steps li { margin: 0 0 18px; }
+  ol.dash-steps img { display: block; width: 100%; height: auto; margin-top: 8px; border-radius: 8px; border: 1px solid var(--border-dark); }
+  .plain { border: 1px solid var(--border-dark); border-radius: 10px; padding: 4px 18px 8px; background: var(--ink-2); }
+  .plain dt { font-weight: 600; margin-top: 8px; }
+  .plain dd { margin: 2px 0 0; }
   @media (max-width: 700px) { .tut-list { columns: 1; } }
   /* tutorials:end */
 
@@ -214,6 +222,7 @@
     <div class="group">
       <div class="group-label">Tutorials</div>
       <a href="#tutorials">Overview</a>
+      <a href="#tut-start">Start here (no code)</a>
       <a href="#tut-connect">Connect an agent and send an action</a>
       <a href="#tut-retries">Safe retries (exactly once)</a>
       <a href="#tut-validation">Validation rules</a>
@@ -306,12 +315,26 @@
       <video class="tut-video" controls preload="none" poster="/videos/tutorial-overview.jpg" src="/videos/tutorial-overview.mp4"></video>
       <ul class="tut-list"><li><a href="#tut-connect">Connect an agent and send an action</a></li><li><a href="#tut-retries">Safe retries (exactly once)</a></li><li><a href="#tut-validation">Validation rules</a></li><li><a href="#tut-approvals">Human approval</a></li><li><a href="#tut-spend-caps">Spend caps and money caps</a></li><li><a href="#tut-policies">Action policies and allowed hours</a></li><li><a href="#tut-failures">Failures and the dead-letter queue</a></li><li><a href="#tut-undo">Undo an action</a></li><li><a href="#tut-record-replay">Record and replay</a></li><li><a href="#tut-apply">Rules as code</a></li><li><a href="#tut-library">Library mode and the chaos tester</a></li><li><a href="#tut-langchain">LangChain and LangGraph tools</a></li><li><a href="#tut-mcp">MCP: scan and wrap a server</a></li></ul>
     </section>
+    <section id="tut-start">
+      <h2>Start here if you don't write code</h2>
+      <p>AgentRaaS sits between your AI agent and the services it uses (Stripe, email, Slack and others). Before anything happens, it checks the action: it stops repeats, keeps to the limits you set, asks a person before big actions, and keeps a record you can read and undo.</p>
+      <p><b>What needs a developer, once:</b> pointing the agent at AgentRaaS. If your agent runs in Make, Zapier or n8n, you can do it yourself: <b>+ Connect agent</b>, pick <b>Make, Zapier or another HTTP tool</b>, and paste the settings it shows (see <a href="#tut-connect">Connect and send</a>).</p>
+      <p><b>Everything else is in the dashboard</b>, no code:</p>
+      <ul><li>Set limits an action must meet, like "amount at most 10000": <a href="#tut-validation">Validation rules</a></li><li>Approve big actions before they run, also from your phone through a Slack, Teams, Telegram, Discord or email link: <a href="#tut-approvals">Human approval</a></li><li>Cap how much an agent can spend or do per day: <a href="#tut-spend-caps">Spend and money caps</a></li><li>Say what each agent may never do, or only do for your own email domains or office hours: <a href="#tut-policies">Action policies</a></li><li>See every action and why it ran or stopped: Recent activity, click a row</li><li>Send a failed action again once the cause is fixed: <a href="#tut-failures">Failed requests</a></li><li>Reverse an action, like refunding a charge: <a href="#tut-undo">Undo</a></li></ul>
+      <p>Each of those tutorials starts with <b>In the dashboard, step by step</b>: a recording and a picture for every click. You can skip the code boxes below it.</p>
+      <h3>Words you will see</h3>
+      <dl class="plain"><dt>Agent</dt><dd>The AI program doing the work. Each one gets its own key.</dd><dt>Service and action</dt><dd>Where it acts and what it does there, like Stripe and charge.create (charge a card).</dd><dt>Payload</dt><dd>The details of one action, like the amount and the customer.</dd><dt>Success</dt><dd>It ran.</dd><dt>Deduplicated</dt><dd>A repeat of something that already ran, so it was not run again. The agent got the first answer back.</dd><dt>Blocked</dt><dd>One of your rules stopped it before it reached the service. Click the row to see which rule.</dd><dt>Pending approval</dt><dd>Waiting for a person to approve or deny it.</dd><dt>Error</dt><dd>The service itself refused it, for example a wrong key. It is listed in Failed requests.</dd></dl>
+    </section>
 
     <section id="tut-connect">
       <h2>Connect an agent and send an action</h2>
       <p>Every agent gets its own key. It sends each action to AgentRaaS, which checks it, runs it once and records it.</p>
       <video class="tut-video" controls preload="none" poster="/videos/tutorial-connect.jpg" src="/videos/tutorial-connect.mp4"></video>
-      <h3>Set it up</h3><ol><li>Click + Connect agent</li><li>Pick where the agent runs and give it a name</li><li>Click Connect, then copy its key and URL</li></ol><p>Or with the API (logged in as a member of the org):</p><pre><code>POST /api/v1/agents/connect
+      <h3>In the dashboard, step by step</h3>
+      <p>No code needed. A recording of these exact clicks, then each step with a picture:</p>
+      <video class="tut-video" controls preload="none" poster="/videos/dash-connect.jpg" src="/videos/dash-connect.mp4"></video>
+      <ol class="dash-steps"><li>Setup tab, Connect a service. Pick the service (here Stripe) and paste its API key. It is encrypted and never shown again.<a href="/videos/dash-connect-1.jpg"><img src="/videos/dash-connect-1.jpg" alt="Setup tab, Connect a service. Pick the service (here Stripe) and paste its API key. It is encrypted and never shown again." loading="lazy" width="1280" height="800"></a></li><li>Give your agent (or your developer) the AgentRaaS URL and key shown here. The key is shown only once.<a href="/videos/dash-connect-2.jpg"><img src="/videos/dash-connect-2.jpg" alt="Give your agent (or your developer) the AgentRaaS URL and key shown here. The key is shown only once." loading="lazy" width="1280" height="800"></a></li><li>One key per agent: + Connect agent, pick where it runs (here Make, Zapier or another no-code tool) and name it.<a href="/videos/dash-connect-3.jpg"><img src="/videos/dash-connect-3.jpg" alt="One key per agent: + Connect agent, pick where it runs (here Make, Zapier or another no-code tool) and name it." loading="lazy" width="1280" height="800"></a></li><li>Paste the setup text into your tool. When the agent makes its first call, it shows up here.<a href="/videos/dash-connect-4.jpg"><img src="/videos/dash-connect-4.jpg" alt="Paste the setup text into your tool. When the agent makes its first call, it shows up here." loading="lazy" width="1280" height="800"></a></li><li>Every call is listed under Recent activity. Click a row for its details.<a href="/videos/dash-connect-5.jpg"><img src="/videos/dash-connect-5.jpg" alt="Every call is listed under Recent activity. Click a row for its details." loading="lazy" width="1280" height="800"></a></li></ol>
+      <h3>With the API or in code</h3><p>Or with the API (logged in as a member of the org):</p><pre><code>POST /api/v1/agents/connect
 {
   &quot;org_id&quot;: &quot;org_acme&quot;,
   &quot;agent_id&quot;: &quot;billing-agent&quot;,
@@ -359,7 +382,11 @@
       <h2>Safe retries (exactly once)</h2>
       <p>An agent retries after a timeout, a crash or a loop. AgentRaaS recognises the same call and answers from its record, so the action runs once.</p>
       <video class="tut-video" controls preload="none" poster="/videos/tutorial-retries.jpg" src="/videos/tutorial-retries.mp4"></video>
-      <h3>Set it up</h3><ol><li>Nothing to set up: every call is deduplicated</li><li>Monitor › Recent activity shows retries as deduplicated</li></ol><ul><li>Same agent, same service and action, same payload = the same call</li><li>Or send x-agentraas-idempotency-key: one key per action, never reused for a different payload</li></ul>
+      <h3>In the dashboard, step by step</h3>
+      <p>No code needed. A recording of these exact clicks, then each step with a picture:</p>
+      <video class="tut-video" controls preload="none" poster="/videos/dash-retries.jpg" src="/videos/dash-retries.mp4"></video>
+      <ol class="dash-steps"><li>Click Run live dedup test: 8 identical calls go to a sandbox and only 1 runs.<a href="/videos/dash-retries-1.jpg"><img src="/videos/dash-retries-1.jpg" alt="Click Run live dedup test: 8 identical calls go to a sandbox and only 1 runs." loading="lazy" width="1280" height="800"></a></li><li>Click a Deduplicated row to see why it was not sent again.<a href="/videos/dash-retries-2.jpg"><img src="/videos/dash-retries-2.jpg" alt="Click a Deduplicated row to see why it was not sent again." loading="lazy" width="1280" height="800"></a></li></ol>
+      <h3>With the API or in code</h3><ul><li>Same agent, same service and action, same payload = the same call</li><li>Or send x-agentraas-idempotency-key: one key per action, never reused for a different payload</li></ul>
       <h3>Every case</h3>
       <p>Click a case to see the request and the real response.</p>
       <details class="case"><summary>First call runs<span class="st-code st-ok">200</span></summary><div><p>The call is new, so it runs and the result is stored.</p><pre><code>curl -X POST &quot;$AGENTRAAS_URL/v1/webhook/org_acme/billing-agent&quot; \
@@ -439,7 +466,11 @@
       <h2>Validation rules</h2>
       <p>Check every payload before it is sent. A call that breaks a rule is refused with 422, nothing reaches the provider, and the answer tells the agent how to fix it.</p>
       <video class="tut-video" controls preload="none" poster="/videos/tutorial-validation.jpg" src="/videos/tutorial-validation.mp4"></video>
-      <h3>Set it up</h3><ol><li>Rules › Validation rules</li><li>Pick the service and action</li><li>Add a rule per field: type, min, max, or not more than another field</li></ol><p>Rule used below: amount: a number from 100 to 10000, never above balance.</p><pre><code>POST /api/v1/validation-rules
+      <h3>In the dashboard, step by step</h3>
+      <p>No code needed. A recording of these exact clicks, then each step with a picture:</p>
+      <video class="tut-video" controls preload="none" poster="/videos/dash-validation.jpg" src="/videos/dash-validation.mp4"></video>
+      <ol class="dash-steps"><li>Rules tab, Validation rules. Name the service and action (Stripe, charge.create), then add a field: amount must be a number from 1 to 10000.<a href="/videos/dash-validation-1.jpg"><img src="/videos/dash-validation-1.jpg" alt="Rules tab, Validation rules. Name the service and action (Stripe, charge.create), then add a field: amount must be a number from 1 to 10000." loading="lazy" width="1280" height="800"></a></li><li>Try it before saving: paste a sample and click Test. 50000 is too big, so it would be refused.<a href="/videos/dash-validation-2.jpg"><img src="/videos/dash-validation-2.jpg" alt="Try it before saving: paste a sample and click Test. 50000 is too big, so it would be refused." loading="lazy" width="1280" height="800"></a></li><li>Click Save rule. It is listed under Saved rules and applies right away.<a href="/videos/dash-validation-3.jpg"><img src="/videos/dash-validation-3.jpg" alt="Click Save rule. It is listed under Saved rules and applies right away." loading="lazy" width="1280" height="800"></a></li><li>When an agent tries to charge 50000, the call is blocked and never reaches Stripe. The row says why.<a href="/videos/dash-validation-4.jpg"><img src="/videos/dash-validation-4.jpg" alt="When an agent tries to charge 50000, the call is blocked and never reaches Stripe. The row says why." loading="lazy" width="1280" height="800"></a></li></ol>
+      <h3>With the API or in code</h3><p>Rule used below: amount: a number from 100 to 10000, never above balance.</p><pre><code>POST /api/v1/validation-rules
 {
   &quot;org_id&quot;: &quot;org_acme&quot;,
   &quot;service&quot;: &quot;mockpay&quot;,
@@ -533,7 +564,11 @@
       <h2>Human approval</h2>
       <p>Hold risky calls until a person says yes. The agent gets 202 and a status URL; the call runs once when approved, or never when denied.</p>
       <video class="tut-video" controls preload="none" poster="/videos/tutorial-approvals.jpg" src="/videos/tutorial-approvals.mp4"></video>
-      <h3>Set it up</h3><ol><li>Rules › Approval rules</li><li>Pick the service and action</li><li>Optional: only when a field passes a threshold (amount &gt; 5000)</li><li>Approve in Monitor › Waiting for approval, Slack, Teams, Telegram, Discord, email, or agtrs approve</li></ol><p>Rule used below: hold payment.create when amount &gt; 5000.</p><pre><code>POST /api/v1/hitl-rules
+      <h3>In the dashboard, step by step</h3>
+      <p>No code needed. A recording of these exact clicks, then each step with a picture:</p>
+      <video class="tut-video" controls preload="none" poster="/videos/dash-approvals.jpg" src="/videos/dash-approvals.mp4"></video>
+      <ol class="dash-steps"><li>Rules tab, Approval rules. Hold Stripe charges when the amount is greater than 5000.<a href="/videos/dash-approvals-1.jpg"><img src="/videos/dash-approvals-1.jpg" alt="Rules tab, Approval rules. Hold Stripe charges when the amount is greater than 5000." loading="lazy" width="1280" height="800"></a></li><li>Click Save rule.<a href="/videos/dash-approvals-2.jpg"><img src="/videos/dash-approvals-2.jpg" alt="Click Save rule." loading="lazy" width="1280" height="800"></a></li><li>Monitor tab, Waiting for approval: the held call, with exactly what it wants to do.<a href="/videos/dash-approvals-3.jpg"><img src="/videos/dash-approvals-3.jpg" alt="Monitor tab, Waiting for approval: the held call, with exactly what it wants to do." loading="lazy" width="1280" height="800"></a></li><li>Approve runs the call once. The first decision wins, here or from Slack, Teams, Telegram, Discord or an email link.<a href="/videos/dash-approvals-4.jpg"><img src="/videos/dash-approvals-4.jpg" alt="Approve runs the call once. The first decision wins, here or from Slack, Teams, Telegram, Discord or an email link." loading="lazy" width="1280" height="800"></a></li><li>Deny drops it: the charge never happens and the agent is told it was denied.<a href="/videos/dash-approvals-5.jpg"><img src="/videos/dash-approvals-5.jpg" alt="Deny drops it: the charge never happens and the agent is told it was denied." loading="lazy" width="1280" height="800"></a></li></ol>
+      <h3>With the API or in code</h3><p>Rule used below: hold payment.create when amount &gt; 5000.</p><pre><code>POST /api/v1/hitl-rules
 {
   &quot;org_id&quot;: &quot;org_acme&quot;,
   &quot;service&quot;: &quot;mockpay&quot;,
@@ -614,7 +649,11 @@
       <h2>Spend caps and money caps</h2>
       <p>Limit how often an agent may act, or how much money it may move per day. Over the limit, the call is refused (429) or held for approval.</p>
       <video class="tut-video" controls preload="none" poster="/videos/tutorial-spend-caps.jpg" src="/videos/tutorial-spend-caps.mp4"></video>
-      <h3>Set it up</h3><ol><li>Rules › Spend caps</li><li>Count calls (max calls per hour or day), or add up a money field (max amount per day, in your time zone)</li><li>Over the limit: block, or hold for approval</li></ol><p>Rule used below: billing-agent: at most 2 payments an hour.</p><pre><code>POST /api/v1/spend-cap-rules
+      <h3>In the dashboard, step by step</h3>
+      <p>No code needed. A recording of these exact clicks, then each step with a picture:</p>
+      <video class="tut-video" controls preload="none" poster="/videos/dash-spend-caps.jpg" src="/videos/dash-spend-caps.mp4"></video>
+      <ol class="dash-steps"><li>Rules tab, Spend caps. billing-agent may charge at most 10000 in total per day on Stripe. Max calls caps the number of calls instead.<a href="/videos/dash-spend-caps-1.jpg"><img src="/videos/dash-spend-caps-1.jpg" alt="Rules tab, Spend caps. billing-agent may charge at most 10000 in total per day on Stripe. Max calls caps the number of calls instead." loading="lazy" width="1280" height="800"></a></li><li>Click Save rule. Leave Agent ID empty to cap every agent. &quot;Route to approval&quot; holds the call for a person instead of blocking it.<a href="/videos/dash-spend-caps-2.jpg"><img src="/videos/dash-spend-caps-2.jpg" alt="Click Save rule. Leave Agent ID empty to cap every agent. &quot;Route to approval&quot; holds the call for a person instead of blocking it." loading="lazy" width="1280" height="800"></a></li><li>The agent tries to charge 12000 today: over the daily total, so it is blocked before Stripe. The row says which cap stopped it.<a href="/videos/dash-spend-caps-3.jpg"><img src="/videos/dash-spend-caps-3.jpg" alt="The agent tries to charge 12000 today: over the daily total, so it is blocked before Stripe. The row says which cap stopped it." loading="lazy" width="1280" height="800"></a></li></ol>
+      <h3>With the API or in code</h3><p>Rule used below: billing-agent: at most 2 payments an hour.</p><pre><code>POST /api/v1/spend-cap-rules
 {
   &quot;org_id&quot;: &quot;org_acme&quot;,
   &quot;agent_id&quot;: &quot;billing-agent&quot;,
@@ -741,7 +780,11 @@
       <h2>Action policies and allowed hours</h2>
       <p>Decide what each agent may do at all: deny an action, require a field to match (an email domain), or allow it only during working hours. A refused call gets 403 naming the policy.</p>
       <video class="tut-video" controls preload="none" poster="/videos/tutorial-policies.jpg" src="/videos/tutorial-policies.mp4"></video>
-      <h3>Set it up</h3><ol><li>Rules › Action policies</li><li>Pick an agent (or all), a service and an action (* for every action)</li><li>Effect: deny, or require fields / hours</li></ol><p>Rule used below: support-agent may not use mockpay at all.</p><pre><code>POST /api/v1/action-policies
+      <h3>In the dashboard, step by step</h3>
+      <p>No code needed. A recording of these exact clicks, then each step with a picture:</p>
+      <video class="tut-video" controls preload="none" poster="/videos/dash-policies.jpg" src="/videos/dash-policies.mp4"></video>
+      <ol class="dash-steps"><li>Rules tab, Action policies. support-agent may send email (Resend) only to addresses at acme.com.<a href="/videos/dash-policies-1.jpg"><img src="/videos/dash-policies-1.jpg" alt="Rules tab, Action policies. support-agent may send email (Resend) only to addresses at acme.com." loading="lazy" width="1280" height="800"></a></li><li>Click Save policy. &quot;Never allow&quot; blocks an action outright; allowed hours limit when it may run.<a href="/videos/dash-policies-2.jpg"><img src="/videos/dash-policies-2.jpg" alt="Click Save policy. &quot;Never allow&quot; blocks an action outright; allowed hours limit when it may run." loading="lazy" width="1280" height="800"></a></li><li>The agent tries to email someone@gmail.com: blocked, the email is never sent. The row names the policy.<a href="/videos/dash-policies-3.jpg"><img src="/videos/dash-policies-3.jpg" alt="The agent tries to email someone@gmail.com: blocked, the email is never sent. The row names the policy." loading="lazy" width="1280" height="800"></a></li></ol>
+      <h3>With the API or in code</h3><p>Rule used below: support-agent may not use mockpay at all.</p><pre><code>POST /api/v1/action-policies
 {
   &quot;org_id&quot;: &quot;org_acme&quot;,
   &quot;agent_id&quot;: &quot;support-agent&quot;,
@@ -831,7 +874,11 @@
       <h2>Failures and the dead-letter queue</h2>
       <p>When the provider fails, the agent gets the error and the call is kept in the dead-letter queue, with its payload, to replay later. Nothing is silently lost.</p>
       <video class="tut-video" controls preload="none" poster="/videos/tutorial-failures.jpg" src="/videos/tutorial-failures.mp4"></video>
-      <h3>Set it up</h3><ol><li>Monitor › Failed requests lists every call that failed</li><li>Replay sends it again with the same Idempotency-Key, so it still runs at most once</li></ol>
+      <h3>In the dashboard, step by step</h3>
+      <p>No code needed. A recording of these exact clicks, then each step with a picture:</p>
+      <video class="tut-video" controls preload="none" poster="/videos/dash-failures.jpg" src="/videos/dash-failures.mp4"></video>
+      <ol class="dash-steps"><li>Monitor tab, Failed requests: every call the service itself refused, with its error (here Stripe: invalid API key).<a href="/videos/dash-failures-1.jpg"><img src="/videos/dash-failures-1.jpg" alt="Monitor tab, Failed requests: every call the service itself refused, with its error (here Stripe: invalid API key)." loading="lazy" width="1280" height="800"></a></li><li>Fix the cause first (here: paste the right key in Setup, Credentials). Then click Replay, or Edit &amp; Replay to change the payload first.<a href="/videos/dash-failures-2.jpg"><img src="/videos/dash-failures-2.jpg" alt="Fix the cause first (here: paste the right key in Setup, Credentials). Then click Replay, or Edit &amp; Replay to change the payload first." loading="lazy" width="1280" height="800"></a></li><li>A replayed call that succeeds leaves the list. Dismiss removes one you do not want to send.<a href="/videos/dash-failures-3.jpg"><img src="/videos/dash-failures-3.jpg" alt="A replayed call that succeeds leaves the list. Dismiss removes one you do not want to send." loading="lazy" width="1280" height="800"></a></li></ol>
+      <h3>With the API or in code</h3>
       <h3>Every case</h3>
       <p>Click a case to see the request and the real response.</p>
       <details class="case"><summary>The provider fails<span class="st-code st-err">500</span></summary><div><p>mockpay with fail: true always errors (it stands in for a provider outage). The agent gets the error.</p><pre><code>curl -X POST &quot;$AGENTRAAS_URL/v1/webhook/org_acme/billing-agent&quot; \
@@ -901,7 +948,11 @@
       <h2>Undo an action</h2>
       <p>Reverse something an agent did: a charge is refunded, a Slack message deleted, your own action reversed by the action you named. Each one can be undone once, for 30 days.</p>
       <video class="tut-video" controls preload="none" poster="/videos/tutorial-undo.jpg" src="/videos/tutorial-undo.mp4"></video>
-      <h3>Set it up</h3><ol><li>Monitor › Undo actions</li><li>Click Undo next to the action</li></ol>
+      <h3>In the dashboard, step by step</h3>
+      <p>No code needed. A recording of these exact clicks, then each step with a picture:</p>
+      <video class="tut-video" controls preload="none" poster="/videos/dash-undo.jpg" src="/videos/dash-undo.mp4"></video>
+      <ol class="dash-steps"><li>Monitor tab, Undo actions: what each one will run to reverse it (here a refund).<a href="/videos/dash-undo-1.jpg"><img src="/videos/dash-undo-1.jpg" alt="Monitor tab, Undo actions: what each one will run to reverse it (here a refund)." loading="lazy" width="1280" height="800"></a></li><li>Click Undo, then Confirm undo.<a href="/videos/dash-undo-2.jpg"><img src="/videos/dash-undo-2.jpg" alt="Click Undo, then Confirm undo." loading="lazy" width="1280" height="800"></a></li><li>The refund runs once. The entry is marked undone and cannot be undone twice.<a href="/videos/dash-undo-3.jpg"><img src="/videos/dash-undo-3.jpg" alt="The refund runs once. The entry is marked undone and cannot be undone twice." loading="lazy" width="1280" height="800"></a></li></ol>
+      <h3>With the API or in code</h3>
       <h3>Every case</h3>
       <p>Click a case to see the request and the real response.</p>
       <details class="case"><summary>A charge runs<span class="st-code st-ok">200</span></summary><div><p>It has a known reverse (payment.refund), so it is recorded as undoable.</p><pre><code>curl -X POST &quot;$AGENTRAAS_URL/v1/webhook/org_acme/billing-agent&quot; \
@@ -953,7 +1004,11 @@
       <h2>Record and replay</h2>
       <p>Record a run against the real providers once, then replay it in tests: every call is answered from the recording and nothing reaches the provider.</p>
       <video class="tut-video" controls preload="none" poster="/videos/tutorial-record-replay.jpg" src="/videos/tutorial-record-replay.mp4"></video>
-      <h3>Set it up</h3><ol><li>Add X-AgentRaaS-Record: &lt;name&gt; to the calls of one run</li><li>Replay with X-AgentRaaS-Replay: &lt;name&gt; and a run id</li><li>Monitor › Recordings lists them</li></ol><ul><li>Python: Client(..., record=&quot;refund-flow&quot;) or replay=&quot;refund-flow&quot;, run_id=...</li><li>JS: record / replay / runId in the Client options</li></ul>
+      <h3>In the dashboard, step by step</h3>
+      <p>No code needed. A recording of these exact clicks, then each step with a picture:</p>
+      <video class="tut-video" controls preload="none" poster="/videos/dash-record-replay.jpg" src="/videos/dash-record-replay.mp4"></video>
+      <ol class="dash-steps"><li>Monitor tab, Recordings: each recorded run, how many calls it made and when.<a href="/videos/dash-record-replay-1.jpg"><img src="/videos/dash-record-replay-1.jpg" alt="Monitor tab, Recordings: each recorded run, how many calls it made and when." loading="lazy" width="1280" height="800"></a></li><li>Click View to see every call and its answer. A replay is answered from here, so nothing reaches the real service.<a href="/videos/dash-record-replay-2.jpg"><img src="/videos/dash-record-replay-2.jpg" alt="Click View to see every call and its answer. A replay is answered from here, so nothing reaches the real service." loading="lazy" width="1280" height="800"></a></li></ol>
+      <h3>With the API or in code</h3><ul><li>Python: Client(..., record=&quot;refund-flow&quot;) or replay=&quot;refund-flow&quot;, run_id=...</li><li>JS: record / replay / runId in the Client options</li></ul>
       <h3>Every case</h3>
       <p>Click a case to see the request and the real response.</p>
       <details class="case"><summary>Record call 1<span class="st-code st-ok">200</span></summary><div><p>Runs for real and is kept under the name checkout-flow.</p><pre><code>curl -X POST &quot;$AGENTRAAS_URL/v1/webhook/org_acme/billing-agent&quot; \

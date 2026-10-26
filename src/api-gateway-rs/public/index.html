@@ -7,6 +7,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AgentRaaS dashboard</title>
+<meta name="robots" content="noindex">
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2024%2024%27%3E%3Crect%20x=%270.75%27%20y=%270.75%27%20width=%2722.5%27%20height=%2722.5%27%20rx=%276%27%20fill=%27%2316191E%27%20stroke=%27%232E343C%27%20stroke-width=%271.5%27/%3E%3Ccircle%20cx=%278.6%27%20cy=%2712%27%20r=%275.1%27%20fill=%27none%27%20stroke=%27%23ECEFF3%27%20stroke-width=%271.9%27/%3E%3Ccircle%20cx=%2715.4%27%20cy=%2712%27%20r=%275.1%27%20fill=%27%23F2B544%27/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -960,7 +961,7 @@
 <div class="modal-overlay" id="hitl-modal-overlay">
   <div class="modal" role="dialog" aria-modal="true" aria-label="Approval rules">
     <h3>Human-in-the-loop approval rules</h3>
-    <p class="sub">Team-tier and above. A request matching a rule below is frozen and sent to Slack for Approve/Deny before it forwards. Leave field/operator/threshold blank to always require approval for that service.action, or set them to only freeze when a payload field crosses a threshold (e.g. <code>amount</code> greater than <code>10000</code>). Webhook calls only. Configure the Slack destination with your AgentRaaS contact.</p>
+    <p class="sub">Team-tier and above. A request matching a rule below is held until a person approves or denies it: in Monitor, Waiting for approval, or from an approval link in Slack, Teams, Telegram, Discord or email (add those in Monitor, Outage alerts). Leave field/operator/threshold blank to always require approval for that service.action, or set them to only hold when a payload field crosses a threshold (e.g. <code>amount</code> greater than <code>10000</code>). Webhook calls only.</p>
     <div class="modal-error" id="hitl-error"></div>
     <form id="hitl-form">
       <div class="field"><label for="hitl-org">Org ID</label><input type="text" id="hitl-org" placeholder="org_acme" required></div>

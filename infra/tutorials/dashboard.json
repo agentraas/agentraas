@@ -1,0 +1,140 @@
+{
+ "connect": [
+  {
+   "caption": "Setup tab, Connect a service. Pick the service (here Stripe) and paste its API key. It is encrypted and never shown again.",
+   "img": "/videos/dash-connect-1.jpg"
+  },
+  {
+   "caption": "Give your agent (or your developer) the AgentRaaS URL and key shown here. The key is shown only once.",
+   "img": "/videos/dash-connect-2.jpg"
+  },
+  {
+   "caption": "One key per agent: + Connect agent, pick where it runs (here Make, Zapier or another no-code tool) and name it.",
+   "img": "/videos/dash-connect-3.jpg"
+  },
+  {
+   "caption": "Paste the setup text into your tool. When the agent makes its first call, it shows up here.",
+   "img": "/videos/dash-connect-4.jpg"
+  },
+  {
+   "caption": "Every call is listed under Recent activity. Click a row for its details.",
+   "img": "/videos/dash-connect-5.jpg"
+  }
+ ],
+ "retries": [
+  {
+   "caption": "Click Run live dedup test: 8 identical calls go to a sandbox and only 1 runs.",
+   "img": "/videos/dash-retries-1.jpg"
+  },
+  {
+   "caption": "Click a Deduplicated row to see why it was not sent again.",
+   "img": "/videos/dash-retries-2.jpg"
+  }
+ ],
+ "validation": [
+  {
+   "caption": "Rules tab, Validation rules. Name the service and action (Stripe, charge.create), then add a field: amount must be a number from 1 to 10000.",
+   "img": "/videos/dash-validation-1.jpg"
+  },
+  {
+   "caption": "Try it before saving: paste a sample and click Test. 50000 is too big, so it would be refused.",
+   "img": "/videos/dash-validation-2.jpg"
+  },
+  {
+   "caption": "Click Save rule. It is listed under Saved rules and applies right away.",
+   "img": "/videos/dash-validation-3.jpg"
+  },
+  {
+   "caption": "When an agent tries to charge 50000, the call is blocked and never reaches Stripe. The row says why.",
+   "img": "/videos/dash-validation-4.jpg"
+  }
+ ],
+ "approvals": [
+  {
+   "caption": "Rules tab, Approval rules. Hold Stripe charges when the amount is greater than 5000.",
+   "img": "/videos/dash-approvals-1.jpg"
+  },
+  {
+   "caption": "Click Save rule.",
+   "img": "/videos/dash-approvals-2.jpg"
+  },
+  {
+   "caption": "Monitor tab, Waiting for approval: the held call, with exactly what it wants to do.",
+   "img": "/videos/dash-approvals-3.jpg"
+  },
+  {
+   "caption": "Approve runs the call once. The first decision wins, here or from Slack, Teams, Telegram, Discord or an email link.",
+   "img": "/videos/dash-approvals-4.jpg"
+  },
+  {
+   "caption": "Deny drops it: the charge never happens and the agent is told it was denied.",
+   "img": "/videos/dash-approvals-5.jpg"
+  }
+ ],
+ "spend-caps": [
+  {
+   "caption": "Rules tab, Spend caps. billing-agent may charge at most 10000 in total per day on Stripe. Max calls caps the number of calls instead.",
+   "img": "/videos/dash-spend-caps-1.jpg"
+  },
+  {
+   "caption": "Click Save rule. Leave Agent ID empty to cap every agent. \"Route to approval\" holds the call for a person instead of blocking it.",
+   "img": "/videos/dash-spend-caps-2.jpg"
+  },
+  {
+   "caption": "The agent tries to charge 12000 today: over the daily total, so it is blocked before Stripe. The row says which cap stopped it.",
+   "img": "/videos/dash-spend-caps-3.jpg"
+  }
+ ],
+ "policies": [
+  {
+   "caption": "Rules tab, Action policies. support-agent may send email (Resend) only to addresses at acme.com.",
+   "img": "/videos/dash-policies-1.jpg"
+  },
+  {
+   "caption": "Click Save policy. \"Never allow\" blocks an action outright; allowed hours limit when it may run.",
+   "img": "/videos/dash-policies-2.jpg"
+  },
+  {
+   "caption": "The agent tries to email someone@gmail.com: blocked, the email is never sent. The row names the policy.",
+   "img": "/videos/dash-policies-3.jpg"
+  }
+ ],
+ "failures": [
+  {
+   "caption": "Monitor tab, Failed requests: every call the service itself refused, with its error (here Stripe: invalid API key).",
+   "img": "/videos/dash-failures-1.jpg"
+  },
+  {
+   "caption": "Fix the cause first (here: paste the right key in Setup, Credentials). Then click Replay, or Edit & Replay to change the payload first.",
+   "img": "/videos/dash-failures-2.jpg"
+  },
+  {
+   "caption": "A replayed call that succeeds leaves the list. Dismiss removes one you do not want to send.",
+   "img": "/videos/dash-failures-3.jpg"
+  }
+ ],
+ "undo": [
+  {
+   "caption": "Monitor tab, Undo actions: what each one will run to reverse it (here a refund).",
+   "img": "/videos/dash-undo-1.jpg"
+  },
+  {
+   "caption": "Click Undo, then Confirm undo.",
+   "img": "/videos/dash-undo-2.jpg"
+  },
+  {
+   "caption": "The refund runs once. The entry is marked undone and cannot be undone twice.",
+   "img": "/videos/dash-undo-3.jpg"
+  }
+ ],
+ "record-replay": [
+  {
+   "caption": "Monitor tab, Recordings: each recorded run, how many calls it made and when.",
+   "img": "/videos/dash-record-replay-1.jpg"
+  },
+  {
+   "caption": "Click View to see every call and its answer. A replay is answered from here, so nothing reaches the real service.",
+   "img": "/videos/dash-record-replay-2.jpg"
+  }
+ ]
+}

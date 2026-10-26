@@ -244,7 +244,8 @@
     accountBtn.textContent = user.email;
     // Org ID fields start with the user's own org (defaultValue survives a
     // form reset), so nobody has to invent one or creates a new org by typo.
-    for (const fid of ['connect-org', 'creds-org', 'branding-org-input']) {
+    for (const fid of ['connect-org', 'creds-org', 'branding-org-input', 'custom-org', 'mcpsvr-org', 'vr-org', 'dr-org', 'hitl-org',
+      'policy-org', 'spendcap-org', 'pruning-org', 'nw-org', 'hc-org', 'tunnel-org', 'enterprise-org-input', 'agentgateway-org']) {
       const el = document.getElementById(fid);
       if (el && user.org_id) { el.defaultValue = user.org_id; if (!el.value) el.value = user.org_id; }
     }
@@ -424,9 +425,15 @@
     return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
   }
 
+  // The activity list's org select scopes the stat tiles and charts too.
+  function chartQuery() {
+    const org = document.getElementById('activity-org-filter').value;
+    return `range=${currentRange}` + (org ? `&org=${encodeURIComponent(org)}` : '');
+  }
+
   async function loadStats() {
     try {
-      const res = await fetch(`/api/v1/dashboard/stats?range=${currentRange}`, { credentials: 'include' });
+      const res = await fetch(`/api/v1/dashboard/stats?${chartQuery()}`, { credentials: 'include' });
       if (res.status === 401) return handleUnauthenticated();
       const s = await res.json();
       document.getElementById('stat-total').textContent = s.total ?? '0';
@@ -448,7 +455,7 @@
 
   async function loadTimeseries() {
     try {
-      const res = await fetch(`/api/v1/dashboard/timeseries?range=${currentRange}`, { credentials: 'include' });
+      const res = await fetch(`/api/v1/dashboard/timeseries?${chartQuery()}`, { credentials: 'include' });
       if (res.status === 401) return handleUnauthenticated();
       const s = await res.json();
       const labels = s.points.map(p => { const d = new Date(p.bucket); return s.bucket === 'hour' ? d.toLocaleTimeString([], { hour: '2-digit' }) : d.toLocaleDateString([], { month: 'short', day: 'numeric' }); });
@@ -462,7 +469,7 @@
 
   async function loadByService() {
     try {
-      const res = await fetch(`/api/v1/dashboard/by-service?range=${currentRange}`, { credentials: 'include' });
+      const res = await fetch(`/api/v1/dashboard/by-service?${chartQuery()}`, { credentials: 'include' });
       if (res.status === 401) return handleUnauthenticated();
       const s = await res.json();
       const labels = s.services.map(r => r.service);
@@ -675,7 +682,7 @@
   }
 
   document.getElementById('activity-search').addEventListener('input', renderActivity);
-  document.getElementById('activity-org-filter').addEventListener('change', renderActivity);
+  document.getElementById('activity-org-filter').addEventListener('change', () => { renderActivity(); loadStats(); loadTimeseries(); loadByService(); });
   document.getElementById('activity-status-filter').addEventListener('change', renderActivity);
   document.getElementById('activity-sort').addEventListener('change', renderActivity);
   document.getElementById('load-more-btn').addEventListener('click', () => { activityLimit += 50; loadRecent(); });

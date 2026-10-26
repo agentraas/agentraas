@@ -104,6 +104,16 @@ async fn stats(State(state): State<SharedState>, user: AuthUser) -> Result<Json<
 #[derive(Deserialize)]
 struct RangeQuery {
     range: Option<String>,
+    /// Narrows the charts to one of the caller's orgs (the dashboard's org
+    /// select). An org the caller isn't in narrows to nothing.
+    org: Option<String>,
+}
+
+fn scope_orgs(org_ids: Vec<String>, org: Option<&str>) -> Vec<String> {
+    match org.filter(|o| !o.is_empty()) {
+        Some(o) => org_ids.into_iter().filter(|id| id == o).collect(),
+        None => org_ids,
+    }
 }
 
 async fn dashboard_stats(State(state): State<SharedState>, user: AuthUser, Query(q): Query<RangeQuery>) -> Result<Json<Value>, ApiError> {
@@ -112,7 +122,7 @@ async fn dashboard_stats(State(state): State<SharedState>, user: AuthUser, Query
     let Some(interval) = range_interval(&range) else {
         return Err(ApiError::new(StatusCode::BAD_REQUEST, "Invalid range. Use one of: 24h, 7d, 30d, 90d."));
     };
-    let org_ids = get_user_org_ids(&state.pg, user.sub).await?;
+    let org_ids = scope_orgs(get_user_org_ids(&state.pg, user.sub).await?, q.org.as_deref());
     if org_ids.is_empty() {
         return Ok(Json(json!({ "range": range, "total": 0, "success": 0, "deduplicated": 0, "blocked": 0, "errors": 0, "avg_duration": null })));
     }
@@ -142,7 +152,7 @@ async fn dashboard_timeseries(State(state): State<SharedState>, user: AuthUser, 
     let (Some(interval), Some(bucket)) = (range_interval(&range), range_bucket(&range)) else {
         return Err(ApiError::new(StatusCode::BAD_REQUEST, "Invalid range. Use one of: 24h, 7d, 30d, 90d."));
     };
-    let org_ids = get_user_org_ids(&state.pg, user.sub).await?;
+    let org_ids = scope_orgs(get_user_org_ids(&state.pg, user.sub).await?, q.org.as_deref());
     if org_ids.is_empty() {
         return Ok(Json(json!({ "range": range, "bucket": bucket, "points": [] })));
     }
@@ -167,7 +177,7 @@ async fn dashboard_by_service(State(state): State<SharedState>, user: AuthUser, 
     let Some(interval) = range_interval(&range) else {
         return Err(ApiError::new(StatusCode::BAD_REQUEST, "Invalid range. Use one of: 24h, 7d, 30d, 90d."));
     };
-    let org_ids = get_user_org_ids(&state.pg, user.sub).await?;
+    let org_ids = scope_orgs(get_user_org_ids(&state.pg, user.sub).await?, q.org.as_deref());
     if org_ids.is_empty() {
         return Ok(Json(json!({ "range": range, "services": [] })));
     }
@@ -850,4 +860,18 @@ async fn admin_audit_siem_export(State(state): State<SharedState>, user: AuthUse
         body.push('\n');
     }
     Ok((response_headers, body))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::scope_orgs;
+
+    #[test]
+    fn org_filter_never_widens_access() {
+        let mine = || vec!["org_a".to_string(), "org_b".to_string()];
+        assert_eq!(scope_orgs(mine(), None), mine());
+        assert_eq!(scope_orgs(mine(), Some("")), mine());
+        assert_eq!(scope_orgs(mine(), Some("org_b")), vec!["org_b".to_string()]);
+        assert!(scope_orgs(mine(), Some("org_someone_else")).is_empty());
+    }
 }
