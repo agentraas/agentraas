@@ -175,7 +175,6 @@ through the built-in `mockpay` service, so no real API keys are needed.
 
 - Verify the undo log against real Stripe and Slack accounts (tested with `mockpay` so far).
 - A real test-mode call to Cashfree and RazorpayX (wiring checked with made-up keys only).
-- Paytm (every call is signed) and PhonePe production (needs the client version from its credentials email) as built-in services; custom actions today.
 
 ## Docs and license
 
