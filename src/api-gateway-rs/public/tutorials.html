@@ -257,6 +257,8 @@
       <a href="#recipe-cashfree">Cashfree Payments</a>
       <a href="#recipe-razorpayx">RazorpayX Payouts</a>
       <a href="#recipe-gupshup">Gupshup (WhatsApp)</a>
+      <a href="#recipe-msg91">MSG91 (SMS)</a>
+      <a href="#recipe-delhivery">Delhivery</a>
       <a href="#recipe-paypal">Paypal</a>
     </div>
     <!-- tutorials-nav:end -->
@@ -1390,7 +1392,7 @@ get_invoice ran (time #2)</code></pre></div></details>
     <section id="recipes">
       <h2>Recipes for real services</h2>
       <p>How to connect a service people already use, what an agent can do with it, and one rule worth adding first. The rule bodies were saved against a real server; the calls need your own key, so they show no response.</p>
-      <ul class="tut-list"><li><a href="#recipe-stripe">Stripe</a></li><li><a href="#recipe-slack">Slack</a></li><li><a href="#recipe-resend">Resend</a></li><li><a href="#recipe-github">GitHub</a></li><li><a href="#recipe-razorpay">Razorpay</a></li><li><a href="#recipe-cashfree">Cashfree Payments</a></li><li><a href="#recipe-razorpayx">RazorpayX Payouts</a></li><li><a href="#recipe-gupshup">Gupshup (WhatsApp)</a></li><li><a href="#recipe-paypal">Paypal</a></li></ul>
+      <ul class="tut-list"><li><a href="#recipe-stripe">Stripe</a></li><li><a href="#recipe-slack">Slack</a></li><li><a href="#recipe-resend">Resend</a></li><li><a href="#recipe-github">GitHub</a></li><li><a href="#recipe-razorpay">Razorpay</a></li><li><a href="#recipe-cashfree">Cashfree Payments</a></li><li><a href="#recipe-razorpayx">RazorpayX Payouts</a></li><li><a href="#recipe-gupshup">Gupshup (WhatsApp)</a></li><li><a href="#recipe-msg91">MSG91 (SMS)</a></li><li><a href="#recipe-delhivery">Delhivery</a></li><li><a href="#recipe-paypal">Paypal</a></li></ul>
     </section>
 
     <section id="recipe-stripe">
@@ -1618,6 +1620,58 @@ get_invoice ran (time #2)</code></pre></div></details>
       <pre><code>curl -X POST &quot;$AGENTRAAS_URL/v1/webhook/org_acme/billing-agent&quot; \
   -H &quot;Authorization: Bearer $AGENTRAAS_KEY&quot; -H &quot;Content-Type: application/json&quot; \
   -d &#x27;{&quot;service&quot;: &quot;gupshup&quot;, &quot;action&quot;: &quot;message.send&quot;, &quot;payload&quot;: {&quot;channel&quot;: &quot;whatsapp&quot;, &quot;source&quot;: &quot;917834811114&quot;, &quot;destination&quot;: &quot;919876543210&quot;, &quot;src.name&quot;: &quot;YourApp&quot;, &quot;message&quot;: &quot;{\&quot;type\&quot;:\&quot;text\&quot;,\&quot;text\&quot;:\&quot;Your order is on its way.\&quot;}&quot;}}&#x27;</code></pre>
+    </section>
+
+    <section id="recipe-msg91">
+      <h2>MSG91 (SMS)</h2>
+      <p>Send SMS from a DLT-approved template: OTPs, order and delivery updates (India).</p>
+      <h3>Connect it</h3>
+      <p>Setup tab, <b>Connect a service</b>, pick MSG91 (SMS) and paste the <b>Auth key</b>. From the MSG91 panel, Authkey. Sends a DLT-approved template. MSG91 answers success before it checks the key, so a wrong key shows up only in MSG91&#x27;s delivery reports. <a href="https://control.msg91.com" target="_blank" rel="noopener">Where to find it</a>.</p>
+      <p>Each recipient carries the variables of your template by name. MSG91 answers success before it checks the key, so check its delivery reports after the first send.</p>
+      <h3>What your agent can call</h3>
+      <ul><li><code>flow.send</code>: needs template_id, recipients</li></ul>
+      <h3>A first rule</h3>
+      <p>At most 500 sends a day, counted in India time, so an agent stuck in a loop cannot run up an SMS bill. The same send to the same numbers runs once anyway. In the dashboard: Rules tab. With the API:</p>
+      <pre><code>POST /api/v1/spend-cap-rules
+{
+  &quot;org_id&quot;: &quot;org_acme&quot;,
+  &quot;service&quot;: &quot;msg91&quot;,
+  &quot;action&quot;: &quot;flow.send&quot;,
+  &quot;window&quot;: &quot;day&quot;,
+  &quot;max_calls&quot;: 500,
+  &quot;timezone&quot;: &quot;Asia/Kolkata&quot;,
+  &quot;on_exceed&quot;: &quot;block&quot;
+}</code></pre>
+      <h3>A call</h3>
+      <pre><code>curl -X POST &quot;$AGENTRAAS_URL/v1/webhook/org_acme/billing-agent&quot; \
+  -H &quot;Authorization: Bearer $AGENTRAAS_KEY&quot; -H &quot;Content-Type: application/json&quot; \
+  -d &#x27;{&quot;service&quot;: &quot;msg91&quot;, &quot;action&quot;: &quot;flow.send&quot;, &quot;payload&quot;: {&quot;template_id&quot;: &quot;your_template_id&quot;, &quot;short_url&quot;: &quot;0&quot;, &quot;recipients&quot;: [{&quot;mobiles&quot;: &quot;919876543210&quot;, &quot;order&quot;: &quot;1001&quot;}]}}&#x27;</code></pre>
+    </section>
+
+    <section id="recipe-delhivery">
+      <h2>Delhivery</h2>
+      <p>Create shipments, track waybills and check pincodes (India).</p>
+      <h3>Connect it</h3>
+      <p>Setup tab, <b>Connect a service</b>, pick Delhivery and paste the <b>API token</b>. From Delhivery One, Settings, API setup. shipment.create sends format &quot;json&quot; and data: the shipments JSON as a string. <a href="https://one.delhivery.com" target="_blank" rel="noopener">Where to find it</a>.</p>
+      <p>shipment.create sends format &quot;json&quot; and data, the shipments JSON as a string, as Delhivery expects it. Pick Delhivery (test) for a staging token.</p>
+      <h3>What your agent can call</h3>
+      <ul><li><code>shipment.track</code>: needs waybill</li><li><code>pincode.check</code>: needs filter_codes</li><li><code>shipment.create</code>: needs format, data</li></ul>
+      <h3>A first rule</h3>
+      <p>Up to 200 new shipments a day, counted in India time; past that, a person approves each one, so a loop cannot book pickups by the hundred. In the dashboard: Rules tab. With the API:</p>
+      <pre><code>POST /api/v1/spend-cap-rules
+{
+  &quot;org_id&quot;: &quot;org_acme&quot;,
+  &quot;service&quot;: &quot;delhivery&quot;,
+  &quot;action&quot;: &quot;shipment.create&quot;,
+  &quot;window&quot;: &quot;day&quot;,
+  &quot;max_calls&quot;: 200,
+  &quot;timezone&quot;: &quot;Asia/Kolkata&quot;,
+  &quot;on_exceed&quot;: &quot;hitl&quot;
+}</code></pre>
+      <h3>A call</h3>
+      <pre><code>curl -X POST &quot;$AGENTRAAS_URL/v1/webhook/org_acme/billing-agent&quot; \
+  -H &quot;Authorization: Bearer $AGENTRAAS_KEY&quot; -H &quot;Content-Type: application/json&quot; \
+  -d &#x27;{&quot;service&quot;: &quot;delhivery&quot;, &quot;action&quot;: &quot;shipment.track&quot;, &quot;payload&quot;: {&quot;waybill&quot;: &quot;1234567890123&quot;}}&#x27;</code></pre>
     </section>
 
     <section id="recipe-paypal">

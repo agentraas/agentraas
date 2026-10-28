@@ -2055,5 +2055,170 @@
         }
       }
     }
+  },
+  "delhivery": {
+    "baseUrl": "https://track.delhivery.com",
+    "authType": "token",
+    "contentType": "application/x-www-form-urlencoded",
+    "setup": {
+      "label": "Delhivery",
+      "category": "Shipping",
+      "key": "API token",
+      "keyHint": "From Delhivery One, Settings, API setup. shipment.create sends format \"json\" and data: the shipments JSON as a string.",
+      "keyUrl": "https://one.delhivery.com",
+      "example": {
+        "action": "shipment.track",
+        "payload": {
+          "waybill": "1234567890123"
+        }
+      }
+    },
+    "actions": {
+      "shipment.track": {
+        "method": "GET",
+        "path": "/api/v1/packages/json/",
+        "validation": {
+          "waybill": {
+            "type": "string",
+            "required": true
+          }
+        }
+      },
+      "pincode.check": {
+        "method": "GET",
+        "path": "/c/api/pin-codes/json/",
+        "validation": {
+          "filter_codes": {
+            "type": "string",
+            "required": true
+          }
+        }
+      },
+      "shipment.create": {
+        "method": "POST",
+        "path": "/api/cmu/create.json",
+        "validation": {
+          "format": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "json"
+            ]
+          },
+          "data": {
+            "type": "string",
+            "required": true,
+            "maxLength": 100000
+          }
+        }
+      }
+    }
+  },
+  "delhivery_staging": {
+    "baseUrl": "https://staging-express.delhivery.com",
+    "authType": "token",
+    "contentType": "application/x-www-form-urlencoded",
+    "setup": {
+      "label": "Delhivery (test)",
+      "category": "Shipping",
+      "key": "API token",
+      "keyHint": "A staging token from Delhivery. Nothing is picked up or shipped.",
+      "keyUrl": "https://one.delhivery.com",
+      "example": {
+        "action": "shipment.track",
+        "payload": {
+          "waybill": "1234567890123"
+        }
+      }
+    },
+    "actions": {
+      "shipment.track": {
+        "method": "GET",
+        "path": "/api/v1/packages/json/",
+        "validation": {
+          "waybill": {
+            "type": "string",
+            "required": true
+          }
+        }
+      },
+      "pincode.check": {
+        "method": "GET",
+        "path": "/c/api/pin-codes/json/",
+        "validation": {
+          "filter_codes": {
+            "type": "string",
+            "required": true
+          }
+        }
+      },
+      "shipment.create": {
+        "method": "POST",
+        "path": "/api/cmu/create.json",
+        "validation": {
+          "format": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "json"
+            ]
+          },
+          "data": {
+            "type": "string",
+            "required": true,
+            "maxLength": 100000
+          }
+        }
+      }
+    }
+  },
+  "msg91": {
+    "baseUrl": "https://control.msg91.com/api/v5",
+    "authHeader": "authkey",
+    "authType": "custom-header",
+    "contentType": "application/json",
+    "setup": {
+      "label": "MSG91 (SMS)",
+      "category": "Messaging",
+      "key": "Auth key",
+      "keyHint": "From the MSG91 panel, Authkey. Sends a DLT-approved template. MSG91 answers success before it checks the key, so a wrong key shows up only in MSG91's delivery reports.",
+      "keyUrl": "https://control.msg91.com",
+      "example": {
+        "action": "flow.send",
+        "payload": {
+          "template_id": "your_template_id",
+          "short_url": "0",
+          "recipients": [
+            {
+              "mobiles": "919876543210",
+              "order": "1001"
+            }
+          ]
+        }
+      }
+    },
+    "actions": {
+      "flow.send": {
+        "method": "POST",
+        "path": "/flow",
+        "validation": {
+          "template_id": {
+            "type": "string",
+            "required": true
+          },
+          "recipients": {
+            "type": "array",
+            "required": true
+          },
+          "short_url": {
+            "type": "string",
+            "enum": [
+              "0",
+              "1"
+            ]
+          }
+        }
+      }
+    }
   }
 }

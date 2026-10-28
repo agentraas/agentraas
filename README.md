@@ -11,7 +11,7 @@ SDK headers or MCP. The core is open source and free to self-host.
 
 Look first: [live read-only demo](https://agentraas.io/api/v1/demo/session),
 no signup. Built-in services include Stripe, Slack, GitHub, HubSpot, Resend,
-SendGrid, Notion, Zendesk, Jira, Twilio, Shopify, Razorpay, Cashfree, RazorpayX, Gupshup and Alpaca (trading); any other HTTP API works as a
+SendGrid, Notion, Zendesk, Jira, Twilio, Shopify, Razorpay, Cashfree, RazorpayX, Gupshup, MSG91, Delhivery and Alpaca (trading); any other HTTP API works as a
 Custom Action and any MCP tool through `agentraas wrap`.
 
 ## The problem
@@ -119,7 +119,7 @@ rather than `restart`.
   them fetched per call ([docs](https://agentraas.io/docs#kms)).
 - **Teams:** OIDC SSO, roles, client tenants with white-label branding.
 
-Curated services (Stripe, Razorpay, Cashfree, RazorpayX, Gupshup, Twilio, HubSpot, Shopify, Slack, PayPal, Alpaca
+Curated services (Stripe, Razorpay, Cashfree, RazorpayX, Gupshup, MSG91, Delhivery, Twilio, HubSpot, Shopify, Slack, PayPal, Alpaca
 paper and live trading and more in `config/services.json`), or register any
 URL as a Custom Action, SSRF-guarded. Guardrails for trading agents:
 [agentraas.io/trading](https://agentraas.io/trading); for agents that refund
@@ -175,7 +175,7 @@ through the built-in `mockpay` service, so no real API keys are needed.
 
 - Verify the undo log against real Stripe and Slack accounts (tested with `mockpay` so far).
 - A real test-mode call to Cashfree and RazorpayX (wiring checked with made-up keys only).
-- PhonePe, Paytm, Shiprocket, Delhivery and MSG91 as built-in services (custom actions today).
+- PhonePe, Paytm and Shiprocket as built-in services (custom actions today): their keys expire or every call is signed, which the catalog cannot do yet.
 
 ## Docs and license
 

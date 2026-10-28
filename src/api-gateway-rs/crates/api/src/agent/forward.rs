@@ -589,6 +589,8 @@ fn apply_auth(builder: reqwest::RequestBuilder, auth_type: &str, auth_header: Op
             Some(name) => builder.header(name, key()),
             None => builder,
         },
+        // "Authorization: Token <key>" (Delhivery).
+        "token" => builder.header("Authorization", format!("Token {}", key())),
         _ => match auth_header {
             Some("Authorization") => builder.header("Authorization", format!("Bearer {}", key())),
             Some(name) => builder.header(name, key()),
@@ -897,6 +899,7 @@ mod tests {
         let dhan = headers("custom-header", Some("access-token"), &key);
         assert_eq!(dhan["access-token"], "sk_test_1");
         assert!(dhan.get("authorization").is_none());
+        assert_eq!(headers("token", None, &key)["authorization"], "Token sk_test_1");
         assert!(headers("basic", None, &pair)["authorization"].to_str().unwrap().starts_with("Basic "));
     }
 

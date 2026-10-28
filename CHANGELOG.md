@@ -15,6 +15,18 @@ safe to re-run.
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-10-28
+
+No new migration.
+
+### Added
+
+- **Shipping and SMS for India:** Delhivery (create shipments, track a
+  waybill, check a pincode; a separate `delhivery_staging` for test tokens)
+  and MSG91 (send SMS from a DLT-approved template).
+- A catalog `authType` of `token`, which sends `Authorization: Token <key>`
+  (Delhivery's form).
+
 ## [0.25.0] - 2026-10-26
 
 No new migration.
@@ -608,7 +620,8 @@ server's `/health` response now includes its version.
 - Up to `050_known_destinations.sql`. On an existing install, apply any of
   `046` to `050` you have not run yet.
 
-[Unreleased]: https://github.com/agentraas/agentraas/compare/v0.25.0...HEAD
+[Unreleased]: https://github.com/agentraas/agentraas/compare/v0.26.0...HEAD
+[0.26.0]: https://github.com/agentraas/agentraas/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/agentraas/agentraas/compare/v0.24.1...v0.25.0
 [0.24.1]: https://github.com/agentraas/agentraas/compare/v0.24.0...v0.24.1
 [0.24.0]: https://github.com/agentraas/agentraas/compare/v0.23.1...v0.24.0
