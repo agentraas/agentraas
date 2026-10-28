@@ -125,6 +125,41 @@ def plan(desired, current, prune):
     return creates, deletes
 
 
+def camel(key):
+    return re.sub(r"_([a-z])", lambda m: m.group(1).upper(), key)
+
+
+def export(argv=None):
+    """`agentraas rules`: the server's rules as a file `apply` accepts, so
+    rules made in the dashboard can move into Git (`apply` on it changes nothing)."""
+    ap = argparse.ArgumentParser(prog="agentraas rules", description="Print the rules of your orgs as a YAML file for `agentraas apply`.")
+    ap.add_argument("--org", action="append", help="only this org (repeat for more); default every org you belong to")
+    args = ap.parse_args(argv)
+    try:
+        import yaml
+    except ImportError:
+        sys.exit('agentraas rules needs PyYAML: pip install "agentraas[apply]"')
+    s, base = login()
+    docs = []
+    for kind, (path, key, _, _) in KINDS.items():
+        r = s.get(base + path, timeout=30)
+        r.raise_for_status()
+        rows = r.json() if key is None else r.json()[key]
+        for row in rows:
+            if args.org and row["org_id"] not in args.org:
+                continue
+            norm = normalize(kind, row["org_id"], row)
+            # Leave out what equals the server default, as a person would write it.
+            spec = {camel(k): v for k, v in norm.items() if k != "org_id" and v is not None and DEFAULTS[kind].get(k, object()) != v}
+            name = "-".join(str(norm[k]) for k in KINDS[kind][2] if norm.get(k)).replace(".", "-").replace("_", "-")
+            docs.append({"apiVersion": API_VERSIONS[0], "kind": kind, "metadata": {"name": name, "org": row["org_id"]}, "spec": spec})
+    if not docs:
+        print("# no rules yet", file=sys.stderr)
+        return 0
+    print(yaml.safe_dump_all(docs, sort_keys=False).rstrip())
+    return 0
+
+
 def body_for(kind, org, spec):
     body = {snake(k): v for k, v in spec.items()}
     body["org_id"] = org

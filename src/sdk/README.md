@@ -301,6 +301,29 @@ agtrs audit -n 200 --json        # adds run/step ids, dedup hash, redacted paylo
 agtrs audit --csv > audit.csv    # the dashboard's CSV export (newest 10,000)
 ```
 
+## Failed calls from the shell
+
+Calls that failed and were kept (the dashboard's **Failed requests**), with
+the same login as `approvals`:
+
+```bash
+agtrs dlq                        # id, time, service action, agent, org, req id, error
+agtrs dlq replay 42              # sends the call again with the same idempotency key; asks first (--yes to skip)
+agtrs dlq dismiss 42             # drop it without sending
+```
+
+`replay` exits 1 if the service fails again; the entry stays in the list.
+
+## Move dashboard rules into Git
+
+`agtrs rules` prints the rules already on the server as a file `apply`
+accepts, so applying it right away changes nothing:
+
+```bash
+agtrs rules --org org_acme > agentraas.yaml
+agtrs apply -f agentraas.yaml --dry-run   # no changes
+```
+
 ## Quickstart
 
 1. Connect an agent from your AgentRaaS dashboard (**+ Connect Agent**) —

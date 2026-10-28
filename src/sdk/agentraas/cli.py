@@ -16,6 +16,12 @@ commands:
          agentraas deny req_abc123
   audit  the audit log, newest first (--limit N, --json, --csv)
          agentraas audit -n 20
+  dlq    failed calls that were kept; send one again or dismiss it
+         agentraas dlq
+         agentraas dlq replay 42           (sends the call again; asks first, or --yes)
+         agentraas dlq dismiss 42
+  rules  print an org's rules as a YAML file for `apply` (start rules as code from the dashboard)
+         agentraas rules --org org_acme > agentraas.yaml
   wrap   exactly-once tool calls + audit log for any MCP server
          agentraas wrap -- npx -y @modelcontextprotocol/server-github
   scan   list which MCP tools can spend money, delete data or send messages
@@ -120,6 +126,54 @@ def audit(argv):
     return 0
 
 
+def dlq(argv):
+    p = argparse.ArgumentParser(prog="agentraas dlq", description="Failed calls kept in the dead-letter queue, newest first (up to 100). "
+                                "Replay one to send it again, or dismiss it. Logs in with AGENTRAAS_EMAIL / AGENTRAAS_PASSWORD "
+                                "against AGENTRAAS_URL (default https://agentraas.io).")
+    p.add_argument("command", nargs="?", choices=("list", "replay", "dismiss"), default="list")
+    p.add_argument("id", nargs="?", type=int, help="entry id, from `agentraas dlq`")
+    p.add_argument("--json", action="store_true", help="list: print the raw entries as JSON")
+    p.add_argument("-y", "--yes", action="store_true", help="replay: don't ask before sending the call")
+    args = p.parse_args(argv)
+    if args.command != "list" and args.id is None:
+        p.error("{} needs the entry id".format(args.command))
+
+    # Replaying sends the call to the service again, so ask first (like approve).
+    if args.command == "replay" and not args.yes:
+        if not sys.stdin.isatty():
+            p.error("replaying sends the call again; pass --yes when not at a terminal")
+        if input("Send entry {} again now? [y/N] ".format(args.id)).strip().lower() not in ("y", "yes"):
+            print("Not replayed.")
+            return 1
+
+    from .apply import login
+
+    s, base = login()
+    url = "{}/api/v1/dead-letter-queue".format(base)
+    if args.command == "list":
+        r = s.get(url, timeout=30)
+    elif args.command == "replay":
+        r = s.post("{}/{}/replay".format(url, args.id), timeout=60)
+    else:
+        r = s.delete("{}/{}".format(url, args.id), timeout=30)
+    data = r.json() if r.headers.get("Content-Type", "").startswith("application/json") else {}
+    if r.status_code != 200:
+        print("error ({}): {}".format(r.status_code, (data.get("error") if isinstance(data, dict) else None) or r.text[:300]), file=sys.stderr)
+        return 1
+    if args.command == "replay":
+        print("{}: replayed ({})".format(args.id, data["reqId"]))
+    elif args.command == "dismiss":
+        print("{}: dismissed".format(args.id))
+    elif args.json:
+        print(json.dumps(data, indent=2))
+    elif not data:
+        print("No failed calls waiting.")
+    for e in [] if args.command != "list" or args.json else data:
+        print("{id:<6} {created_at}  {service} {action} by {agent_id} ({org_id})  {req_id}".format(**e))
+        print("  " + (e.get("error_message") or "no error message"))
+    return 0
+
+
 def decide(decision, argv):
     p = argparse.ArgumentParser(prog="agentraas " + decision, description="{} a held call by its request id (from `agentraas approvals`).".format(decision.capitalize()))
     p.add_argument("req_id")
@@ -162,6 +216,10 @@ def main(argv=None):
         return decide(cmd, rest)
     elif cmd == "audit":
         return audit(rest)
+    elif cmd == "dlq":
+        return dlq(rest)
+    elif cmd == "rules":
+        from .apply import export as run
     elif cmd == "wrap":
         from .mcp_wrap import main as run
     elif cmd == "scan":
