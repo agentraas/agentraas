@@ -17,7 +17,8 @@ TEXT = ('error', 'hint', 'message')
 
 def shape(v):
     if isinstance(v, dict):
-        return {k: (re.sub(r'[0-9a-f]{8,}|\d+', '#', x) if k in TEXT and isinstance(x, str) else shape(x)) for k, x in v.items()}
+        # Days blanked too: the allowed-hours case leaves out the day it runs on.
+        return {k: (re.sub(r'[0-9a-f]{8,}|\d+|\b(mon|tue|wed|thu|fri|sat|sun)\b', '#', x) if k in TEXT and isinstance(x, str) else shape(x)) for k, x in v.items()}
     if isinstance(v, list):
         return [shape(v[0])] if v else []
     return type(v).__name__
