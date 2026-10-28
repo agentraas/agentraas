@@ -583,8 +583,40 @@
   },
   "paypal": {
     "baseUrl": "https://api-m.paypal.com/v2",
-    "authHeader": "Authorization",
+    "authType": "login",
     "contentType": "application/json",
+    "tokenLogin": {
+      "url": "https://api-m.paypal.com/v1/oauth2/token",
+      "contentType": "application/x-www-form-urlencoded",
+      "basicAuth": true,
+      "body": {
+        "grant_type": "client_credentials"
+      },
+      "tokenField": "access_token",
+      "expiresInField": "expires_in"
+    },
+    "setup": {
+      "label": "PayPal",
+      "category": "Payments",
+      "username": "Client ID",
+      "password": "Secret",
+      "usernameHint": "From the PayPal developer dashboard, Apps & Credentials (Live). AgentRaaS gets a fresh access token itself when the old one expires.",
+      "keyUrl": "https://developer.paypal.com/dashboard/applications",
+      "example": {
+        "action": "order.create",
+        "payload": {
+          "intent": "CAPTURE",
+          "purchase_units": [
+            {
+              "amount": {
+                "currency_code": "USD",
+                "value": "25.00"
+              }
+            }
+          ]
+        }
+      }
+    },
     "actions": {
       "order.create": {
         "method": "POST",
@@ -2216,6 +2248,232 @@
               "0",
               "1"
             ]
+          }
+        }
+      }
+    }
+  },
+  "paypal_sandbox": {
+    "baseUrl": "https://api-m.sandbox.paypal.com/v2",
+    "authType": "login",
+    "contentType": "application/json",
+    "tokenLogin": {
+      "url": "https://api-m.sandbox.paypal.com/v1/oauth2/token",
+      "contentType": "application/x-www-form-urlencoded",
+      "basicAuth": true,
+      "body": {
+        "grant_type": "client_credentials"
+      },
+      "tokenField": "access_token",
+      "expiresInField": "expires_in"
+    },
+    "setup": {
+      "label": "PayPal (test)",
+      "category": "Payments",
+      "username": "Client ID",
+      "password": "Secret",
+      "usernameHint": "Sandbox app credentials from the PayPal developer dashboard. Nothing real is charged.",
+      "keyUrl": "https://developer.paypal.com/dashboard/applications",
+      "example": {
+        "action": "order.create",
+        "payload": {
+          "intent": "CAPTURE",
+          "purchase_units": [
+            {
+              "amount": {
+                "currency_code": "USD",
+                "value": "25.00"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "actions": {
+      "order.create": {
+        "method": "POST",
+        "path": "/checkout/orders",
+        "validation": {
+          "intent": {
+            "type": "string",
+            "required": true
+          },
+          "purchase_units": {
+            "type": "array",
+            "required": true,
+            "minLength": 1
+          }
+        }
+      }
+    }
+  },
+  "phonepe_sandbox": {
+    "baseUrl": "https://api-preprod.phonepe.com/apis/pg-sandbox",
+    "authType": "login",
+    "contentType": "application/json",
+    "tokenLogin": {
+      "url": "https://api-preprod.phonepe.com/apis/pg-sandbox/v1/oauth/token",
+      "contentType": "application/x-www-form-urlencoded",
+      "body": {
+        "client_id": "{username}",
+        "client_version": "1",
+        "client_secret": "{password}",
+        "grant_type": "client_credentials"
+      },
+      "tokenField": "access_token",
+      "expiresAtField": "expires_at",
+      "prefix": "O-Bearer"
+    },
+    "setup": {
+      "label": "PhonePe (test)",
+      "category": "Payments",
+      "username": "Client ID",
+      "password": "Client secret",
+      "usernameHint": "PhonePe UAT (sandbox) credentials. AgentRaaS gets a fresh token itself when the old one expires. Amounts are in paise.",
+      "keyUrl": "https://business.phonepe.com/developer-settings",
+      "example": {
+        "action": "order.status",
+        "payload": {
+          "merchantOrderId": "order_1001"
+        }
+      }
+    },
+    "actions": {
+      "order.status": {
+        "method": "GET",
+        "path": "/checkout/v2/order/{merchantOrderId}/status",
+        "validation": {
+          "merchantOrderId": {
+            "type": "string",
+            "required": true
+          }
+        }
+      },
+      "refund.create": {
+        "method": "POST",
+        "path": "/payments/v2/refund",
+        "validation": {
+          "merchantRefundId": {
+            "type": "string",
+            "required": true,
+            "maxLength": 63
+          },
+          "originalMerchantOrderId": {
+            "type": "string",
+            "required": true
+          },
+          "amount": {
+            "type": "number",
+            "required": true,
+            "min": 100
+          }
+        }
+      },
+      "refund.status": {
+        "method": "GET",
+        "path": "/payments/v2/refund/{merchantRefundId}/status",
+        "validation": {
+          "merchantRefundId": {
+            "type": "string",
+            "required": true
+          }
+        }
+      }
+    }
+  },
+  "shiprocket": {
+    "baseUrl": "https://apiv2.shiprocket.in/v1/external",
+    "authType": "login",
+    "contentType": "application/json",
+    "tokenLogin": {
+      "url": "https://apiv2.shiprocket.in/v1/external/auth/login",
+      "body": {
+        "email": "{username}",
+        "password": "{password}"
+      },
+      "tokenField": "token",
+      "ttlSeconds": 864000
+    },
+    "setup": {
+      "label": "Shiprocket",
+      "category": "Shipping",
+      "username": "API user email",
+      "password": "API user password",
+      "usernameHint": "An API user (Settings, API, Configure, not your panel login). AgentRaaS logs in itself and renews the token every 10 days.",
+      "keyUrl": "https://app.shiprocket.in/api-user",
+      "example": {
+        "action": "shipment.track",
+        "payload": {
+          "awb_code": "141123221084922"
+        }
+      }
+    },
+    "actions": {
+      "order.create": {
+        "method": "POST",
+        "path": "/orders/create/adhoc",
+        "validation": {
+          "order_id": {
+            "type": "string",
+            "required": true
+          },
+          "order_date": {
+            "type": "string",
+            "required": true
+          },
+          "pickup_location": {
+            "type": "string",
+            "required": true
+          },
+          "billing_customer_name": {
+            "type": "string",
+            "required": true
+          },
+          "order_items": {
+            "type": "array",
+            "required": true
+          },
+          "payment_method": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "Prepaid",
+              "COD"
+            ]
+          },
+          "sub_total": {
+            "type": "number",
+            "required": true
+          }
+        }
+      },
+      "courier.assign": {
+        "method": "POST",
+        "path": "/courier/assign/awb",
+        "validation": {
+          "shipment_id": {
+            "type": "number",
+            "required": true
+          }
+        }
+      },
+      "shipment.track": {
+        "method": "GET",
+        "path": "/courier/track/awb/{awb_code}",
+        "validation": {
+          "awb_code": {
+            "type": "string",
+            "required": true
+          }
+        }
+      },
+      "order.cancel": {
+        "method": "POST",
+        "path": "/orders/cancel",
+        "validation": {
+          "ids": {
+            "type": "array",
+            "required": true
           }
         }
       }

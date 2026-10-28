@@ -15,6 +15,24 @@ safe to re-run.
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-10-28
+
+No new migration.
+
+### Added
+
+- **Keys that expire, renewed by the server.** A catalog service with
+  `authType: "login"` and a `tokenLogin` block trades the saved credentials
+  for a token, keeps it in Redis (encrypted, like stored credentials) until a
+  minute before it expires, and logs in again after a 401. Wrong credentials
+  answer 424 with the reason and don't count against the circuit breaker.
+- **PayPal** now logs in with the app's client ID and secret (and is in
+  Connect a service); `paypal_sandbox` for sandbox apps. An access token
+  saved earlier as a plain key is still sent as is.
+- **Shiprocket** (create orders, assign a courier, track an AWB, cancel) and
+  **PhonePe test mode** (`phonepe_sandbox`: order status, refund, refund
+  status).
+
 ## [0.26.0] - 2026-10-28
 
 No new migration.
@@ -620,7 +638,8 @@ server's `/health` response now includes its version.
 - Up to `050_known_destinations.sql`. On an existing install, apply any of
   `046` to `050` you have not run yet.
 
-[Unreleased]: https://github.com/agentraas/agentraas/compare/v0.26.0...HEAD
+[Unreleased]: https://github.com/agentraas/agentraas/compare/v0.27.0...HEAD
+[0.27.0]: https://github.com/agentraas/agentraas/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/agentraas/agentraas/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/agentraas/agentraas/compare/v0.24.1...v0.25.0
 [0.24.1]: https://github.com/agentraas/agentraas/compare/v0.24.0...v0.24.1

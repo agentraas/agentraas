@@ -11,7 +11,7 @@ SDK headers or MCP. The core is open source and free to self-host.
 
 Look first: [live read-only demo](https://agentraas.io/api/v1/demo/session),
 no signup. Built-in services include Stripe, Slack, GitHub, HubSpot, Resend,
-SendGrid, Notion, Zendesk, Jira, Twilio, Shopify, Razorpay, Cashfree, RazorpayX, Gupshup, MSG91, Delhivery and Alpaca (trading); any other HTTP API works as a
+SendGrid, Notion, Zendesk, Jira, Twilio, Shopify, Razorpay, Cashfree, RazorpayX, Gupshup, MSG91, Delhivery, Shiprocket and Alpaca (trading); any other HTTP API works as a
 Custom Action and any MCP tool through `agentraas wrap`.
 
 ## The problem
@@ -175,7 +175,7 @@ through the built-in `mockpay` service, so no real API keys are needed.
 
 - Verify the undo log against real Stripe and Slack accounts (tested with `mockpay` so far).
 - A real test-mode call to Cashfree and RazorpayX (wiring checked with made-up keys only).
-- PhonePe, Paytm and Shiprocket as built-in services (custom actions today): their keys expire or every call is signed, which the catalog cannot do yet.
+- Paytm (every call is signed) and PhonePe production (needs the client version from its credentials email) as built-in services; custom actions today.
 
 ## Docs and license
 

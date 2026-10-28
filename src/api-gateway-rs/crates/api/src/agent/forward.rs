@@ -191,7 +191,20 @@ async fn build_request(
     }
 
     if let Some(cred) = &credential {
-        builder = apply_auth(builder, &route.auth_type, route.auth_header.as_deref(), cred);
+        builder = match state.token_logins.get(service_name).filter(|_| route.auth_type == "login") {
+            Some(spec) => {
+                let token = super::token_login::token(state, spec, service_name, org_id, end_user_id, cred).await.map_err(|message| ForwardError {
+                    message,
+                    upstream_status: None,
+                    upstream_body: None,
+                    circuit_already_recorded: false,
+                    outcome_unknown: false,
+                    setup_error: true,
+                })?;
+                builder.header("Authorization", format!("{} {token}", spec.prefix))
+            }
+            None => apply_auth(builder, &route.auth_type, route.auth_header.as_deref(), cred),
+        };
     }
 
     let builder = if route.method.eq_ignore_ascii_case("GET") {
@@ -251,6 +264,9 @@ pub async fn forward_action(
     let body: Value = response.json().await.unwrap_or(Value::Null);
 
     if status.as_u16() >= 400 {
+        if status.as_u16() == 401 && route.auth_type == "login" {
+            super::token_login::forget(state, service_name, org_id, end_user_id).await;
+        }
         let message = extract_upstream_error_message(&body)
             .unwrap_or_else(|| format!("HTTP {}", status.as_u16()));
         return Err(ForwardError {

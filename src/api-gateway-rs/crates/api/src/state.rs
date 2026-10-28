@@ -26,6 +26,8 @@ pub struct AppState {
     pub curated_services: std::collections::HashSet<String>,
     /// Setup text and actions per curated service (`/api/v1/services`).
     pub service_catalog: std::collections::HashMap<String, serde_json::Value>,
+    /// `tokenLogin` per service with `authType: "login"` (`agent::token_login`).
+    pub token_logins: HashMap<String, agentraas_core::config::TokenLogin>,
     /// Precomputed `tools/list` result, static for the process lifetime.
     pub mcp_tools_list: serde_json::Value,
 

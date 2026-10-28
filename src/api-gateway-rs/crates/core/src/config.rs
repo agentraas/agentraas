@@ -43,7 +43,45 @@ pub struct RawServiceConfig {
     /// find it, and an example call. Not used for routing.
     #[serde(default)]
     pub setup: Option<serde_json::Value>,
+    /// With `authType: "login"`: how to trade the stored credential for a
+    /// token that expires (PayPal, PhonePe, Shiprocket).
+    #[serde(rename = "tokenLogin", default)]
+    pub token_login: Option<TokenLogin>,
     pub actions: HashMap<String, RawActionConfig>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TokenLogin {
+    pub url: String,
+    /// `application/json` (default) or `application/x-www-form-urlencoded`.
+    #[serde(default)]
+    pub content_type: Option<String>,
+    /// Send the username and password as HTTP basic auth on the login (PayPal).
+    #[serde(default)]
+    pub basic_auth: bool,
+    /// Login body; a value `"{username}"` or `"{password}"` is filled from the
+    /// stored credential.
+    #[serde(default)]
+    pub body: serde_json::Map<String, serde_json::Value>,
+    pub token_field: String,
+    /// Seconds from now (`expires_in`) or epoch seconds (`expires_at`), read
+    /// from the login answer; `ttl_seconds` when the answer has neither.
+    pub expires_in_field: Option<String>,
+    pub expires_at_field: Option<String>,
+    #[serde(default = "default_token_ttl")]
+    pub ttl_seconds: i64,
+    /// Word before the token in `Authorization` ("Bearer", PhonePe "O-Bearer").
+    #[serde(default = "default_token_prefix")]
+    pub prefix: String,
+}
+
+fn default_token_ttl() -> i64 {
+    3600
+}
+
+fn default_token_prefix() -> String {
+    "Bearer".to_string()
 }
 
 #[derive(Debug, Clone, Deserialize)]

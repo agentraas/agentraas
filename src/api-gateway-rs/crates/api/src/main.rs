@@ -110,6 +110,11 @@ async fn main() -> anyhow::Result<()> {
     }
     let mcp_tools_list = serde_json::json!(tools);
     let curated_services: std::collections::HashSet<String> = services_config.keys().cloned().collect();
+    let token_logins: std::collections::HashMap<String, agentraas_core::config::TokenLogin> = services_config
+        .iter()
+        .filter(|(_, svc)| svc.auth_type.as_deref() == Some("login"))
+        .map(|(name, svc)| (name.clone(), svc.token_login.clone().unwrap_or_else(|| panic!("service {name}: authType \"login\" needs tokenLogin"))))
+        .collect();
     // What the dashboard's "Connect a service" shows per service: its setup
     // text and each action with its required fields.
     let service_catalog: std::collections::HashMap<String, serde_json::Value> = services_config
@@ -145,6 +150,7 @@ async fn main() -> anyhow::Result<()> {
         mcp_tools_list,
         curated_services,
         service_catalog,
+        token_logins,
         jwt_secret,
         public_url: std::env::var("PUBLIC_URL")
             .unwrap_or_else(|_| "http://localhost:13000".to_string()),

@@ -51,7 +51,7 @@ Measured overhead: 2.1 to 2.4 ms added per call at the median (one machine, Inte
 - [Self-hosting](https://agentraas.io/self-host): editions, install, license keys
 - [Cloud](https://agentraas.io/cloud): hosted trial and plans
 - [Trading agents](https://agentraas.io/trading): a safety layer for agents that already trade (Alpaca, Upstox, Dhan): orders run once, with limits, hours and approvals
-- [Online shopping and quick commerce](https://agentraas.io/commerce): agents that refund orders, send WhatsApp updates and pay riders (Razorpay, Cashfree, RazorpayX, Gupshup, MSG91, Delhivery): each action runs once, refunds checked against the real order, approvals and daily caps
+- [Online shopping and quick commerce](https://agentraas.io/commerce): agents that refund orders, send WhatsApp updates and pay riders (Razorpay, Cashfree, RazorpayX, Gupshup, MSG91, Delhivery, Shiprocket): each action runs once, refunds checked against the real order, approvals and daily caps
 - [Community](https://agentraas.io/community): questions and answers in GitHub Discussions
 - [Getting started guide](https://agentraas.io/guide)
 - [Source code (GitHub)](https://github.com/agentraas/agentraas)

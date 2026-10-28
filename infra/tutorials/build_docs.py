@@ -159,11 +159,16 @@ RECIPES = [
      'rule': ('spend-cap-rules', {'service': 'delhivery', 'action': 'shipment.create', 'window': 'day', 'max_calls': 200, 'timezone': 'Asia/Kolkata', 'on_exceed': 'hitl'},
               'Up to 200 new shipments a day, counted in India time; past that, a person approves each one, so a loop cannot book pickups by the hundred.'),
      'note': 'shipment.create sends format "json" and data, the shipments JSON as a string, as Delhivery expects it. Pick Delhivery (test) for a staging token.'},
+    {'service': 'shiprocket', 'why': 'Create orders, assign a courier and track shipments (India).',
+     'call': ('shipment.track', {'awb_code': '141123221084922'}),
+     'rule': ('spend-cap-rules', {'service': 'shiprocket', 'action': 'order.cancel', 'window': 'day', 'max_calls': 20, 'timezone': 'Asia/Kolkata', 'on_exceed': 'hitl'},
+              'Up to 20 cancel calls a day, counted in India time; past that, a person approves each one.'),
+     'note': 'Create an API user in Shiprocket (Settings, API) and save its email and password, not your panel login. AgentRaaS logs in itself and renews the 10-day token.'},
     {'service': 'paypal', 'why': 'Create checkout orders.',
      'call': ('order.create', {'intent': 'CAPTURE', 'purchase_units': [{'amount': {'currency_code': 'USD', 'value': '25.00'}}]}),
      'rule': ('hitl-rules', {'service': 'paypal', 'action': 'order.create'},
               'Hold every order for a person. The amount sits inside purchase_units, where amount rules cannot reach it, so this rule has no threshold.'),
-     'note': 'PayPal is not in Connect a service yet: save an access token under Setup, Credentials (service paypal). PayPal access tokens expire, so it has to be replaced when it does.'},
+     'note': 'Save the app\'s client ID and secret: AgentRaaS gets a fresh access token itself when the old one expires. Pick PayPal (test) for sandbox credentials.'},
 ]
 
 def recipe_html(r):

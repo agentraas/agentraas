@@ -259,7 +259,8 @@
       <a href="#recipe-gupshup">Gupshup (WhatsApp)</a>
       <a href="#recipe-msg91">MSG91 (SMS)</a>
       <a href="#recipe-delhivery">Delhivery</a>
-      <a href="#recipe-paypal">Paypal</a>
+      <a href="#recipe-shiprocket">Shiprocket</a>
+      <a href="#recipe-paypal">PayPal</a>
     </div>
     <!-- tutorials-nav:end -->
   </aside>
@@ -1392,7 +1393,7 @@ get_invoice ran (time #2)</code></pre></div></details>
     <section id="recipes">
       <h2>Recipes for real services</h2>
       <p>How to connect a service people already use, what an agent can do with it, and one rule worth adding first. The rule bodies were saved against a real server; the calls need your own key, so they show no response.</p>
-      <ul class="tut-list"><li><a href="#recipe-stripe">Stripe</a></li><li><a href="#recipe-slack">Slack</a></li><li><a href="#recipe-resend">Resend</a></li><li><a href="#recipe-github">GitHub</a></li><li><a href="#recipe-razorpay">Razorpay</a></li><li><a href="#recipe-cashfree">Cashfree Payments</a></li><li><a href="#recipe-razorpayx">RazorpayX Payouts</a></li><li><a href="#recipe-gupshup">Gupshup (WhatsApp)</a></li><li><a href="#recipe-msg91">MSG91 (SMS)</a></li><li><a href="#recipe-delhivery">Delhivery</a></li><li><a href="#recipe-paypal">Paypal</a></li></ul>
+      <ul class="tut-list"><li><a href="#recipe-stripe">Stripe</a></li><li><a href="#recipe-slack">Slack</a></li><li><a href="#recipe-resend">Resend</a></li><li><a href="#recipe-github">GitHub</a></li><li><a href="#recipe-razorpay">Razorpay</a></li><li><a href="#recipe-cashfree">Cashfree Payments</a></li><li><a href="#recipe-razorpayx">RazorpayX Payouts</a></li><li><a href="#recipe-gupshup">Gupshup (WhatsApp)</a></li><li><a href="#recipe-msg91">MSG91 (SMS)</a></li><li><a href="#recipe-delhivery">Delhivery</a></li><li><a href="#recipe-shiprocket">Shiprocket</a></li><li><a href="#recipe-paypal">PayPal</a></li></ul>
     </section>
 
     <section id="recipe-stripe">
@@ -1674,12 +1675,38 @@ get_invoice ran (time #2)</code></pre></div></details>
   -d &#x27;{&quot;service&quot;: &quot;delhivery&quot;, &quot;action&quot;: &quot;shipment.track&quot;, &quot;payload&quot;: {&quot;waybill&quot;: &quot;1234567890123&quot;}}&#x27;</code></pre>
     </section>
 
+    <section id="recipe-shiprocket">
+      <h2>Shiprocket</h2>
+      <p>Create orders, assign a courier and track shipments (India).</p>
+      <h3>Connect it</h3>
+      <p>Setup tab, <b>Connect a service</b>, pick Shiprocket and paste the <b>API user email and API user password</b>. <a href="https://app.shiprocket.in/api-user" target="_blank" rel="noopener">Where to find it</a>.</p>
+      <p>Create an API user in Shiprocket (Settings, API) and save its email and password, not your panel login. AgentRaaS logs in itself and renews the 10-day token.</p>
+      <h3>What your agent can call</h3>
+      <ul><li><code>order.create</code>: needs order_id, order_date, pickup_location, billing_customer_name, order_items, payment_method, sub_total</li><li><code>courier.assign</code>: needs shipment_id</li><li><code>shipment.track</code>: needs awb_code</li><li><code>order.cancel</code>: needs ids</li></ul>
+      <h3>A first rule</h3>
+      <p>Up to 20 cancel calls a day, counted in India time; past that, a person approves each one. In the dashboard: Rules tab. With the API:</p>
+      <pre><code>POST /api/v1/spend-cap-rules
+{
+  &quot;org_id&quot;: &quot;org_acme&quot;,
+  &quot;service&quot;: &quot;shiprocket&quot;,
+  &quot;action&quot;: &quot;order.cancel&quot;,
+  &quot;window&quot;: &quot;day&quot;,
+  &quot;max_calls&quot;: 20,
+  &quot;timezone&quot;: &quot;Asia/Kolkata&quot;,
+  &quot;on_exceed&quot;: &quot;hitl&quot;
+}</code></pre>
+      <h3>A call</h3>
+      <pre><code>curl -X POST &quot;$AGENTRAAS_URL/v1/webhook/org_acme/billing-agent&quot; \
+  -H &quot;Authorization: Bearer $AGENTRAAS_KEY&quot; -H &quot;Content-Type: application/json&quot; \
+  -d &#x27;{&quot;service&quot;: &quot;shiprocket&quot;, &quot;action&quot;: &quot;shipment.track&quot;, &quot;payload&quot;: {&quot;awb_code&quot;: &quot;141123221084922&quot;}}&#x27;</code></pre>
+    </section>
+
     <section id="recipe-paypal">
-      <h2>Paypal</h2>
+      <h2>PayPal</h2>
       <p>Create checkout orders.</p>
       <h3>Connect it</h3>
-      <p>Setup tab, <b>Connect a service</b>, pick Paypal and paste the <b>access token</b>.</p>
-      <p>PayPal is not in Connect a service yet: save an access token under Setup, Credentials (service paypal). PayPal access tokens expire, so it has to be replaced when it does.</p>
+      <p>Setup tab, <b>Connect a service</b>, pick PayPal and paste the <b>Client ID and Secret</b>. <a href="https://developer.paypal.com/dashboard/applications" target="_blank" rel="noopener">Where to find it</a>.</p>
+      <p>Save the app&#x27;s client ID and secret: AgentRaaS gets a fresh access token itself when the old one expires. Pick PayPal (test) for sandbox credentials.</p>
       <h3>What your agent can call</h3>
       <ul><li><code>order.create</code>: needs intent, purchase_units</li></ul>
       <h3>A first rule</h3>
