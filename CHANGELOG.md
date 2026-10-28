@@ -15,6 +15,17 @@ safe to re-run.
 
 ## [Unreleased]
 
+## [0.27.1] - 2026-10-28
+
+No new migration.
+
+### Changed
+
+- A service with `authType: "login"` that answers 401 (a token revoked
+  before it expired) gets the same call once more with a fresh login, so the
+  agent no longer sees that one 401. A 401 means the call was refused, not
+  run, so it can't run twice.
+
 ## [0.27.0] - 2026-10-28
 
 No new migration.
@@ -638,7 +649,8 @@ server's `/health` response now includes its version.
 - Up to `050_known_destinations.sql`. On an existing install, apply any of
   `046` to `050` you have not run yet.
 
-[Unreleased]: https://github.com/agentraas/agentraas/compare/v0.27.0...HEAD
+[Unreleased]: https://github.com/agentraas/agentraas/compare/v0.27.1...HEAD
+[0.27.1]: https://github.com/agentraas/agentraas/compare/v0.27.0...v0.27.1
 [0.27.0]: https://github.com/agentraas/agentraas/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/agentraas/agentraas/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/agentraas/agentraas/compare/v0.24.1...v0.25.0

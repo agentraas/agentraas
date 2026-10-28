@@ -256,17 +256,24 @@ pub async fn forward_action(
         }
     }
 
-    let builder = build_request(state, route, service_name, org_id, payload, req_id, end_user_id, upstream_key).await?;
-
-    let response = builder.send().await.map_err(send_error)?;
-
-    let status = response.status();
-    let body: Value = response.json().await.unwrap_or(Value::Null);
-
-    if status.as_u16() >= 400 {
+    let mut relogin = route.auth_type == "login";
+    let (status, body) = loop {
+        let builder = build_request(state, route, service_name, org_id, payload, req_id, end_user_id, upstream_key).await?;
+        let response = builder.send().await.map_err(send_error)?;
+        let status = response.status();
+        let body: Value = response.json().await.unwrap_or(Value::Null);
         if status.as_u16() == 401 && route.auth_type == "login" {
             super::token_login::forget(state, service_name, org_id, end_user_id).await;
+            // The token expired or was revoked early. A 401 means the call
+            // was refused, not run, so it is safe to log in and send it once more.
+            if std::mem::take(&mut relogin) {
+                continue;
+            }
         }
+        break (status, body);
+    };
+
+    if status.as_u16() >= 400 {
         let message = extract_upstream_error_message(&body)
             .unwrap_or_else(|| format!("HTTP {}", status.as_u16()));
         return Err(ForwardError {
