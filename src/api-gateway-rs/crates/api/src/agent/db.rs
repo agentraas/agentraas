@@ -731,9 +731,8 @@ pub struct ResolvedRoute {
 }
 
 /// Looks up a registered custom action, shaped like a `SERVICE_ROUTES`
-/// entry — Dynamic Header & Secret Injection: any `secret: true` header is
-/// decrypted now, so the forwarder's plain header merge just works, same
-/// as a curated service's static config-driven `extraHeaders`.
+/// entry — Dynamic Header & Secret Injection: a `secret: true` header is
+/// passed on as `{"encrypted": ...}` for the forwarder to decrypt.
 pub async fn resolve_custom_route(
     state: &SharedState,
     org_id: &str,
@@ -760,24 +759,17 @@ pub async fn resolve_custom_route(
     .await?;
     let Some(row) = row else { return Ok(None) };
 
+    // Secret headers stay encrypted here and are decrypted by the forwarder
+    // (`forward::forward_action`) only when the call is really sent, so a
+    // blocked or shadowed call never decrypts them.
     let mut extra_headers = serde_json::Map::new();
     if let Some(arr) = row.extra_headers.as_array() {
         for h in arr {
             let name = h.get("name").and_then(Value::as_str).unwrap_or_default();
             let is_secret = h.get("secret").and_then(Value::as_bool).unwrap_or(false);
             let raw_value = h.get("value").and_then(Value::as_str).unwrap_or_default();
-            let value = if is_secret {
-                match state.cipher.decrypt(raw_value) {
-                    Ok(v) => v,
-                    Err(err) => {
-                        tracing::error!(?err, org_id, action_name, header = name, "failed to decrypt custom-action secret header");
-                        String::new()
-                    }
-                }
-            } else {
-                raw_value.to_string()
-            };
-            extra_headers.insert(name.to_string(), Value::String(value));
+            let value = if is_secret { serde_json::json!({ "encrypted": raw_value }) } else { Value::String(raw_value.to_string()) };
+            extra_headers.insert(name.to_string(), value);
         }
     }
 

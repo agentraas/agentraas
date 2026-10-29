@@ -169,7 +169,11 @@ async fn build_request(
                     (Some("{idempotency_key}"), Some(key)) => builder = builder.header(k, key),
                     (Some("{idempotency_key}"), None) => {}
                     (Some(s), _) => builder = builder.header(k, s),
-                    _ => {}
+                    _ => match v.get("encrypted").and_then(Value::as_str).map(|c| state.cipher.decrypt(c)) {
+                        Some(Ok(secret)) => builder = builder.header(k, secret),
+                        Some(Err(err)) => tracing::error!(?err, header = %k, "failed to decrypt custom-action secret header"),
+                        None => {}
+                    },
                 }
             }
         }
