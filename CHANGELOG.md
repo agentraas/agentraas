@@ -15,6 +15,19 @@ safe to re-run.
 
 ## [Unreleased]
 
+## [0.28.1] - 2026-10-29
+
+No new migration.
+
+### Fixed
+
+- A resource lock (`resource_id`) could expire while its call was still
+  running: its lifetime was a fixed 15 seconds, shorter than the default
+  30-second proxy timeout, so a second agent could act on the same record
+  during a slow call. It now lasts as long as the longest possible forward
+  (every attempt timing out, plus backoff) plus 5 seconds, and is still
+  released as soon as the call ends.
+
 ## [0.28.0] - 2026-10-29
 
 New migration: `061_reports_and_shadow.sql`. Apply it before starting this
