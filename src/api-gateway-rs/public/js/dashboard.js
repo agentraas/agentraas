@@ -2335,7 +2335,7 @@
   }
 
   function decisionText(d) {
-    const fixed = { would_execute: 'Would have run', would_deduplicate: 'Duplicate of a live call', would_error: 'A check could not be read' };
+    const fixed = { would_execute: 'Would have run', would_deduplicate: 'Duplicate of a live call', would_error: 'A check could not be read', would_wait_for_lock: 'Another call held this record' };
     return fixed[d] || (d || '').replace(/^would_block:/, 'Would have been blocked: ').replace(/^would_need_approval:/, 'Would have needed approval: ');
   }
   async function loadShadowCalls() {
@@ -2355,6 +2355,24 @@
   }
   if (wireModal('shadow-calls-btn', 'shadow-calls-modal-overlay', 'shadow-calls-modal-close', loadShadowCalls)) {
     document.getElementById('shadow-calls-filter').addEventListener('submit', (e) => { e.preventDefault(); loadShadowCalls(); });
+  }
+
+  // ─── Record locks ───
+  async function loadRecordLocks() {
+    showErr('record-locks-error', '');
+    try {
+      const s = await getJson(`/api/v1/record-locks?${orgQ()}`);
+      document.getElementById('record-locks-on').checked = s.enabled;
+      document.getElementById('record-locks-actions').textContent = `Actions that lock their record: ${s.actions.join(', ')}.`;
+    } catch (err) { showErr('record-locks-error', err.message); }
+  }
+  if (wireModal('record-locks-btn', 'record-locks-modal-overlay', 'record-locks-modal-close', loadRecordLocks)) {
+    const box = document.getElementById('record-locks-on');
+    box.addEventListener('change', async () => {
+      showErr('record-locks-error', '');
+      try { await getJson('/api/v1/record-locks', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ org_id: currentUserOrgId, enabled: box.checked }) }); }
+      catch (err) { showErr('record-locks-error', err.message); box.checked = !box.checked; }
+    });
   }
 
   // ─── Savings report ───

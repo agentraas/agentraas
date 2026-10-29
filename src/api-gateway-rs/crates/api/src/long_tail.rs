@@ -532,8 +532,8 @@ async fn put_org_branding(State(state): State<SharedState>, user: AuthUser, Path
         return Err(ApiError::new(StatusCode::PAYMENT_REQUIRED, "White-label branding requires the Enterprise plan."));
     }
     if let Some(name) = &body.display_name {
-        if name.chars().count() > 255 {
-            return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "display_name must be a string up to 255 characters."));
+        if name.chars().count() > 255 || name.chars().any(char::is_control) {
+            return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "display_name must be up to 255 characters, with no control characters."));
         }
     }
     if body.accent_color.as_deref().is_some_and(|c| !crate::reports::is_hex_color(c)) {

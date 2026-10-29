@@ -720,7 +720,46 @@ async fn approve(state: &SharedState, req_id: &str, org_id: &str, resolved_by: S
     };
     let circuit_key = if resolved_route.credential_key.is_empty() { row.service.clone() } else { resolved_route.credential_key.clone() };
 
-    match crate::agent::forward::forward_with_retry(state, &resolved_route, &row.service, &row.action, &row.org_id, &row.payload, req_id, &circuit_key, None, Some(&dedup::upstream_idempotency_key(&row.dedup_hash))).await {
+    // Put in shadow mode while it waited: approving must not send it. Fail
+    // closed when the rule can't be read.
+    if !matches!(crate::shadow::rule_for(state, &row.org_id, &row.agent_id, &row.service, &row.action).await, Ok(None)) {
+        if let Ok(mut conn) = state.redis_conn_result() {
+            let _ = dedup::release_dedup_slot(&mut conn, &format!("dedup:{}", row.dedup_hash)).await;
+        }
+        fail_request(state, req_id, &row, "The agent is in shadow mode, so the approved call was not sent.").await;
+        patch_slack_message(state, response_url, "Not sent: the agent was put in shadow mode while this waited.").await;
+        return;
+    }
+
+    // A held call gave up its record lock while it waited (it could wait for
+    // hours); it takes it again now. If another call holds the record at this
+    // moment, the approved call goes to the dead-letter queue to replay.
+    let mut held_lock = None;
+    if let Some(lock) = crate::record_locks::lock_for(state, &row.org_id, &row.service, &row.action, &row.payload, None).await {
+        if let Ok(mut conn) = state.redis_conn_result() {
+            match agentraas_core::resource_lock::acquire(&mut conn, &row.org_id, &lock.id, &row.agent_id, crate::agent::forward::resource_lock_ttl_seconds(state)).await {
+                Ok(got) if !got.acquired => {
+                    let _ = dedup::release_dedup_slot(&mut conn, &format!("dedup:{}", row.dedup_hash)).await;
+                    let message = format!("record busy: another call was changing this {} when it was approved", lock.label);
+                    crate::agent::db::write_dead_letter_queue(state, req_id, &row.org_id, &row.agent_id, &row.service, &row.action, &row.payload, &message, Some(&row.dedup_hash)).await;
+                    fail_request(state, req_id, &row, &message).await;
+                    patch_slack_message(state, response_url, &format!("Approved by {resolved_by}, but another call was changing this {} at that moment. Replay it from Failed requests.", lock.label)).await;
+                    return;
+                }
+                Ok(got) => held_lock = Some((lock.id, got.token)),
+                Err(err) => tracing::error!(?err, "record lock for an approved call failed, running without it"),
+            }
+        }
+    }
+
+    let forwarded = crate::agent::forward::forward_with_retry(state, &resolved_route, &row.service, &row.action, &row.org_id, &row.payload, req_id, &circuit_key, None, Some(&dedup::upstream_idempotency_key(&row.dedup_hash))).await;
+    // Kept until its TTL when the outcome is unknown: it may still be running.
+    if let (Some((id, token)), Ok(mut conn)) = (&held_lock, state.redis_conn_result()) {
+        if !matches!(&forwarded, Err(e) if e.outcome_unknown) {
+            let _ = agentraas_core::resource_lock::release(&mut conn, &row.org_id, id, token).await;
+        }
+    }
+    match forwarded {
         Ok(result) => {
             if let Ok(mut conn) = state.redis_conn_result() {
                 let _ = dedup::complete_dedup_slot_with_ttl(&mut conn, &format!("dedup:{}", row.dedup_hash), &result, row.dedup_ttl_seconds).await;

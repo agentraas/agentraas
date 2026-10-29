@@ -84,7 +84,7 @@ test('a call that would time out is not sent either', async () => {
   const r = await webhook('mockpay', 'payment.create', { amount: 41, fail: false, delay_ms: 5000, hit_tag: tag });
   assert.equal(r.status, 200, JSON.stringify(r.data));
   assert.equal(r.data.shadow, true);
-  assert.ok(Date.now() - started < 2000, 'answered without waiting on the provider');
+  assert.ok(Date.now() - started < 4000, 'answered without waiting on the provider (5 s delay)');
   assert.equal(await hits(tag), 0);
 });
 

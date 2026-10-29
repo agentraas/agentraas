@@ -135,9 +135,9 @@ async fn build(state: &SharedState, org_id: &str, p: &Period) -> Result<Value, s
     }
     let agents: Vec<AgentRow> = sqlx::query_as(&format!(
         "SELECT agent_id,
-                COUNT(*) FILTER (WHERE status <> 'shadow') AS total,
+                COUNT(DISTINCT req_id) FILTER (WHERE status <> 'shadow') AS total,
                 COUNT(*) FILTER (WHERE {DUPLICATE}) AS duplicates,
-                COUNT(*) FILTER (WHERE status = 'blocked' AND NOT {DUPLICATE}) AS blocked,
+                COUNT(*) FILTER (WHERE status = 'blocked' AND NOT {DUPLICATE} AND error_type NOT LIKE 'hitl%') AS blocked,
                 COUNT(*) FILTER (WHERE status = 'blocked' AND error_type LIKE 'policy%') AS by_policy,
                 COUNT(*) FILTER (WHERE status = 'blocked' AND error_type = 'spend_cap_exceeded') AS by_spend_cap,
                 COUNT(*) FILTER (WHERE status = 'pending_approval') AS held,
@@ -161,7 +161,7 @@ async fn build(state: &SharedState, org_id: &str, p: &Period) -> Result<Value, s
         errors: i64,
     }
     let services: Vec<ServiceRow> = sqlx::query_as(
-        "SELECT service, COUNT(*) FILTER (WHERE status <> 'shadow') AS total,
+        "SELECT service, COUNT(DISTINCT req_id) FILTER (WHERE status <> 'shadow') AS total,
                 COUNT(*) FILTER (WHERE status = 'success') AS success, COUNT(*) FILTER (WHERE status = 'error') AS errors
          FROM audit_log WHERE org_id = $1 AND created_at >= $2 AND created_at < $3 GROUP BY service ORDER BY total DESC",
     )
@@ -196,10 +196,14 @@ async fn build(state: &SharedState, org_id: &str, p: &Period) -> Result<Value, s
     .bind(p.to)
     .fetch_all(&state.pg)
     .await?;
+    // Once per payment (dedup hash), however often it was retried: an agent
+    // stuck retrying one timed-out payment must not multiply the estimate.
     let money: Vec<(String, f64, i64)> = sqlx::query_as(&format!(
-        "SELECT money_currency, SUM(money_amount)::float8, COUNT(*) FROM audit_log
-         WHERE org_id = $1 AND created_at >= $2 AND created_at < $3 AND money_amount IS NOT NULL AND {DUPLICATE}
-         GROUP BY money_currency ORDER BY money_currency"
+        "SELECT money_currency, SUM(money_amount)::float8, COUNT(*) FROM (
+           SELECT DISTINCT ON (payload_hash) money_currency, money_amount FROM audit_log
+           WHERE org_id = $1 AND created_at >= $2 AND created_at < $3 AND money_amount IS NOT NULL AND {DUPLICATE}
+           ORDER BY payload_hash, created_at
+         ) once GROUP BY money_currency ORDER BY money_currency"
     ))
     .bind(org_id)
     .bind(p.from)
@@ -234,8 +238,8 @@ async fn build(state: &SharedState, org_id: &str, p: &Period) -> Result<Value, s
         },
         "money_protected": {
             "estimate": true,
-            "note": "Sum of the amounts in duplicate payment calls AgentRaaS stopped, per currency, never converted. Recorded from the release that added this report; a duplicate whose request had no amount and currency is not counted.",
-            "by_currency": money.iter().map(|(c, a, n)| json!({ "currency": c, "amount": (a * 100.0).round() / 100.0, "duplicates": n })).collect::<Vec<_>>(),
+            "note": "Sum of the amounts of payments AgentRaaS stopped a duplicate of, each payment counted once however often it was retried, per currency, never converted. Recorded from the release that added this report; a duplicate whose request had no amount and currency is not counted.",
+            "by_currency": money.iter().map(|(c, a, n)| json!({ "currency": c, "amount": (a * 100.0).round() / 100.0, "payments": n })).collect::<Vec<_>>(),
         },
         "agents": agents.iter().map(|a| json!({
             "agent_id": a.agent_id,
@@ -261,8 +265,8 @@ async fn build(state: &SharedState, org_id: &str, p: &Period) -> Result<Value, s
 // ─── exports ───
 
 fn csv_field(s: &str) -> String {
-    // A leading =, +, - or @ would run as a formula in a spreadsheet.
-    let s = if s.starts_with(['=', '+', '-', '@']) { format!("'{s}") } else { s.to_string() };
+    // A leading =, +, -, @, tab or CR would run as a formula in a spreadsheet.
+    let s = if s.starts_with(['=', '+', '-', '@', '\t', '\r']) { format!("'{s}") } else { s.to_string() };
     format!("\"{}\"", s.replace('"', "\"\""))
 }
 
@@ -291,7 +295,7 @@ fn to_csv(r: &Value) -> String {
     }
     for m in r["money_protected"]["by_currency"].as_array().into_iter().flatten() {
         push("money_protected_estimate", &cell(&m["currency"]), "amount", &m["amount"]);
-        push("money_protected_estimate", &cell(&m["currency"]), "duplicates", &m["duplicates"]);
+        push("money_protected_estimate", &cell(&m["currency"]), "payments", &m["payments"]);
     }
     for (section, key) in [("agents", "agent_id"), ("services", "service")] {
         for row in r[section].as_array().into_iter().flatten() {
@@ -380,10 +384,10 @@ img.logo{{max-height:40px}}@media (prefers-color-scheme:dark){{body{{background:
     if money.is_empty() {
         h.push_str("<p>No duplicate payment with an amount and currency in this period.</p>");
     } else {
-        h.push_str("<table><tr><th>Currency</th><th class=\"n\">Amount</th><th class=\"n\">Duplicates</th></tr>");
+        h.push_str("<table><tr><th>Currency</th><th class=\"n\">Amount</th><th class=\"n\">Payments</th></tr>");
         for m in &money {
             let amount = m["amount"].as_f64().map(|x| format!("{x:.2}")).unwrap_or_default();
-            let _ = write!(h, "<tr><td>{}</td><td class=\"n\">{}</td><td class=\"n\">{}</td></tr>", e(&m["currency"]), amount, e(&m["duplicates"]));
+            let _ = write!(h, "<tr><td>{}</td><td class=\"n\">{}</td><td class=\"n\">{}</td></tr>", e(&m["currency"]), amount, e(&m["payments"]));
         }
         h.push_str("</table>");
     }
@@ -525,23 +529,27 @@ pub fn spawn_monthly_email_loop(state: SharedState) {
 async fn send_due(state: &SharedState) {
     let now = Utc::now().naive_utc();
     let last_month = (now.date().with_day(1).expect("day 1 exists") - chrono::Duration::days(1)).format("%Y-%m").to_string();
-    // Claiming the month first means two servers never both send it; a
-    // failed send is logged, not retried, rather than risk sending twice.
-    let claimed: Vec<(String, Vec<String>)> = match sqlx::query_as(
-        "UPDATE report_settings SET last_sent_period = $1 WHERE enabled AND cardinality(recipients) > 0
-           AND last_sent_period IS DISTINCT FROM $1 RETURNING org_id, recipients",
-    )
-    .bind(&last_month)
-    .fetch_all(&state.pg)
-    .await
-    {
-        Ok(rows) => rows,
-        Err(err) => {
-            tracing::error!(?err, "monthly report: claim failed");
-            return;
-        }
-    };
-    for (org_id, recipients) in claimed {
+    // One org claimed at a time, before its send: two servers never send the
+    // same month, and a crash loses at most the one email in flight (a
+    // failed send is logged, not retried, rather than risk sending twice).
+    loop {
+        let claimed: Option<(String, Vec<String>)> = match sqlx::query_as(
+            "UPDATE report_settings SET last_sent_period = $1 WHERE org_id = (
+               SELECT org_id FROM report_settings WHERE enabled AND cardinality(recipients) > 0
+                 AND last_sent_period IS DISTINCT FROM $1 LIMIT 1 FOR UPDATE SKIP LOCKED)
+             RETURNING org_id, recipients",
+        )
+        .bind(&last_month)
+        .fetch_optional(&state.pg)
+        .await
+        {
+            Ok(row) => row,
+            Err(err) => {
+                tracing::error!(?err, "monthly report: claim failed");
+                return;
+            }
+        };
+        let Some((org_id, recipients)) = claimed else { return };
         let Ok(p) = period("month", Some(&last_month), now) else { continue };
         let report = match build(state, &org_id, &p).await {
             Ok(r) => r,

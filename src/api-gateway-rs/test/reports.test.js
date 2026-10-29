@@ -53,8 +53,8 @@ test('the report counts what was caught, per currency and per agent', async () =
   assert.equal(totals.blocked_by_policy, 1);
   assert.equal(money.estimate, true);
   assert.deepEqual(money.by_currency, [
-    { currency: 'INR', amount: 1200, duplicates: 1 },
-    { currency: 'USD', amount: 50, duplicates: 2 },
+    { currency: 'INR', amount: 1200, payments: 1 },
+    { currency: 'USD', amount: 25, payments: 1 },
   ]);
   const billing = rows.find((a) => a.agent_id === 'billing');
   assert.equal(billing.actions, 5);
@@ -79,7 +79,7 @@ test('a calendar month and the exports', async () => {
   assert.equal(csv.status, 200);
   assert.match(csv.headers['content-type'], /text\/csv/);
   assert.match(csv.headers['content-disposition'], /attachment; filename="agentraas-report-/);
-  assert.match(csv.data, /"money_protected_estimate","USD","amount","50"/);
+  assert.match(csv.data, /"money_protected_estimate","USD","amount","25"/);
   assert.match(csv.data, /"agents","billing","duplicate_rate","60"/);
 
   const html = await report('&format=html');

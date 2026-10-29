@@ -26,6 +26,12 @@
           "with": {
             "charge": "response.id"
           }
+        },
+        "lock": {
+          "record": "customer",
+          "from": [
+            "customer"
+          ]
         }
       },
       "customer.create": {
@@ -46,6 +52,12 @@
             "type": "string",
             "required": true
           }
+        },
+        "lock": {
+          "record": "charge",
+          "from": [
+            "charge"
+          ]
         }
       },
       "payment_intent.create": {
@@ -71,6 +83,12 @@
             "type": "string",
             "required": true
           }
+        },
+        "lock": {
+          "record": "payment_intent",
+          "from": [
+            "payment_intent"
+          ]
         }
       },
       "subscription.create": {
@@ -91,6 +109,12 @@
           "with": {
             "id": "response.id"
           }
+        },
+        "lock": {
+          "record": "customer",
+          "from": [
+            "customer"
+          ]
         }
       },
       "subscription.cancel": {
@@ -101,6 +125,12 @@
             "type": "string",
             "required": true
           }
+        },
+        "lock": {
+          "record": "subscription",
+          "from": [
+            "id"
+          ]
         }
       },
       "invoice.create": {
@@ -111,6 +141,12 @@
             "type": "string",
             "required": true
           }
+        },
+        "lock": {
+          "record": "customer",
+          "from": [
+            "customer"
+          ]
         }
       }
     },
@@ -189,6 +225,12 @@
             "type": "object",
             "required": true
           }
+        },
+        "lock": {
+          "record": "contact",
+          "from": [
+            "contactId"
+          ]
         }
       }
     },
@@ -228,6 +270,12 @@
           "with": {
             "payment": "response.id"
           }
+        },
+        "lock": {
+          "record": "customer",
+          "from": [
+            "customer"
+          ]
         }
       },
       "payment.refund": {
@@ -238,6 +286,12 @@
             "type": "string",
             "required": true
           }
+        },
+        "lock": {
+          "record": "payment",
+          "from": [
+            "payment"
+          ]
         }
       },
       "order.get": {
@@ -288,6 +342,12 @@
             "type": "string",
             "required": true
           }
+        },
+        "lock": {
+          "record": "inventory_item",
+          "from": [
+            "inventory_item_id"
+          ]
         }
       }
     },
@@ -357,6 +417,12 @@
             "type": "array",
             "required": true
           }
+        },
+        "lock": {
+          "record": "customer",
+          "from": [
+            "customer_id"
+          ]
         }
       }
     }
@@ -402,6 +468,12 @@
             "type": "number",
             "min": 100
           }
+        },
+        "lock": {
+          "record": "payment",
+          "from": [
+            "payment_id"
+          ]
         }
       }
     },
@@ -1227,6 +1299,12 @@
             "type": "object",
             "required": true
           }
+        },
+        "lock": {
+          "record": "issue",
+          "from": [
+            "issueKey"
+          ]
         }
       },
       "issue.delete": {
@@ -1241,6 +1319,12 @@
             "type": "string",
             "required": true
           }
+        },
+        "lock": {
+          "record": "issue",
+          "from": [
+            "issueKey"
+          ]
         }
       }
     }
@@ -1865,6 +1949,12 @@
             "minLength": 3,
             "maxLength": 40
           }
+        },
+        "lock": {
+          "record": "order",
+          "from": [
+            "order_id"
+          ]
         }
       }
     }
@@ -1941,6 +2031,12 @@
             "minLength": 3,
             "maxLength": 40
           }
+        },
+        "lock": {
+          "record": "order",
+          "from": [
+            "order_id"
+          ]
         }
       }
     }

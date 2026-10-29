@@ -111,6 +111,9 @@ rather than `restart`.
   exactly once.
 - **Shadow mode:** run an agent on real traffic with its writes recorded and
   checked against your rules but never sent ([docs](https://agentraas.io/docs#shadow-mode)).
+- **Record locks:** two agents can't change the same Stripe customer or CRM
+  contact at the same moment; the second gets a 409 naming the holder
+  ([docs](https://agentraas.io/docs#record-locks)).
 - **Savings reports:** duplicates caught, calls blocked, approvals and an
   estimate of the money in duplicate payments stopped, per agent and service,
   as HTML or CSV or a monthly email ([docs](https://agentraas.io/docs#reports)).
@@ -154,7 +157,7 @@ on one machine (Intel Core i3-12100, local stack, three runs of 500 calls) with
 |---|---|---|
 | Price | Free, no license key | [Talk to us](mailto:hello@agentraas.io) |
 | Limits | No action limit, up to 3 seats | Unlimited seats |
-| Includes | Exactly-once execution, MCP gateway, dashboard, audit trail, DLQ, undo, record and replay, shadow mode, savings reports, spend caps and action policies, DLP redaction, human approvals, semantic dedup, SSO | Everything in Self-hosted, plus agent identity, inbound webhooks, white-label branding (also on reports), service keys read from your own secrets manager |
+| Includes | Exactly-once execution, MCP gateway, dashboard, audit trail, DLQ, undo, record and replay, shadow mode, savings reports, record locks, spend caps and action policies, DLP redaction, human approvals, semantic dedup, SSO | Everything in Self-hosted, plus agent identity, inbound webhooks, white-label branding (also on reports), service keys read from your own secrets manager |
 
 AgentRaaS Cloud starts with a free trial of 1,000 actions with every
 feature, for trying it out; for production, self-host. The core server is

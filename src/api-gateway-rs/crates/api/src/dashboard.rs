@@ -92,7 +92,7 @@ async fn stats(State(state): State<SharedState>, user: AuthUser) -> Result<Json<
                 COUNT(*) FILTER(WHERE status='blocked') as blocked,
                 COUNT(*) FILTER(WHERE status='error') as errors,
                 AVG(duration_ms)::float8 as avg_duration
-         FROM audit_log WHERE created_at >= $1::date AND org_id = ANY($2)",
+         FROM audit_log WHERE created_at >= $1::date AND org_id = ANY($2) AND status <> 'shadow'",
     )
     .bind(&today)
     .bind(&org_ids)
@@ -132,7 +132,7 @@ async fn dashboard_stats(State(state): State<SharedState>, user: AuthUser, Query
                 COUNT(*) FILTER(WHERE status='blocked') as blocked,
                 COUNT(*) FILTER(WHERE status='error') as errors,
                 AVG(duration_ms)::float8 as avg_duration
-         FROM audit_log WHERE created_at >= NOW() - INTERVAL '{interval}' AND org_id = ANY($1)"
+         FROM audit_log WHERE created_at >= NOW() - INTERVAL '{interval}' AND org_id = ANY($1) AND status <> 'shadow'"
     );
     let row = sqlx::query_as::<_, StatsRow>(&sql).bind(&org_ids).fetch_one(&state.pg).await?;
     let mut body = json!(row);
@@ -488,7 +488,7 @@ async fn public_execution_ledger(State(state): State<SharedState>) -> Result<Jso
     }
     let row: (i64, i64, Option<f64>) = sqlx::query_as(
         "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'deduplicated') as deduplicated, AVG(duration_ms)::float8 as avg_duration
-         FROM audit_log WHERE created_at >= NOW() - INTERVAL '24 hours'",
+         FROM audit_log WHERE created_at >= NOW() - INTERVAL '24 hours' AND status <> 'shadow'",
     )
     .fetch_one(&state.pg)
     .await?;

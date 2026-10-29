@@ -115,6 +115,8 @@ SUMMARY = {
     ("DELETE", "/api/v1/shadow-rules/:id"): ("Rules", "Remove one shadow rule.", "session"),
     ("POST", "/api/v1/shadow-rules/promote"): ("Rules", "Take an agent out of shadow mode; nothing is replayed.", "session"),
     ("GET", "/api/v1/shadow-calls"): ("Monitoring", "Writes agents in shadow mode would have made, with the decision.", "session"),
+    ("GET", "/api/v1/record-locks"): ("Rules", "Whether automatic record locks are on, and which actions lock.", "session"),
+    ("PUT", "/api/v1/record-locks"): ("Rules", "Turn automatic record locks on or off for an org.", "session"),
     ("GET", "/api/v1/reports"): ("Monitoring", "Savings and reliability report as JSON, CSV or HTML.", "session"),
     ("GET", "/api/v1/reports/settings"): ("Monitoring", "Monthly report email settings.", "session"),
     ("PUT", "/api/v1/reports/settings"): ("Monitoring", "Turn the monthly report email on or off.", "session"),

@@ -89,7 +89,9 @@ async fn internal_mockpay(State(state): State<SharedState>, headers: HeaderMap, 
 /// Tests prove a call never reached the provider by counting mockpay's hits
 /// (`mockpay:hits:<tag>` in Redis, a day). Calls without a tag aren't counted.
 async fn count_mockpay_hit(state: &SharedState, tag: Option<&str>) {
-    let (Some(tag), Ok(mut conn)) = (tag, state.redis_conn_result()) else { return };
+    // Public route: only short identifiers, so nobody can grow Redis with it.
+    let Some(tag) = tag.filter(|t| is_valid_identifier(t)) else { return };
+    let Ok(mut conn) = state.redis_conn_result() else { return };
     let key = format!("mockpay:hits:{tag}");
     let _: Result<(), _> = redis::pipe().incr(&key, 1).expire(&key, 86_400).query_async(&mut conn).await;
 }
@@ -566,12 +568,21 @@ async fn handle_request_inner(
         return crate::recordings::replay(state, &org_id, &agent_id, name, run_id.as_deref(), &service, &action, &payload, &req_id).await;
     }
 
+    // The record this call locks, if any (explicit resource_id, or an
+    // automatic record lock; `crate::record_locks`).
+    let lock = crate::record_locks::lock_for(state, &org_id, &service, &action, &payload, resource_id.as_deref()).await;
+
     // Shadow mode: before anything that claims, counts or forwards. A rule
     // we can't read is not a pass (fail closed).
     match crate::shadow::rule_for(state, &org_id, &agent_id, &service, &action).await {
         Ok(Some(rule)) if rule.block_reads || !crate::shadow::is_read(&target) => {
             let webhook = matches!(source, Source::Webhook);
-            return crate::shadow::answer(state, webhook, mcp, &req_id, &api_key, &org_id, &agent_id, &service, &action, &payload, idempotency_key.as_deref(), end_user_id.as_deref(), run_id.as_deref(), step_id.as_deref(), rule).await;
+            let circuit_key = match &target {
+                Target::Mcp(m) => m.credential_key.clone(),
+                Target::Http(r) if r.credential_key.is_empty() => service.clone(),
+                Target::Http(r) => r.credential_key.clone(),
+            };
+            return crate::shadow::answer(state, webhook, mcp, &req_id, &api_key, &org_id, &agent_id, &service, &action, &payload, idempotency_key.as_deref(), end_user_id.as_deref(), run_id.as_deref(), step_id.as_deref(), &circuit_key, lock.as_ref(), rule).await;
         }
         Ok(_) => {}
         Err(err) => {
@@ -758,14 +769,14 @@ async fn handle_request_inner(
     // claim just above: dedup catches a retry of THIS exact request,
     // this catches a second, different request (this agent or
     // another) racing to act on the same declared resource_id right now.
-    if let Some(resource_id) = &resource_id {
-        match agentraas_core::resource_lock::acquire(&mut conn, &org_id, resource_id, forward::resource_lock_ttl_seconds(state)).await {
-            Ok(lock) if !lock.acquired => {
+    if let Some(lock) = &lock {
+        match agentraas_core::resource_lock::acquire(&mut conn, &org_id, &lock.id, &agent_id, forward::resource_lock_ttl_seconds(state)).await {
+            Ok(got) if !got.acquired => {
                 let _ = dedup::release_dedup_slot(&mut conn, &claim.key).await;
                 log_audit(&state.pg, &req_id, &api_key, &org_id, &agent_id, &service, &action, "blocked", Some("resource_locked"), start.elapsed().as_millis() as i64, Some(&dedup_hash), false, None, run_id.as_deref(), step_id.as_deref(), end_user_id.as_deref()).await;
-                return err_response(StatusCode::CONFLICT, &req_id, "Another in-flight request is already acting on this resource_id. Retry shortly.");
+                return Response::Json(StatusCode::CONFLICT, Json(crate::record_locks::locked_body(&req_id, lock, got.held_by)));
             }
-            Ok(lock) => *held_lock = Some((org_id.clone(), resource_id.clone(), lock.token)),
+            Ok(got) => *held_lock = Some((org_id.clone(), lock.id.clone(), got.token)),
             Err(err) => tracing::error!(?err, "resource_lock acquire failed, continuing without it"),
         }
     }

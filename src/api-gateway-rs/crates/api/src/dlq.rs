@@ -132,6 +132,10 @@ async fn replay_dlq(
         },
     };
 
+    // An agent in shadow mode must not act through a replay either.
+    if crate::shadow::rule_for(&state, &row.org_id, &row.agent_id, &row.service, &row.action).await?.is_some() {
+        return Err(ApiError::new(StatusCode::CONFLICT, "This agent is in shadow mode, so nothing it does is sent. Take it out of shadow mode first (Rules, Shadow mode, Go live), then replay."));
+    }
     let resolved_route = resolve_route(&state, &row.service, &row.action, &row.org_id).await?;
     let Some(resolved_route) = resolved_route else {
         return Err(ApiError::new(

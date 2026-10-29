@@ -100,6 +100,10 @@ pub struct RawActionConfig {
     /// Stripe charge's refund. Absent = can't be undone.
     #[serde(default)]
     pub undo: Option<crate::undo::UndoSpec>,
+    /// Which business record this action changes, for automatic record
+    /// locks (`crate::resource_lock::derived_id`). Absent = no lock.
+    #[serde(default)]
+    pub lock: Option<crate::resource_lock::LockSpec>,
 }
 
 /// One resolved `service.action` route — the Rust equivalent of a
@@ -118,6 +122,7 @@ pub struct ServiceRoute {
     pub validation: serde_json::Value,
     pub streaming: bool,
     pub undo: Option<crate::undo::UndoSpec>,
+    pub lock: Option<crate::resource_lock::LockSpec>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -194,6 +199,7 @@ pub fn build_service_routes(config: &ServicesConfig) -> HashMap<String, ServiceR
                     validation: action_config.validation.clone(),
                     streaming: action_config.streaming,
                     undo: action_config.undo.clone(),
+                    lock: action_config.lock.clone(),
                 },
             );
         }

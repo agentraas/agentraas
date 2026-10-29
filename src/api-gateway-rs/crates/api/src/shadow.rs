@@ -14,8 +14,14 @@
 //! which a shadowed call never reaches. Shadow rows are not usage: billing
 //! counts `success` rows only.
 //!
-//! Reads (GET/HEAD routes) are forwarded as usual unless the rule sets
-//! `block_reads`. MCP tools have no method, so they always count as writes.
+//! Reads (GET/HEAD routes, including a custom action registered as GET and
+//! the MCP tool of a curated GET action) are forwarded as usual unless the
+//! rule sets `block_reads`. Tools on a registered MCP server have no method,
+//! so they always count as writes.
+//!
+//! An approved held call and a dead-letter replay of an agent in shadow mode
+//! are refused too (`ee::hitl`, `dlq`). Undo is not: it reverses something
+//! that already ran live, on a person's request.
 //! If the rule can't be read, the caller refuses the call (fail closed).
 
 use axum::extract::{Path, Query, State};
@@ -80,20 +86,49 @@ async fn decide(
     action: &str,
     payload: &Value,
     dedup_hash: &str,
+    idempotency_key: Option<&str>,
+    circuit_key: &str,
+    lock: Option<&crate::record_locks::Lock>,
 ) -> (String, String) {
     let unknown = |gate: &str| ("would_error".to_string(), format!("The {gate} check could not be read; the live call would have failed."));
 
     let Ok(mut conn) = state.redis_conn_result() else { return unknown("duplicate") };
+    // The same answers the live dedup branch gives for each slot state.
     match dedup::read_dedup_slot(&mut conn, &format!("dedup:{dedup_hash}")).await {
+        Ok(Some(slot)) if dedup::is_outcome_unknown(&slot) || dedup::is_stale_pending(&slot, crate::agent::now_ms()) => {
+            return ("would_block:outcome_unknown".into(), "An identical live call timed out and may have run; the live call would get 409.".into())
+        }
+        Ok(Some(slot)) if slot.get("pending").and_then(Value::as_bool).unwrap_or(false) => {
+            return ("would_block:duplicate_in_progress".into(), "An identical live call is running right now; the live call would get 409.".into())
+        }
+        Ok(Some(slot)) if slot.get("streamed").and_then(Value::as_bool).unwrap_or(false) => {
+            return ("would_block:duplicate_of_streamed_response".into(), "An identical streamed call already ran; the live call would get 409.".into())
+        }
+        Ok(Some(slot)) if idempotency_key.is_some() && slot.get("__payloadDigest").and_then(Value::as_str).is_some_and(|d| d != dedup::hash_only(payload)) => {
+            return ("would_block:idempotency_key_reused".into(), "This Idempotency-Key was used with a different payload; the live call would get 422.".into())
+        }
         Ok(Some(_)) => return ("would_deduplicate".into(), "An identical live call is already recorded; it would have been answered from cache.".into()),
         Ok(None) => {}
         Err(_) => return unknown("duplicate"),
     }
 
-    if let Ok(Some(rule)) = get_effective_validation_rule(state, org_id, service, action).await {
-        if let Some(first) = agentraas_core::validator::validate_all(payload, &rule.fields).first() {
-            return ("would_block:validation_failed".into(), first.message.clone());
+    // A record lock is read, never taken: taking it would block live agents.
+    if let Some(lock) = lock {
+        match agentraas_core::resource_lock::holder(&mut conn, org_id, &lock.id).await {
+            Ok(Some((agent, _))) => return ("would_wait_for_lock".into(), format!("Another call ({agent}) holds the lock on this {}; the live call would get 409.", lock.label)),
+            Ok(None) => {}
+            Err(_) => return unknown("record lock"),
         }
+    }
+
+    match get_effective_validation_rule(state, org_id, service, action).await {
+        Ok(Some(rule)) => {
+            if let Some(first) = agentraas_core::validator::validate_all(payload, &rule.fields).first() {
+                return ("would_block:validation_failed".into(), first.message.clone());
+            }
+        }
+        Ok(None) => {}
+        Err(_) => return unknown("validation rule"),
     }
 
     // As live: a policy or spend cap can hold any non-MCP call for approval
@@ -108,6 +143,18 @@ async fn decide(
         Err(_) => return unknown("action policy"),
     }
 
+    // Read only: a transition the breaker is due is left for the next live call to record.
+    match agentraas_core::circuit_breaker::get_circuit_state(&mut conn, circuit_key).await {
+        Ok((s, _)) if s == "open" => return ("would_block:circuit_open".into(), format!("The circuit breaker for {service} is open; the live call would get 503.")),
+        Ok(_) => {}
+        Err(_) => return unknown("circuit breaker"),
+    }
+    match crate::agent::db::check_usage_limit(state, org_id).await {
+        Ok(u) if !u.ok => return ("would_block:usage_limit_exceeded".into(), u.exceeded_message()),
+        Ok(_) => {}
+        Err(_) => return unknown("usage limit"),
+    }
+
     match crate::spend_caps::peek(state, org_id, agent_id, service, action, payload).await {
         Ok(Some((on_exceed, message))) if on_exceed == "hitl" && can_hold => return ("would_need_approval:spend_cap_exceeded".into(), message),
         Ok(Some((_, message))) => return ("would_block:spend_cap_exceeded".into(), message),
@@ -120,7 +167,8 @@ async fn decide(
         match crate::ee::hitl::match_rule(&state.pg, org_id, service, action, payload).await {
             Ok(Some(_)) => return ("would_need_approval:hitl_rule".into(), "An approval rule matches this call.".into()),
             Ok(None) => {}
-            Err(_) => return unknown("approval rule"),
+            // As live: an unreadable approval rule doesn't stop the call.
+            Err(err) => tracing::error!(?err, "hitl match_rule failed (shadow)"),
         }
     }
     ("would_execute".into(), format!("Every gate passed; the live call would have been sent.{note}"))
@@ -143,17 +191,25 @@ pub(crate) async fn answer(
     end_user_id: Option<&str>,
     run_id: Option<&str>,
     step_id: Option<&str>,
+    circuit_key: &str,
+    lock: Option<&crate::record_locks::Lock>,
     rule: Rule,
 ) -> Response {
     let start = std::time::Instant::now();
     // The same hash the live call would claim, so a would-be duplicate is seen.
-    let dedup_rule = get_effective_dedup_rule(&state.pg, org_id, service, action).await.unwrap_or(None);
+    let dedup_rule = match get_effective_dedup_rule(&state.pg, org_id, service, action).await {
+        Ok(r) => r,
+        Err(err) => {
+            tracing::error!(?err, "shadow: dedup rule unreadable, hashing the whole payload");
+            None
+        }
+    };
     let dedup_hash = match select_dedup_hash_mode(idempotency_key, dedup_rule.as_ref()) {
         DedupHashMode::IdempotencyKey(idem) => dedup::hash_idempotency_key(api_key, service, action, idem, end_user_id),
         DedupHashMode::Fields { fields, normalize } => dedup::hash_field_values(api_key, service, action, payload, fields, normalize, end_user_id),
         DedupHashMode::Payload => dedup::hash_payload(api_key, service, action, payload, end_user_id),
     };
-    let (decision, detail) = decide(state, webhook, mcp, org_id, agent_id, service, action, payload, &dedup_hash).await;
+    let (decision, detail) = decide(state, webhook, mcp, org_id, agent_id, service, action, payload, &dedup_hash, idempotency_key, circuit_key, lock).await;
     log_audit(&state.pg, req_id, api_key, org_id, agent_id, service, action, "shadow", Some(&decision), start.elapsed().as_millis() as i64, Some(&dedup_hash), state.enterprise_mode, Some(payload), run_id, step_id, end_user_id).await;
     (
         StatusCode::OK,
