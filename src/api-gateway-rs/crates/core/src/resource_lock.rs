@@ -17,11 +17,6 @@ pub struct LockResult {
     pub token: String,
 }
 
-/// Safety net only: `handle_request` releases the lock as soon as the call
-/// finishes. The TTL covers a crash, and a forward whose outcome is unknown
-/// (upstream may still be acting on the resource), which keeps the lock.
-pub const DEFAULT_TTL_SECONDS: i64 = 15;
-
 pub async fn acquire(
     conn: &mut MultiplexedConnection,
     org_id: &str,

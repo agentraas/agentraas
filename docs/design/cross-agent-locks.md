@@ -22,9 +22,10 @@ Two gaps:
 
 1. The agent has to name the record. Agents rarely do, so in practice the
    lock is never taken.
-2. The 15 s lease is shorter than the default `PROXY_TIMEOUT_SECONDS` (30),
-   so a slow call can lose its lock while it is still running. Worth fixing
-   on its own, before any of the below.
+2. Fixed in 0.28.1: the lease was a fixed 15 s, shorter than the default
+   `PROXY_TIMEOUT_SECONDS` (30), so a slow call could lose its lock while
+   still running. It is now the longest forward (every attempt timing out,
+   plus backoff) plus 5 s.
 
 ## Proposal
 
@@ -56,7 +57,7 @@ get wrong and no deadlock.
 
 ### Lease
 
-- Lease = `PROXY_TIMEOUT_SECONDS` × retry attempts + 5 s, not a constant.
+- Lease = the longest forward + 5 s (`forward::resource_lock_ttl_seconds`, since 0.28.1).
 - Released right after the call (success or a failure that certainly did
   not run), kept until the lease ends when the outcome is unknown, as today.
 - A crash leaves the lock to expire on its lease; Redis keeps the time, so
@@ -117,7 +118,7 @@ way it reports `would_deduplicate`.
 
 ## Rollout
 
-1. Fix the 15 s lease (independent bug).
+1. (Done in 0.28.1: the lease now outlasts the longest forward.)
 2. `lock` entries for the curated write actions; per-org switch "Lock
    records automatically", off by default. Cost: one `SET NX` and one
    compare-and-delete per locked call, measured with

@@ -31,16 +31,27 @@ pub struct ForwardError {
     pub setup_error: bool,
 }
 
-/// When a claimer should have finished forwarding (epoch ms): every attempt
-/// timing out, plus backoff, plus a minute of slack. A slot still pending
-/// after this means the process handling it stopped mid-call.
+/// The longest a forward can take: every attempt timing out, plus backoff.
+fn forward_work_ms(timeout_seconds: u64, attempts: u32, base_delay_ms: u64) -> i64 {
+    let attempts = attempts.max(1) as i64;
+    timeout_seconds as i64 * 1000 * attempts + base_delay_ms as i64 * (1i64 << attempts.min(20))
+}
+
+/// When a claimer should have finished forwarding (epoch ms): the longest
+/// forward plus a minute of slack. A slot still pending after this means the
+/// process handling it stopped mid-call.
 pub fn forward_lease_until_ms(state: &SharedState) -> i64 {
-    let attempts = state.proxy_retry_max_attempts.max(1) as i64;
-    let work_ms = state.proxy_timeout_seconds as i64 * 1000 * attempts
-        + state.proxy_retry_base_delay_ms as i64 * (1i64 << attempts.min(20))
-        + 60_000;
+    let work_ms = forward_work_ms(state.proxy_timeout_seconds, state.proxy_retry_max_attempts, state.proxy_retry_base_delay_ms) + 60_000;
     let now_ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0);
     now_ms + work_ms
+}
+
+/// How long a resource lock lives: the longest forward plus 5 s, so a slow
+/// call never loses its lock while it is still running. It's released as
+/// soon as the call ends; the TTL only matters after a crash or an
+/// outcome-unknown timeout, which keeps it.
+pub fn resource_lock_ttl_seconds(state: &SharedState) -> i64 {
+    forward_work_ms(state.proxy_timeout_seconds, state.proxy_retry_max_attempts, state.proxy_retry_base_delay_ms) / 1000 + 5
 }
 
 /// `send()` failed. A refused connection or DNS failure means nothing was
@@ -905,6 +916,15 @@ pub async fn log_circuit_transition(state: &SharedState, transition: circuit_bre
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_forward_never_outlives_its_resource_lock() {
+        // 30 s timeout, 3 attempts, 200 ms base backoff: 90 s + 1.6 s.
+        assert_eq!(super::forward_work_ms(30, 3, 200), 91_600);
+        // The old fixed 15 s lock was shorter than a single attempt.
+        assert!(super::forward_work_ms(30, 1, 0) / 1000 + 5 > 30);
+        assert_eq!(super::forward_work_ms(30, 0, 0), 30_000, "zero attempts still means one");
+    }
 
     #[test]
     fn credentials_land_in_the_headers_each_service_expects() {

@@ -759,7 +759,7 @@ async fn handle_request_inner(
     // this catches a second, different request (this agent or
     // another) racing to act on the same declared resource_id right now.
     if let Some(resource_id) = &resource_id {
-        match agentraas_core::resource_lock::acquire(&mut conn, &org_id, resource_id, agentraas_core::resource_lock::DEFAULT_TTL_SECONDS).await {
+        match agentraas_core::resource_lock::acquire(&mut conn, &org_id, resource_id, forward::resource_lock_ttl_seconds(state)).await {
             Ok(lock) if !lock.acquired => {
                 let _ = dedup::release_dedup_slot(&mut conn, &claim.key).await;
                 log_audit(&state.pg, &req_id, &api_key, &org_id, &agent_id, &service, &action, "blocked", Some("resource_locked"), start.elapsed().as_millis() as i64, Some(&dedup_hash), false, None, run_id.as_deref(), step_id.as_deref(), end_user_id.as_deref()).await;
