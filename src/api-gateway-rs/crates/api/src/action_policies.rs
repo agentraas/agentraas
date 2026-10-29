@@ -365,6 +365,17 @@ fn fmt(n: f64) -> String {
 }
 
 pub async fn check(state: &SharedState, org_id: &str, agent_id: &str, service: &str, action: &str, payload: &Value) -> Result<Option<Violation>, sqlx::Error> {
+    check_inner(state, org_id, agent_id, service, action, payload, true).await.map(|(v, _)| v)
+}
+
+/// `check` without `max_from` lookups, which would call the provider with
+/// the org's credentials: shadow mode (`crate::shadow`) never does. The bool
+/// is true when a lookup was left out, so the answer may be too lenient.
+pub async fn check_offline(state: &SharedState, org_id: &str, agent_id: &str, service: &str, action: &str, payload: &Value) -> Result<(Option<Violation>, bool), sqlx::Error> {
+    check_inner(state, org_id, agent_id, service, action, payload, false).await
+}
+
+async fn check_inner(state: &SharedState, org_id: &str, agent_id: &str, service: &str, action: &str, payload: &Value, run_lookups: bool) -> Result<(Option<Violation>, bool), sqlx::Error> {
     let policies = matching_policies(state, org_id, Some(agent_id), service, action).await?;
     let wanted: Vec<(String, String)> = policies.iter().flat_map(|p| policy_destinations(p, payload)).collect();
     let mut unknown = vec![];
@@ -384,18 +395,23 @@ pub async fn check(state: &SharedState, org_id: &str, agent_id: &str, service: &
     let found = evaluate(&policies, service, action, payload, &unknown, chrono::Utc::now());
     // A block already decides; lookups (a network call each) only run when it could still change the answer.
     if found.as_ref().is_some_and(|v| !v.hitl) {
-        return Ok(found);
+        return Ok((found, false));
     }
     let mut hitl = found;
+    let mut skipped = false;
     for p in &policies {
+        if !run_lookups {
+            skipped |= p.fields.as_ref().is_some_and(|f| p.effect == "require" && !lookups(f).is_empty());
+            continue;
+        }
         if let Some(v) = check_lookups(state, org_id, service, payload, p).await {
             if !v.hitl {
-                return Ok(Some(v));
+                return Ok((Some(v), false));
             }
             hitl.get_or_insert(v);
         }
     }
-    Ok(hitl)
+    Ok((hitl, skipped))
 }
 
 /// Called once a human approved a call: its destinations become known, so

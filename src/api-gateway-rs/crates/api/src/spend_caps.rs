@@ -210,8 +210,8 @@ fn fmt_amount(a: f64) -> String {
 /// the amount: a call without a usable value in `amount_field` is refused
 /// (otherwise leaving the field out would skip the cap). A refused call
 /// gives back what it added, so it doesn't use up the window.
-pub async fn check_and_increment(state: &SharedState, org_id: &str, agent_id: &str, service: &str, action: &str, payload: &serde_json::Value) -> Result<SpendCapCheck, ApiError> {
-    let rule: Option<MatchedSpendCapRule> = sqlx::query_as(
+async fn matching_rule(state: &SharedState, org_id: &str, agent_id: &str, service: &str, action: &str) -> Result<Option<MatchedSpendCapRule>, sqlx::Error> {
+    sqlx::query_as(
         "SELECT id, max_calls, time_window AS window, on_exceed, amount_field, max_amount, timezone FROM spend_cap_rules
          WHERE org_id = $1 AND service = $2 AND action = $3 AND (agent_id = $4 OR agent_id IS NULL)
          ORDER BY agent_id NULLS LAST LIMIT 1",
@@ -221,15 +221,57 @@ pub async fn check_and_increment(state: &SharedState, org_id: &str, agent_id: &s
     .bind(action)
     .bind(agent_id)
     .fetch_optional(&state.pg)
-    .await?;
+    .await
+}
+
+fn counter_key(org_id: &str, agent_id: &str, service: &str, action: &str, rule: &MatchedSpendCapRule) -> String {
+    let bucket = window_bucket(&rule.window, rule.timezone.as_deref(), chrono::Utc::now());
+    format!("spendcap:{}:{}:{}:{}:{}", org_id, agent_id, service, action, bucket)
+}
+
+/// What `check_and_increment` would answer, without counting the call:
+/// shadow mode (`crate::shadow`) must not use up a live agent's window.
+/// `Some((on_exceed, message))` when the call would be refused.
+pub async fn peek(state: &SharedState, org_id: &str, agent_id: &str, service: &str, action: &str, payload: &serde_json::Value) -> Result<Option<(String, String)>, ApiError> {
+    let Some(rule) = matching_rule(state, org_id, agent_id, service, action).await? else {
+        return Ok(None);
+    };
+    let base = counter_key(org_id, agent_id, service, action, &rule);
+    let mut conn = state
+        .redis_conn_result()
+        .map_err(|_| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "Spend-cap counter unavailable."))?;
+    let (calls, total): (Option<i64>, Option<f64>) = redis::pipe()
+        .get(&base)
+        .get(format!("{base}:amount"))
+        .query_async(&mut conn)
+        .await
+        .map_err(|_| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "Spend-cap counter failed."))?;
+    if let (Some(field), Some(max)) = (rule.amount_field.as_deref(), rule.max_amount) {
+        match amount_of(payload, field) {
+            None => return Ok(Some((rule.on_exceed.clone(), format!("needs a number in \"{field}\" (spend cap #{})", rule.id)))),
+            Some(amount) if total.unwrap_or(0.0) + amount > max => {
+                return Ok(Some((rule.on_exceed.clone(), format!("{field} total would pass {} (spend cap #{})", fmt_amount(max), rule.id))))
+            }
+            Some(_) => {}
+        }
+    }
+    if let Some(max_calls) = rule.max_calls {
+        if calls.unwrap_or(0) + 1 > max_calls as i64 {
+            return Ok(Some((rule.on_exceed.clone(), format!("more than {max_calls} calls (spend cap #{})", rule.id))));
+        }
+    }
+    Ok(None)
+}
+
+pub async fn check_and_increment(state: &SharedState, org_id: &str, agent_id: &str, service: &str, action: &str, payload: &serde_json::Value) -> Result<SpendCapCheck, ApiError> {
+    let rule = matching_rule(state, org_id, agent_id, service, action).await?;
 
     let Some(rule) = rule else {
         return Ok(SpendCapCheck { allowed: true, rule: None, message: String::new() });
     };
     let refuse = |message: String, rule: MatchedSpendCapRule| Ok(SpendCapCheck { allowed: false, rule: Some(rule), message });
     let period = if rule.window == "hour" { "hour" } else { "day" };
-    let bucket = window_bucket(&rule.window, rule.timezone.as_deref(), chrono::Utc::now());
-    let base = format!("spendcap:{}:{}:{}:{}:{}", org_id, agent_id, service, action, bucket);
+    let base = counter_key(org_id, agent_id, service, action, &rule);
     let mut conn = state
         .redis_conn_result()
         .map_err(|_| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "Spend-cap counter unavailable."))?;

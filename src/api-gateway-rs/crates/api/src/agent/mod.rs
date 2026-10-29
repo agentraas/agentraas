@@ -44,7 +44,8 @@ pub fn router() -> Router<SharedState> {
 /// entry points at `http://localhost:3000/internal/mockpay`, which resolves
 /// to whichever server is handling the request (each container has its own
 /// network namespace), so this server has to serve it itself.
-async fn internal_mockpay(headers: HeaderMap, Json(body): Json<Value>) -> Response {
+async fn internal_mockpay(State(state): State<SharedState>, headers: HeaderMap, Json(body): Json<Value>) -> Response {
+    count_mockpay_hit(&state, body.get("hit_tag").and_then(Value::as_str)).await;
     // delay_ms (capped at 10s) lets a test push a forward past a short
     // PROXY_TIMEOUT_SECONDS to exercise the outcome-unknown path.
     if let Some(ms) = body.get("delay_ms").and_then(Value::as_u64) {
@@ -85,6 +86,14 @@ async fn internal_mockpay(headers: HeaderMap, Json(body): Json<Value>) -> Respon
         .into()
 }
 
+/// Tests prove a call never reached the provider by counting mockpay's hits
+/// (`mockpay:hits:<tag>` in Redis, a day). Calls without a tag aren't counted.
+async fn count_mockpay_hit(state: &SharedState, tag: Option<&str>) {
+    let (Some(tag), Ok(mut conn)) = (tag, state.redis_conn_result()) else { return };
+    let key = format!("mockpay:hits:{tag}");
+    let _: Result<(), _> = redis::pipe().incr(&key, 1).expire(&key, 86_400).query_async(&mut conn).await;
+}
+
 fn generate_request_id() -> String {
     let mut buf = [0u8; 8];
     rand::thread_rng().fill_bytes(&mut buf);
@@ -94,7 +103,8 @@ fn generate_request_id() -> String {
 /// mockpay's order lookup (`order.get`), stateless: an order's amount is
 /// the number at the end of its id (`order_1200` is an order of 1200), so a
 /// lookup limit can be tried without a real provider or any stored orders.
-async fn internal_mockpay_order(Path(order_id): Path<String>) -> Response {
+async fn internal_mockpay_order(State(state): State<SharedState>, Path(order_id): Path<String>) -> Response {
+    count_mockpay_hit(&state, Some(&order_id)).await;
     let digits: String = order_id.chars().rev().take_while(char::is_ascii_digit).collect::<Vec<_>>().into_iter().rev().collect();
     match digits.parse::<u64>() {
         Ok(amount) if amount > 0 => (StatusCode::OK, Json(json!({ "order_id": order_id, "order_amount": amount, "order_status": "PAID" }))).into(),
@@ -554,6 +564,20 @@ async fn handle_request_inner(
 
     if let Some(Tape::Replay(name)) = &tape {
         return crate::recordings::replay(state, &org_id, &agent_id, name, run_id.as_deref(), &service, &action, &payload, &req_id).await;
+    }
+
+    // Shadow mode: before anything that claims, counts or forwards. A rule
+    // we can't read is not a pass (fail closed).
+    match crate::shadow::rule_for(state, &org_id, &agent_id, &service, &action).await {
+        Ok(Some(rule)) if rule.block_reads || !crate::shadow::is_read(&target) => {
+            let webhook = matches!(source, Source::Webhook);
+            return crate::shadow::answer(state, webhook, mcp, &req_id, &api_key, &org_id, &agent_id, &service, &action, &payload, idempotency_key.as_deref(), end_user_id.as_deref(), run_id.as_deref(), step_id.as_deref(), rule).await;
+        }
+        Ok(_) => {}
+        Err(err) => {
+            tracing::error!(?err, "shadow rule lookup failed, refusing the call");
+            return err_response(StatusCode::SERVICE_UNAVAILABLE, &req_id, "Couldn't check whether this agent is in shadow mode, so nothing was sent. Retry shortly.");
+        }
     }
 
     // State Checkpointing — only engages when the caller supplies BOTH a

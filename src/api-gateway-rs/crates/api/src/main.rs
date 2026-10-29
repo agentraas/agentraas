@@ -26,6 +26,7 @@ mod secret_refs;
 mod self_host;
 mod billing;
 mod recordings;
+mod shadow;
 mod undo;
 mod spend_caps;
 mod action_policies;
@@ -258,6 +259,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(billing::router())
         .merge(undo::router())
         .merge(recordings::router())
+        .merge(shadow::router())
         .merge(pruning_settings::router())
         .merge(chaos_settings::router())
         .merge(agentgateway::router())
