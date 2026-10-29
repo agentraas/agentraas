@@ -15,6 +15,32 @@ safe to re-run.
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-10-29
+
+New migration: `061_reports_and_shadow.sql`. Apply it before starting this
+version.
+
+### Added
+
+- Shadow mode: put an agent (or one service or action of it) in shadow
+  mode and its writes are checked against your rules and recorded, but
+  never sent; its stored keys are not used. The agent gets a placeholder
+  answer marked `"shadow": true` with what would have happened (run,
+  duplicate, blocked, needs approval). Reads are still sent unless blocked
+  too. Works on the webhook, SDK and MCP. Dashboard: Rules, Shadow mode and
+  Monitor, Shadow calls. API: `/api/v1/shadow-rules`, `/api/v1/shadow-calls`.
+- Savings reports: duplicates caught, calls blocked by policy or spend cap,
+  approvals, per-agent and per-service rates, top duplicated actions, and
+  an estimate of the money in duplicate payments stopped, per currency.
+  JSON, CSV or a self-contained HTML page (`/api/v1/reports`), and an
+  opt-in monthly email. Enterprise: white-label name, logo and the new
+  `accent_color` on the page and email.
+
+### Changed
+
+- Custom-action secret headers are decrypted only when the call is sent,
+  not when the route is looked up.
+
 ## [0.27.1] - 2026-10-28
 
 No new migration.

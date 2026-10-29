@@ -13,7 +13,7 @@ variable "name" {
 variable "image" {
   description = "API image. Needs 0.23.0 or later (it carries the service catalog, the migrations and agentraas-migrate)."
   type        = string
-  default     = "ghcr.io/agentraas/agentraas:0.27.1"
+  default     = "ghcr.io/agentraas/agentraas:0.28.0"
 }
 
 variable "public_url" {
