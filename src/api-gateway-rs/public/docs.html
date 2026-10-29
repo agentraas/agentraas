@@ -246,6 +246,8 @@
       <a href="#custom-actions">Custom Actions</a>
       <a href="#undo">Undo log</a>
       <a href="#record-replay">Record and replay</a>
+      <a href="#shadow-mode">Shadow mode</a>
+      <a href="#reports">Savings reports</a>
       <a href="#approvals">Human approval</a>
       <a href="#action-policies">Action policies</a>
       <a href="#apply">Rules as code</a>
@@ -628,6 +630,29 @@ const result = await client.call("stripe", "charge.create", { amount: 5000, curr
       <p>Answers are played back in order: the second <code>stripe charge.create</code> of a replay gets the second one recorded. <code>payload_matches</code> is <code>false</code> when the agent now sends something different, and a call the recording doesn't have gets a <code>404</code>, so a test can fail on either. The position is kept per agent and <code>X-AgentRaaS-Run-Id</code> for an hour: send a new run id to start from the top. From the SDKs: <code>Client(..., record="refund-flow")</code> or <code>replay="refund-flow", run_id=...</code> in Python (0.10.0), <code>record</code> / <code>replay</code> / <code>runId</code> in the JS <code>Client</code> options (0.4.0). Only successful, non-streaming calls are recorded. MCP calls record and replay the same way: set the headers on the MCP connection (<code>X-AgentRaaS-Run-Id</code>, or a <code>run_id</code> tool argument). In the dashboard: <b>Monitor → Recordings</b> lists them, shows each call and deletes one. API: <code>GET /api/v1/recordings?org_id=</code> lists recordings, <code>GET /api/v1/recordings/&lt;name&gt;?org_id=</code> shows each call with its payload and response, <code>DELETE</code> on the same URL removes it.</p>
     </section>
 
+    <section id="shadow-mode">
+      <h2>Shadow mode <span class="badge free">Free</span></h2>
+      <p>Run a new or changed agent against real traffic before you let it act. Put an agent in shadow mode (dashboard: <b>Rules → Shadow mode</b>), for every service, one service or one action, and every write it makes is checked and recorded but never sent. Its stored provider keys are never read for those calls, and nothing is billed or counted as usage. Reads (<code>GET</code> actions) are still sent so the agent sees real data, unless you tick "Don't send reads either". MCP tools always count as writes.</p>
+      <p>The agent gets a placeholder answer so it can carry on, with the body you set:</p>
+      <pre><code>{ "shadow": true, "decision": "would_block:spend_cap_exceeded",
+  "detail": "more than 100 calls (spend cap #4)", "reqId": "req_...",
+  "response": { "id": "shadow_payment", "status": "succeeded" },
+  "message": "Shadow mode: nothing was sent to stripe. This is a placeholder answer, not the provider's." }</code></pre>
+      <p>Each call is still run past your rules, without side effects: a live duplicate is found but no dedup slot is taken (so the same call made live later still runs), spend caps are checked but not counted, validation, action policies and approval rules are checked. <code>decision</code> says what would have happened: <code>would_execute</code>, <code>would_deduplicate</code>, <code>would_block:&lt;reason&gt;</code> or <code>would_need_approval:&lt;reason&gt;</code>. A policy limit that AgentRaaS reads from the provider first (<code>max_from</code>) is not checked in shadow mode, since that read would use the keys; <code>detail</code> says so. If AgentRaaS can't read whether an agent is in shadow mode, it refuses the call with <code>503</code> rather than send it.</p>
+      <p>The calls are listed under <b>Monitor → Shadow calls</b>, filterable by agent, service and decision, with a payload preview after PII/DLP redaction (no preview when redaction is off). <b>Go live</b> takes the agent out of shadow mode; the recorded calls are not replayed. API: <code>GET/POST /api/v1/shadow-rules</code>, <code>DELETE /api/v1/shadow-rules/&lt;id&gt;?org_id=</code>, <code>POST /api/v1/shadow-rules/promote</code> (<code>{"org_id", "agent_id"}</code>), <code>GET /api/v1/shadow-calls?org_id=&amp;agent_id=&amp;service=&amp;decision=</code>. Shadow calls are in the audit log with status <code>shadow</code>.</p>
+    </section>
+
+    <section id="reports">
+      <h2>Savings reports <span class="badge free">Free</span></h2>
+      <p>A report of what AgentRaaS caught for an org, for people who never open the dashboard: total actions, duplicates caught, calls blocked by a policy or a spend cap, calls held for approval (approved, denied, still pending), and per agent its duplicate, block and error rates. Per service: error rate, timeouts (calls whose outcome is unknown), circuit breaker trips (counted for the whole server, not one org) and schema drift alerts. Plus the five most duplicated actions and the number of shadow calls, which are never counted as actions.</p>
+      <p><b>Money protected</b> is an estimate: the amounts in duplicate payment calls AgentRaaS stopped, per currency, never converted. It is read from the request body for payment services that send an amount and a currency (Stripe, Razorpay, RazorpayX, Adyen, Mollie, Airwallex, Xendit, PayPal, Klarna, Paystack, GoCardless, Opn, Cashfree) and recorded from the release that added this report, so duplicates caught before it have no amount.</p>
+      <p>In the dashboard: <b>Monitor → Savings report</b>, for the last 7 or 30 days, this month or last month, with downloads as a single HTML page (no scripts, opens anywhere) or CSV. Turn on the monthly email there to send last month's report to up to 10 addresses at the start of each month, through the server's SMTP settings. Nothing leaves the server otherwise. Reports hold only agent ids, service and action names, counts and amounts, never payloads. On Enterprise the HTML page and email use your white-label name, logo and colour (<code>PUT /api/v1/org-branding/&lt;org_id&gt;</code> with <code>display_name</code>, <code>logo_url</code>, <code>accent_color</code>).</p>
+      <pre><code>GET /api/v1/reports?org_id=org_acme&amp;period=month&amp;month=2026-10&amp;format=html
+GET /api/v1/reports?org_id=org_acme&amp;period=30d&amp;format=csv
+PUT /api/v1/reports/settings  {"org_id": "org_acme", "enabled": true, "recipients": ["ops@acme.com"]}</code></pre>
+      <p><code>period</code> is <code>7d</code>, <code>30d</code> or <code>month</code> (with <code>month=YYYY-MM</code>, default this month); <code>format</code> is <code>json</code> (default), <code>csv</code> or <code>html</code>. Times are UTC.</p>
+    </section>
+
     <section id="approvals">
       <h2>Human approval <span class="badge team">Team</span></h2>
       <p>An approval rule (dashboard: <b>Rules → Approval rules</b>, or <code>/api/v1/hitl-rules</code>) holds a matching call instead of running it: always, or when a payload field passes a threshold (<code>amount &gt; 50000</code>). The caller gets <code>202</code> with a <code>status_url</code> to poll; the call runs only after a person approves it, and a retry of the same call while it waits gets <code>409</code>, never a second hold.</p>
@@ -882,7 +907,7 @@ histogram_quantile(0.95, sum by (le) (rate(agentraas_call_duration_ms_bucket[5m]
         <tr><th></th><th>Community</th><th>Team</th><th>Enterprise</th></tr>
         <tr><td>Self-hosted</td><td colspan="2">Free, unlimited actions, no license key</td><td>License key: <a href="mailto:hello@agentraas.io">talk to us</a></td></tr>
         <tr><td>Cloud</td><td colspan="3">Free trial: 1,000 actions once, every feature</td></tr>
-        <tr><td>Features</td><td>Exactly-once execution, MCP gateway, dashboard, audit trail, DLQ, undo, record and replay, blocking spend caps and action policies, DLP redaction</td><td>+ human approvals (also on spend caps and policies), semantic dedup, SSO</td><td>+ agent identity, inbound webhooks, white-label branding, <a href="#secret-refs">secret references</a></td></tr>
+        <tr><td>Features</td><td>Exactly-once execution, MCP gateway, dashboard, audit trail, DLQ, undo, record and replay, shadow mode, savings reports, blocking spend caps and action policies, DLP redaction</td><td>+ human approvals (also on spend caps and policies), semantic dedup, SSO</td><td>+ agent identity, inbound webhooks, white-label branding (also on savings reports), <a href="#secret-refs">secret references</a></td></tr>
         <tr><td>Seats</td><td colspan="2">3</td><td>Unlimited</td></tr>
       </table>
       <p>For production, self-host: your API keys and data stay on your servers. AgentRaaS Cloud is the quickest way to try it; use test or restricted keys there for now.</p>
@@ -997,7 +1022,7 @@ redis-cli --scan --pattern 'dedup:local:*' | xargs -r redis-cli del</code></pre>
     <!-- api-ref:start (generated by infra/scripts/build-openapi.py; edit there) -->
     <section id="api-reference">
       <h2>API reference</h2>
-      <p>Every endpoint of the server (140 in all), read from its code. The same list as an OpenAPI file, to import into Postman, Insomnia or a code generator: <a href="https://agentraas.io/openapi.json">openapi.json</a>. <b>Dashboard login</b> means the session cookie from <code>/api/v1/auth/login</code> (or the same token as <code>Authorization: Bearer</code>); <b>Agent key</b> is <code>Authorization: Bearer ar_live_...</code>.</p>
+      <p>Every endpoint of the server (148 in all), read from its code. The same list as an OpenAPI file, to import into Postman, Insomnia or a code generator: <a href="https://agentraas.io/openapi.json">openapi.json</a>. <b>Dashboard login</b> means the session cookie from <code>/api/v1/auth/login</code> (or the same token as <code>Authorization: Bearer</code>); <b>Agent key</b> is <code>Authorization: Bearer ar_live_...</code>.</p>
       <h3>Calling services</h3>
       <table class="api-ref">
         <tr><th>Call</th><th>What it does</th><th>Auth</th></tr>
@@ -1040,6 +1065,10 @@ redis-cli --scan --pattern 'dedup:local:*' | xargs -r redis-cli del</code></pre>
         <tr><td><code>PUT&nbsp;/api/v1/output-pruning</code></td><td>Turn tool output pruning on or off.</td><td>Dashboard login</td></tr>
         <tr><td><code>GET&nbsp;/api/v1/output-sanitization</code></td><td>Whether output sanitization is on for an org.</td><td>Dashboard login</td></tr>
         <tr><td><code>PUT&nbsp;/api/v1/output-sanitization</code></td><td>Turn output sanitization on or off.</td><td>Dashboard login</td></tr>
+        <tr><td><code>GET&nbsp;/api/v1/shadow-rules</code></td><td>Agents in shadow mode (writes recorded, never sent).</td><td>Dashboard login</td></tr>
+        <tr><td><code>POST&nbsp;/api/v1/shadow-rules</code></td><td>Put an agent, service or action in shadow mode.</td><td>Dashboard login</td></tr>
+        <tr><td><code>DELETE&nbsp;/api/v1/shadow-rules/:id</code></td><td>Remove one shadow rule.</td><td>Dashboard login</td></tr>
+        <tr><td><code>POST&nbsp;/api/v1/shadow-rules/promote</code></td><td>Take an agent out of shadow mode; nothing is replayed.</td><td>Dashboard login</td></tr>
         <tr><td><code>GET&nbsp;/api/v1/spend-cap-rules</code></td><td>List spend caps.</td><td>Dashboard login</td></tr>
         <tr><td><code>POST&nbsp;/api/v1/spend-cap-rules</code></td><td>Create a spend cap: calls or a money total per hour or day, then block or ask a person.</td><td>Dashboard login</td></tr>
         <tr><td><code>DELETE&nbsp;/api/v1/spend-cap-rules/:id</code></td><td>Delete a spend cap.</td><td>Dashboard login</td></tr>
@@ -1104,8 +1133,12 @@ redis-cli --scan --pattern 'dedup:local:*' | xargs -r redis-cli del</code></pre>
         <tr><td><code>DELETE&nbsp;/api/v1/recordings/:name</code></td><td>Delete a recording.</td><td>Dashboard login</td></tr>
         <tr><td><code>GET&nbsp;/api/v1/recordings/:name</code></td><td>Every call and answer in one recording.</td><td>Dashboard login</td></tr>
         <tr><td><code>GET&nbsp;/api/v1/reliability-report</code></td><td>Uptime, success rate and duplicates prevented per service.</td><td>Dashboard login</td></tr>
+        <tr><td><code>GET&nbsp;/api/v1/reports</code></td><td>Savings and reliability report as JSON, CSV or HTML.</td><td>Dashboard login</td></tr>
+        <tr><td><code>GET&nbsp;/api/v1/reports/settings</code></td><td>Monthly report email settings.</td><td>Dashboard login</td></tr>
+        <tr><td><code>PUT&nbsp;/api/v1/reports/settings</code></td><td>Turn the monthly report email on or off.</td><td>Dashboard login</td></tr>
         <tr><td><code>GET&nbsp;/api/v1/runs/:run_id</code></td><td>Every step of one agent run.</td><td>Dashboard login</td></tr>
         <tr><td><code>GET&nbsp;/api/v1/schema-drift-events</code></td><td>Times a service&#x27;s response shape changed.</td><td>Dashboard login</td></tr>
+        <tr><td><code>GET&nbsp;/api/v1/shadow-calls</code></td><td>Writes agents in shadow mode would have made, with the decision.</td><td>Dashboard login</td></tr>
         <tr><td><code>GET&nbsp;/api/v1/stats</code></td><td>Overall counts.</td><td>Dashboard login</td></tr>
         <tr><td><code>GET&nbsp;/api/v1/undo-log</code></td><td>Actions that can be undone, for 30 days.</td><td>Dashboard login</td></tr>
         <tr><td><code>POST&nbsp;/api/v1/undo-log/:id/undo</code></td><td>Undo an action once (for example refund a charge).</td><td>Dashboard login</td></tr>

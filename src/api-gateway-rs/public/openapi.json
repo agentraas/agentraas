@@ -2651,6 +2651,67 @@
     }
    }
   },
+  "/api/v1/reports": {
+   "get": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Savings and reliability report as JSON, CSV or HTML.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/reports/settings": {
+   "get": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Monthly report email settings.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   },
+   "put": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Turn the monthly report email on or off.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
   "/api/v1/runs/{run_id}": {
    "get": {
     "tags": [
@@ -2709,6 +2770,119 @@
      "Agents and services"
     ],
     "summary": "The service catalog: every service and action AgentRaaS knows.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/shadow-calls": {
+   "get": {
+    "tags": [
+     "Monitoring"
+    ],
+    "summary": "Writes agents in shadow mode would have made, with the decision.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/shadow-rules": {
+   "get": {
+    "tags": [
+     "Rules"
+    ],
+    "summary": "Agents in shadow mode (writes recorded, never sent).",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "Rules"
+    ],
+    "summary": "Put an agent, service or action in shadow mode.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/v1/shadow-rules/{id}": {
+   "delete": {
+    "tags": [
+     "Rules"
+    ],
+    "summary": "Remove one shadow rule.",
+    "security": [
+     {
+      "session": []
+     },
+     {
+      "sessionBearer": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/shadow-rules/promote": {
+   "post": {
+    "tags": [
+     "Rules"
+    ],
+    "summary": "Take an agent out of shadow mode; nothing is replayed.",
     "security": [
      {
       "session": []
