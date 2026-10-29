@@ -15,6 +15,43 @@ safe to re-run.
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-10-29
+
+New migration: `062_record_locks.sql`. Apply it before starting this
+version.
+
+### Added
+
+- Record locks: with an org's switch on (Rules, Record locks; off by
+  default), two calls that change the same record at the same moment (a
+  Stripe customer, a HubSpot contact, a Razorpay payment) no longer race:
+  the second gets `409` with `code: "resource_locked"`, the agent holding
+  it and `retry_after_ms`. Which record each catalog action changes is in
+  `config/services.json` (`"lock"`). An approved held call takes the lock
+  again before it runs; shadow calls report `would_wait_for_lock` and never
+  take one. API: `/api/v1/record-locks`.
+
+### Changed
+
+- Shadow mode now predicts an open circuit breaker, a used-up plan, an
+  in-flight or timed-out duplicate and a reused Idempotency-Key the way the
+  live call answers them. An approved held call or a dead-letter replay of
+  an agent in shadow mode is not sent.
+- Savings reports count each payment once in "money protected", however
+  often it was retried (`payments` replaces `duplicates` in that section),
+  count an approved call once, and leave approval denials out of the block
+  rate. The monthly email claims one org at a time.
+- Existing dashboard totals and the public ledger leave shadow calls out.
+- The resource-lock 409 body has `code`, `held_by_agent` and
+  `retry_after_ms` next to `error`.
+
+### Security
+
+- mockpay's test hit counter only accepts short identifiers.
+- White-label display names may not contain control characters.
+- `rustls-webpki` 0.103.16 and `webpki-roots` 1.0.11 (RUSTSEC-2026-0382,
+  RUSTSEC-2026-0381).
+
 ## [0.28.1] - 2026-10-29
 
 No new migration.
