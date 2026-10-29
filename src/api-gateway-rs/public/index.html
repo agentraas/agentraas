@@ -257,6 +257,7 @@
   .log-row.success .status-word { color: var(--signal); }
   .log-row.deduplicated .status-word { color: var(--dedup); }
   .log-row.blocked .status-word, .log-row.error .status-word { color: var(--alert); }
+  .log-row.shadow .status-word { color: var(--muted); }
 
   /* Agents roster */
   .agent-item { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
@@ -596,6 +597,7 @@
           <button class="btn" id="hitl-rules-btn" data-tier="team">Approval rules</button>
           <button class="btn" id="spendcap-rules-btn">Spend caps</button>
           <button class="btn" id="policy-rules-btn">Action policies</button>
+          <button class="btn" id="shadow-rules-btn">Shadow mode</button>
           <button class="btn" id="pruning-btn">Output pruning</button>
         </div>
         <div class="control-group" data-tab="monitor">
@@ -606,6 +608,8 @@
           <button class="btn" id="undo-btn">Undo actions</button>
           <button class="btn" id="recordings-btn">Recordings</button>
           <button class="btn" id="health-checks-btn">Active monitoring</button>
+          <button class="btn" id="shadow-calls-btn">Shadow calls</button>
+          <button class="btn" id="savings-btn">Savings report</button>
           <button class="btn" id="reliability-btn">Reliability report</button>
           <button class="btn" id="tunnel-btn">Dev tunnel</button>
         </div>
@@ -1154,6 +1158,79 @@
     <div id="recordings-list"></div>
     <div id="recording-calls"></div>
     <button class="close-btn" id="recordings-modal-close">Close</button>
+  </div>
+</div>
+
+<!-- Shadow mode: agents whose writes are recorded, never sent -->
+<div class="modal-overlay" id="shadow-rules-modal-overlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Shadow mode">
+    <h3>Shadow mode</h3>
+    <p class="sub">Run an agent against real traffic without letting it act. Every write it makes is checked against your rules and recorded under Shadow calls, but never sent, and its stored keys are never used. The agent gets a placeholder answer marked <code>"shadow": true</code>. Reads are still sent unless you block them too. See <a href="/docs#shadow-mode" target="_blank" rel="noopener">Shadow mode</a>.</p>
+    <div class="modal-error" id="shadow-rules-error"></div>
+    <form id="shadow-rules-form">
+      <div class="field"><label for="shadow-agent">Agent ID</label><input type="text" id="shadow-agent" placeholder="refund-agent" required></div>
+      <div class="field"><label for="shadow-service">Service (optional)</label><input type="text" id="shadow-service" placeholder="leave blank for every service"></div>
+      <div class="field"><label for="shadow-action">Action (optional)</label><input type="text" id="shadow-action" placeholder="leave blank for every action"></div>
+      <div class="field"><label><input type="checkbox" id="shadow-block-reads"> Don't send reads either</label></div>
+      <div class="field"><label for="shadow-stub">Placeholder answer (JSON, optional)</label><textarea id="shadow-stub" rows="3" placeholder='{"id": "shadow_payment", "status": "succeeded"}'></textarea></div>
+      <button type="submit" class="primary" id="shadow-rules-submit">Put in shadow mode</button>
+    </form>
+    <h3 style="margin-top:26px;">Agents in shadow mode</h3>
+    <div id="shadow-rules-list"></div>
+    <button class="close-btn" id="shadow-rules-modal-close">Close</button>
+  </div>
+</div>
+
+<!-- Shadow calls: what agents in shadow mode would have done -->
+<div class="modal-overlay" id="shadow-calls-modal-overlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Shadow calls">
+    <h3>Shadow calls</h3>
+    <p class="sub">Writes your agents in shadow mode would have made, and what AgentRaaS would have done with each. None of them was sent. Going live (in Shadow mode) does not replay them.</p>
+    <div class="modal-error" id="shadow-calls-error"></div>
+    <form id="shadow-calls-filter" style="display:flex;gap:8px;flex-wrap:wrap;">
+      <input type="text" id="shadow-filter-agent" placeholder="Agent ID" style="flex:1;min-width:120px;">
+      <input type="text" id="shadow-filter-service" placeholder="Service" style="flex:1;min-width:120px;">
+      <select id="shadow-filter-decision">
+        <option value="">Every decision</option>
+        <option value="would_execute">Would have run</option>
+        <option value="would_deduplicate">Duplicate</option>
+        <option value="would_block">Would have been blocked</option>
+        <option value="would_need_approval">Would have needed approval</option>
+      </select>
+      <button type="submit" class="btn">Filter</button>
+    </form>
+    <div id="shadow-calls-list"></div>
+    <button class="close-btn" id="shadow-calls-modal-close">Close</button>
+  </div>
+</div>
+
+<!-- Savings report: what AgentRaaS caught, to share -->
+<div class="modal-overlay" id="savings-modal-overlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Savings report">
+    <h3>Savings report</h3>
+    <p class="sub">What AgentRaaS caught for this org: duplicates, blocked calls, approvals and an estimate of the money in duplicate payments it stopped, per currency. Download it as a page or CSV to send to someone who doesn't use the dashboard.</p>
+    <div class="modal-error" id="savings-error"></div>
+    <div class="field"><label for="savings-period">Period</label>
+      <select id="savings-period">
+        <option value="period=7d">Last 7 days</option>
+        <option value="period=30d" selected>Last 30 days</option>
+        <option value="period=month">This month</option>
+        <option value="last-month">Last month</option>
+      </select>
+    </div>
+    <div id="savings-body"></div>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <a class="btn" id="savings-html" href="#">Download page</a>
+      <a class="btn" id="savings-csv" href="#">Download CSV</a>
+    </div>
+    <h3 style="margin-top:26px;">Monthly email</h3>
+    <form id="savings-email-form">
+      <div class="field"><label><input type="checkbox" id="savings-email-on"> Email last month's report at the start of each month</label></div>
+      <div class="field"><label for="savings-email-to">Send to (comma-separated)</label><input type="text" id="savings-email-to" placeholder="you@example.com, client@example.com"></div>
+      <div class="meta" id="savings-email-note" style="color:var(--muted);font-size:12.5px;"></div>
+      <button type="submit" class="primary">Save</button>
+    </form>
+    <button class="close-btn" id="savings-modal-close">Close</button>
   </div>
 </div>
 

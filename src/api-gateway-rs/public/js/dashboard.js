@@ -621,6 +621,7 @@
         : 'A repeat of an earlier identical call. It got that call\'s result back and did not run again. The original is older than the rows loaded here.';
     }
     if (row.status === 'pending_approval') return 'Held for a person to approve before it runs.';
+    if (row.status === 'shadow') return `Shadow mode: recorded, not sent. ${decisionText(row.error_type)}.`;
     if (row.status === 'blocked') return BLOCK_REASONS[row.error_type] || `Stopped before it ran${row.error_type ? `: ${row.error_type}` : ''}.`;
     if (row.status === 'error') return `The call failed${row.error_type ? `: ${row.error_type}` : ''}. Failed calls are kept under Failed requests, where you can replay them.`;
     return row.status;
@@ -2255,6 +2256,154 @@
         `<div class="cred-row" style="display:block;"><div class="svc">#${i + 1} ${escapeHtml(c.service)}.${escapeHtml(c.action)} by ${escapeHtml(c.agent_id)}</div><div class="meta">${escapeHtml(new Date(c.created_at).toLocaleString())} · ${escapeHtml(c.req_id)}</div><div class="meta">Payload</div>${pre(c.payload)}<div class="meta">Response</div>${pre(c.response)}</div>`
       ).join('');
     } catch (err) { showRecordingsError('Could not reach the server.'); }
+  }
+
+  // ─── Shadow mode and shadow calls ───
+  // Looked up with `if`: dashboard.js can reach visitors before the page that
+  // has these buttons (the Worker and octopus deploy separately).
+  const orgQ = () => `org_id=${encodeURIComponent(currentUserOrgId)}`;
+  const getJson = async (url, opts = {}) => {
+    const res = await fetch(url, { credentials: 'include', ...opts });
+    if (res.status === 401) { handleUnauthenticated(); throw new Error('Signed out.'); }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Request failed.');
+    return data;
+  };
+  function wireModal(btnId, overlayId, closeId, onOpen) {
+    const btn = document.getElementById(btnId);
+    const overlay = document.getElementById(overlayId);
+    if (!btn || !overlay) return null;
+    const close = () => { overlay.style.display = 'none'; anyModalOpen = false; };
+    btn.addEventListener('click', () => { overlay.style.display = 'flex'; anyModalOpen = true; onOpen(); });
+    document.getElementById(closeId)?.addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    return overlay;
+  }
+  const showErr = (id, msg) => { const el = document.getElementById(id); if (el) { el.textContent = msg; el.style.display = msg ? 'block' : 'none'; } };
+  const emptyNote = (text) => `<div style="color:var(--muted);font-size:13px;padding:8px 0;">${escapeHtml(text)}</div>`;
+
+  async function loadShadowRules() {
+    const list = document.getElementById('shadow-rules-list');
+    showErr('shadow-rules-error', '');
+    try {
+      const { rules } = await getJson(`/api/v1/shadow-rules?${orgQ()}`);
+      if (!rules.length) { list.innerHTML = emptyNote('No agent is in shadow mode.'); return; }
+      list.innerHTML = '';
+      for (const r of rules) {
+        const scope = r.service ? `${r.service}${r.action ? '.' + r.action : ' (every action)'}` : 'every service';
+        const div = document.createElement('div');
+        div.className = 'cred-row';
+        div.innerHTML = `<div class="info"><div class="svc">${escapeHtml(r.agent_id)}</div><div class="meta">${escapeHtml(scope)}${r.block_reads ? ' · reads not sent either' : ''}</div></div><div style="display:flex;gap:6px;"><button class="btn sh-live" style="padding:6px 12px;font-size:12px;">Go live</button><button class="btn sh-del" style="padding:6px 12px;font-size:12px;">Remove</button></div>`;
+        const live = div.querySelector('.sh-live');
+        // Two clicks, no browser dialog: Go live, then Confirm.
+        live.addEventListener('click', async () => {
+          if (live.dataset.armed !== '1') { live.dataset.armed = '1'; live.textContent = `Confirm: ${r.agent_id} acts for real`; return; }
+          try { await getJson('/api/v1/shadow-rules/promote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ org_id: currentUserOrgId, agent_id: r.agent_id }) }); }
+          catch (err) { showErr('shadow-rules-error', err.message); }
+          loadShadowRules();
+        });
+        div.querySelector('.sh-del').addEventListener('click', async () => {
+          try { await getJson(`/api/v1/shadow-rules/${encodeURIComponent(r.id)}?${orgQ()}`, { method: 'DELETE' }); }
+          catch (err) { showErr('shadow-rules-error', err.message); }
+          loadShadowRules();
+        });
+        list.appendChild(div);
+      }
+    } catch (err) { showErr('shadow-rules-error', err.message); }
+  }
+  if (wireModal('shadow-rules-btn', 'shadow-rules-modal-overlay', 'shadow-rules-modal-close', loadShadowRules)) {
+    document.getElementById('shadow-rules-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      showErr('shadow-rules-error', '');
+      let stub;
+      const stubText = document.getElementById('shadow-stub').value.trim();
+      if (stubText) {
+        try { stub = JSON.parse(stubText); } catch (err) { showErr('shadow-rules-error', 'The placeholder answer is not valid JSON.'); return; }
+      }
+      const body = {
+        org_id: currentUserOrgId,
+        agent_id: document.getElementById('shadow-agent').value.trim(),
+        service: document.getElementById('shadow-service').value.trim() || null,
+        action: document.getElementById('shadow-action').value.trim() || null,
+        block_reads: document.getElementById('shadow-block-reads').checked,
+        stub,
+      };
+      try { await getJson('/api/v1/shadow-rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); }
+      catch (err) { showErr('shadow-rules-error', err.message); return; }
+      loadShadowRules();
+    });
+  }
+
+  function decisionText(d) {
+    const fixed = { would_execute: 'Would have run', would_deduplicate: 'Duplicate of a live call', would_error: 'A check could not be read' };
+    return fixed[d] || (d || '').replace(/^would_block:/, 'Would have been blocked: ').replace(/^would_need_approval:/, 'Would have needed approval: ');
+  }
+  async function loadShadowCalls() {
+    const list = document.getElementById('shadow-calls-list');
+    showErr('shadow-calls-error', '');
+    const q = new URLSearchParams({ org_id: currentUserOrgId });
+    for (const [k, id] of [['agent_id', 'shadow-filter-agent'], ['service', 'shadow-filter-service'], ['decision', 'shadow-filter-decision']]) {
+      const v = document.getElementById(id).value.trim();
+      if (v) q.set(k, v);
+    }
+    try {
+      const { calls } = await getJson(`/api/v1/shadow-calls?${q}`);
+      list.innerHTML = calls.length ? calls.map((c) =>
+        `<div class="cred-row" style="display:block;"><div class="svc">${escapeHtml(c.service)}.${escapeHtml(c.action)} by ${escapeHtml(c.agent_id || '')}</div><div class="meta">${escapeHtml(decisionText(c.decision))} · ${escapeHtml(new Date(c.created_at).toLocaleString())} · ${escapeHtml(c.req_id)}</div>${c.payload_preview ? `<pre style="white-space:pre-wrap;word-break:break-all;font-size:11px;margin:4px 0;max-height:120px;overflow:auto;">${escapeHtml(c.payload_preview)}</pre>` : ''}</div>`
+      ).join('') : emptyNote('No shadow calls match.');
+    } catch (err) { showErr('shadow-calls-error', err.message); }
+  }
+  if (wireModal('shadow-calls-btn', 'shadow-calls-modal-overlay', 'shadow-calls-modal-close', loadShadowCalls)) {
+    document.getElementById('shadow-calls-filter').addEventListener('submit', (e) => { e.preventDefault(); loadShadowCalls(); });
+  }
+
+  // ─── Savings report ───
+  function savingsQuery() {
+    const v = document.getElementById('savings-period').value;
+    if (v !== 'last-month') return v;
+    const d = new Date();
+    d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - 1);
+    return `period=month&month=${d.toISOString().slice(0, 7)}`;
+  }
+  async function loadSavings() {
+    const body = document.getElementById('savings-body');
+    showErr('savings-error', '');
+    const base = `/api/v1/reports?${orgQ()}&${savingsQuery()}`;
+    document.getElementById('savings-html').href = `${base}&format=html`;
+    document.getElementById('savings-csv').href = `${base}&format=csv`;
+    try {
+      const r = await getJson(base);
+      const t = r.totals;
+      const tile = (label, v) => `<div class="cred-row" style="display:block;"><div class="svc">${escapeHtml(String(v))}</div><div class="meta">${escapeHtml(label)}</div></div>`;
+      const money = r.money_protected.by_currency.map((m) => `${m.amount.toFixed(2)} ${m.currency}`).join(', ') || 'none in this period';
+      const top = r.top_duplicated.map((d) => `${d.service}.${d.action} (${d.duplicates})`).join(', ') || 'none';
+      body.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;">${
+        tile('Actions', t.actions) + tile('Duplicates caught', t.duplicates_caught) + tile('Blocked by policy', t.blocked_by_policy)
+        + tile('Blocked by spend cap', t.blocked_by_spend_cap) + tile('Held for approval', t.held_for_approval) + tile('Shadow calls', t.shadow_calls)
+      }</div><p class="meta" style="margin-top:10px;">Money in duplicate payments stopped (estimate, not converted): ${escapeHtml(money)}</p><p class="meta">Most duplicated: ${escapeHtml(top)}</p>`;
+    } catch (err) { showErr('savings-error', err.message); }
+  }
+  async function loadSavingsEmail() {
+    try {
+      const s = await getJson(`/api/v1/reports/settings?${orgQ()}`);
+      document.getElementById('savings-email-on').checked = s.enabled;
+      document.getElementById('savings-email-to').value = s.recipients.join(', ');
+      document.getElementById('savings-email-note').textContent = (s.email_configured ? '' : 'This server has no SMTP settings, so nothing is sent until it does. ')
+        + (s.last_sent_period ? `Last sent: the ${s.last_sent_period} report.` : '');
+    } catch (err) { showErr('savings-error', err.message); }
+  }
+  if (wireModal('savings-btn', 'savings-modal-overlay', 'savings-modal-close', () => { loadSavings(); loadSavingsEmail(); })) {
+    document.getElementById('savings-period').addEventListener('change', loadSavings);
+    document.getElementById('savings-email-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      showErr('savings-error', '');
+      const recipients = document.getElementById('savings-email-to').value.split(',').map((x) => x.trim()).filter(Boolean);
+      try {
+        await getJson('/api/v1/reports/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ org_id: currentUserOrgId, enabled: document.getElementById('savings-email-on').checked, recipients }) });
+        loadSavingsEmail();
+      } catch (err) { showErr('savings-error', err.message); }
+    });
   }
 
   // ─── Reliability report (uptime %, success rate, duplicates prevented) ───
