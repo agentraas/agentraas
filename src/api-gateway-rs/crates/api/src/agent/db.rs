@@ -918,10 +918,35 @@ pub async fn log_audit(
     step_id: Option<&str>,
     end_user_id: Option<&str>,
 ) {
+    log_audit_money(pg, req_id, api_key, org_id, agent_id, service, action, status, error_type, duration_ms, payload_hash, enterprise_mode, raw_payload, run_id, step_id, end_user_id, None).await
+}
+
+/// `log_audit` plus the amount and currency of a caught duplicate payment
+/// (`crate::reports::money_of`), for the savings report.
+#[allow(clippy::too_many_arguments)]
+pub async fn log_audit_money(
+    pg: &PgPool,
+    req_id: &str,
+    api_key: &str,
+    org_id: &str,
+    agent_id: &str,
+    service: &str,
+    action: &str,
+    status: &str,
+    error_type: Option<&str>,
+    duration_ms: i64,
+    payload_hash: Option<&str>,
+    enterprise_mode: bool,
+    raw_payload: Option<&Value>,
+    run_id: Option<&str>,
+    step_id: Option<&str>,
+    end_user_id: Option<&str>,
+    money: Option<(f64, String)>,
+) {
     let masked_key = mask_api_key_for_audit(api_key);
     let redacted_preview = redact_preview(enterprise_mode, raw_payload);
     if let Err(err) = sqlx::query(
-        "INSERT INTO audit_log (req_id,api_key,org_id,agent_id,service,action,status,error_type,duration_ms,payload_hash,redacted_payload_preview,run_id,step_id,end_user_id,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NOW())",
+        "INSERT INTO audit_log (req_id,api_key,org_id,agent_id,service,action,status,error_type,duration_ms,payload_hash,redacted_payload_preview,run_id,step_id,end_user_id,money_amount,money_currency,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::float8::numeric,$16,NOW())",
     )
     .bind(req_id)
     .bind(&masked_key)
@@ -937,6 +962,8 @@ pub async fn log_audit(
     .bind(run_id)
     .bind(step_id)
     .bind(end_user_id)
+    .bind(money.as_ref().map(|m| m.0))
+    .bind(money.map(|m| m.1))
     .execute(pg)
     .await
     {

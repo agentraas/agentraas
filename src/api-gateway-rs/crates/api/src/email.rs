@@ -116,6 +116,11 @@ impl Mailer {
         }
     }
 
+    /// The monthly savings report (`crate::reports`), its HTML page as the body.
+    pub async fn send_report(&self, to_email: &str, subject: &str, text: &str, html: &str) {
+        self.send(to_email, subject, text, html).await;
+    }
+
     /// An alert or an approval request for an org's "email" alert channel.
     pub async fn send_notification_email(&self, to_email: &str, subject: &str, message: &str, cta_text: &str, cta_url: &str, expiry_note: Option<&str>) {
         if !self.is_configured() {

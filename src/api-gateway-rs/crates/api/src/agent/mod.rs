@@ -712,22 +712,22 @@ async fn handle_request_inner(
             .and_then(Value::as_bool)
             .unwrap_or(false);
         let Some(existing) = existing else {
-            log_audit(&state.pg, &req_id, &api_key, &org_id, &agent_id, &service, &action, "blocked", Some("duplicate_in_progress"), start.elapsed().as_millis() as i64, Some(&dedup_hash), false, None, run_id.as_deref(), step_id.as_deref(), end_user_id.as_deref()).await;
+            db::log_audit_money(&state.pg, &req_id, &api_key, &org_id, &agent_id, &service, &action, "blocked", Some("duplicate_in_progress"), start.elapsed().as_millis() as i64, Some(&dedup_hash), false, None, run_id.as_deref(), step_id.as_deref(), end_user_id.as_deref(), crate::reports::money_of(&service, &payload)).await;
             return err_response(StatusCode::CONFLICT, &req_id, "An identical request is already being processed. Retry shortly.");
         };
         if dedup::is_stale_pending(&existing, now_ms()) {
             settle_stale_claim(state, &mut conn, &claim.key, &existing, &org_id, &agent_id, &service, &action, &payload, &dedup_hash).await;
         }
         if dedup::is_outcome_unknown(&existing) || dedup::is_stale_pending(&existing, now_ms()) {
-            log_audit(&state.pg, &req_id, &api_key, &org_id, &agent_id, &service, &action, "blocked", Some("outcome_unknown"), start.elapsed().as_millis() as i64, Some(&dedup_hash), false, None, run_id.as_deref(), step_id.as_deref(), end_user_id.as_deref()).await;
+            db::log_audit_money(&state.pg, &req_id, &api_key, &org_id, &agent_id, &service, &action, "blocked", Some("outcome_unknown"), start.elapsed().as_millis() as i64, Some(&dedup_hash), false, None, run_id.as_deref(), step_id.as_deref(), end_user_id.as_deref(), crate::reports::money_of(&service, &payload)).await;
             return err_response(StatusCode::CONFLICT, &req_id, OUTCOME_UNKNOWN_RETRY_MESSAGE);
         }
         if is_pending {
-            log_audit(&state.pg, &req_id, &api_key, &org_id, &agent_id, &service, &action, "blocked", Some("duplicate_in_progress"), start.elapsed().as_millis() as i64, Some(&dedup_hash), false, None, run_id.as_deref(), step_id.as_deref(), end_user_id.as_deref()).await;
+            db::log_audit_money(&state.pg, &req_id, &api_key, &org_id, &agent_id, &service, &action, "blocked", Some("duplicate_in_progress"), start.elapsed().as_millis() as i64, Some(&dedup_hash), false, None, run_id.as_deref(), step_id.as_deref(), end_user_id.as_deref(), crate::reports::money_of(&service, &payload)).await;
             return err_response(StatusCode::CONFLICT, &req_id, "An identical request is already being processed. Retry shortly.");
         }
         if is_streamed {
-            log_audit(&state.pg, &req_id, &api_key, &org_id, &agent_id, &service, &action, "blocked", Some("duplicate_of_streamed_response"), start.elapsed().as_millis() as i64, Some(&dedup_hash), false, None, run_id.as_deref(), step_id.as_deref(), end_user_id.as_deref()).await;
+            db::log_audit_money(&state.pg, &req_id, &api_key, &org_id, &agent_id, &service, &action, "blocked", Some("duplicate_of_streamed_response"), start.elapsed().as_millis() as i64, Some(&dedup_hash), false, None, run_id.as_deref(), step_id.as_deref(), end_user_id.as_deref(), crate::reports::money_of(&service, &payload)).await;
             return err_response(StatusCode::CONFLICT, &req_id, "An identical request was already served as a streaming response and cannot be replayed. Wait for the dedup window to expire, or use a new Idempotency-Key.");
         }
 
@@ -742,7 +742,7 @@ async fn handle_request_inner(
             }
         }
 
-        log_audit(&state.pg, &req_id, &api_key, &org_id, &agent_id, &service, &action, "deduplicated", None, start.elapsed().as_millis() as i64, Some(&dedup_hash), false, None, run_id.as_deref(), step_id.as_deref(), end_user_id.as_deref()).await;
+        db::log_audit_money(&state.pg, &req_id, &api_key, &org_id, &agent_id, &service, &action, "deduplicated", None, start.elapsed().as_millis() as i64, Some(&dedup_hash), false, None, run_id.as_deref(), step_id.as_deref(), end_user_id.as_deref(), crate::reports::money_of(&service, &payload)).await;
         let mut cached = existing;
         if let Value::Object(ref mut map) = cached {
             map.remove("__payloadDigest");

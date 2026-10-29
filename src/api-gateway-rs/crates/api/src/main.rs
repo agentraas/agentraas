@@ -26,6 +26,7 @@ mod secret_refs;
 mod self_host;
 mod billing;
 mod recordings;
+mod reports;
 mod shadow;
 mod undo;
 mod spend_caps;
@@ -237,6 +238,7 @@ async fn main() -> anyhow::Result<()> {
     licensing::spawn_license_refresh_loop(state.clone());
     health_checks::spawn_health_check_loop(state.clone());
     billing::spawn_monthly_charge_loop(state.clone());
+    reports::spawn_monthly_email_loop(state.clone());
     #[cfg(feature = "enterprise")]
     ee::hitl::spawn_hitl_escalation_loop(state.clone());
     tokio::task::spawn_blocking(self_host::build_snapshot);
@@ -260,6 +262,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(undo::router())
         .merge(recordings::router())
         .merge(shadow::router())
+        .merge(reports::router())
         .merge(pruning_settings::router())
         .merge(chaos_settings::router())
         .merge(agentgateway::router())

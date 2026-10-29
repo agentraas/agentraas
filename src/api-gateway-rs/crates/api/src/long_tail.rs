@@ -508,17 +508,18 @@ async fn downgrade_if_no_live_subscription(pg: &sqlx::PgPool, user_id: i32) -> R
 // ─── Org branding (Enterprise-tier white-label) ───
 
 async fn get_org_branding(State(state): State<SharedState>, Path(org_id): Path<String>) -> Result<Json<Value>, ApiError> {
-    let row: Option<(Option<String>, Option<String>)> = sqlx::query_as("SELECT display_name, logo_url FROM org_branding WHERE org_id = $1").bind(&org_id).fetch_optional(&state.pg).await?;
-    match row {
-        Some((display_name, logo_url)) => Ok(Json(json!({ "display_name": display_name, "logo_url": logo_url }))),
-        None => Ok(Json(json!({ "display_name": null, "logo_url": null }))),
-    }
+    let row: Option<(Option<String>, Option<String>, Option<String>)> =
+        sqlx::query_as("SELECT display_name, logo_url, accent_color FROM org_branding WHERE org_id = $1").bind(&org_id).fetch_optional(&state.pg).await?;
+    let (display_name, logo_url, accent_color) = row.unwrap_or_default();
+    Ok(Json(json!({ "display_name": display_name, "logo_url": logo_url, "accent_color": accent_color })))
 }
 
 #[derive(Deserialize)]
 struct BrandingBody {
     display_name: Option<String>,
     logo_url: Option<Option<String>>,
+    /// "#rrggbb", used by white-label reports (`crate::reports`).
+    accent_color: Option<String>,
 }
 
 async fn put_org_branding(State(state): State<SharedState>, user: AuthUser, Path(org_id): Path<String>, Json(body): Json<BrandingBody>) -> Result<Json<Value>, ApiError> {
@@ -535,6 +536,9 @@ async fn put_org_branding(State(state): State<SharedState>, user: AuthUser, Path
             return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "display_name must be a string up to 255 characters."));
         }
     }
+    if body.accent_color.as_deref().is_some_and(|c| !crate::reports::is_hex_color(c)) {
+        return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "accent_color must look like #1f6feb."));
+    }
     let logo_url = body.logo_url.flatten();
     if let Some(url) = &logo_url {
         if let Some(err) = validate_target_url(url).await {
@@ -543,12 +547,13 @@ async fn put_org_branding(State(state): State<SharedState>, user: AuthUser, Path
     }
 
     sqlx::query(
-        "INSERT INTO org_branding (org_id, display_name, logo_url, updated_at) VALUES ($1, $2, $3, NOW())
-         ON CONFLICT (org_id) DO UPDATE SET display_name = EXCLUDED.display_name, logo_url = EXCLUDED.logo_url, updated_at = NOW()",
+        "INSERT INTO org_branding (org_id, display_name, logo_url, accent_color, updated_at) VALUES ($1, $2, $3, $4, NOW())
+         ON CONFLICT (org_id) DO UPDATE SET display_name = EXCLUDED.display_name, logo_url = EXCLUDED.logo_url, accent_color = EXCLUDED.accent_color, updated_at = NOW()",
     )
     .bind(&org_id)
     .bind(&body.display_name)
     .bind(&logo_url)
+    .bind(&body.accent_color)
     .execute(&state.pg)
     .await?;
     Ok(Json(json!({ "updated": true })))
