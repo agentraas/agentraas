@@ -15,6 +15,23 @@ safe to re-run.
 
 ## [Unreleased]
 
+## [0.30.1] - 2026-10-30
+
+### Added
+
+- `ALLOWED_PRIVATE_NETWORKS` (self-hosted only): CIDR ranges agents may
+  reach, for services that only have an internal address (air-gapped or
+  internal networks). Applies to built-in services, custom actions, MCP
+  servers and alert webhooks. Loopback and link-local (cloud metadata) stay
+  blocked whatever is listed; ignored on Cloud.
+
+### Fixed
+
+- Helm chart 0.7.1: the migration step runs `agentraas-migrate` from the
+  AgentRaaS image instead of `psql` from `postgresql.image`, so an external
+  database needs no Postgres image, and migrations always match the image
+  version. The migrations ConfigMap is gone.
+
 ## [0.30.0] - 2026-10-30
 
 New migration: `063_record_locks_defaults.sql`. Apply it before starting
