@@ -51,8 +51,12 @@ pub async fn upsert_membership(state: &SharedState, user_id: i32, org_id: &str, 
 /// (`get_user_org_ids`) — whoever already owns this org_id in that sense
 /// can bootstrap it into a real admin membership row, once.
 pub async fn require_org_admin(state: &SharedState, user_id: i32, org_id: &str) -> Result<(), ApiError> {
-    if get_role(state, user_id, org_id).await?.as_deref() == Some("admin") {
-        return Ok(());
+    match get_role(state, user_id, org_id).await?.as_deref() {
+        Some("admin") => return Ok(()),
+        // A member or auditor was given that role; never promote them, even
+        // in an org that has no admin yet.
+        Some(_) => return Err(ApiError::new(StatusCode::FORBIDDEN, "Org admin access required.")),
+        None => {}
     }
 
     let admin_exists: Option<i32> = sqlx::query_scalar("SELECT 1 FROM org_members WHERE org_id = $1 AND role = 'admin' LIMIT 1")
