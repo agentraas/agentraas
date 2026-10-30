@@ -15,6 +15,45 @@ safe to re-run.
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-10-30
+
+New migration: `063_record_locks_defaults.sql`. Apply it before starting
+this version.
+
+### Breaking
+
+- Record locks are on by default. An org that never touched the switch now
+  gets `409 resource_locked` when two calls change the same record at the
+  same moment. To keep the old behaviour, turn it off in Rules, Record
+  locks (or `PUT /api/v1/record-locks` with `"enabled": false`), or send
+  `lock_wait_ms` so the second call waits instead.
+- With the Enterprise build, only org admins can create, delete or promote
+  shadow rules (members with write access could before).
+
+### Added
+
+- `lock_wait_ms` (webhook body, `X-AgentRaaS-Lock-Wait-Ms` header, MCP
+  argument; up to 5000): wait for a busy record instead of getting the 409
+  at once. An approved held call waits up to 5 s before going to Failed
+  requests.
+- Custom actions can name the record they change when registered:
+  `"lock": {"record": "order", "from": ["order_id"]}`.
+- The dashboard's Waiting for approval list and the approval link page say
+  when another call changed the record after the call was held
+  (`record_changed` in `/api/v1/hitl/pending` and `/v1/hitl/link`).
+- Terraform for Azure (`infra/azure`: Container Apps, PostgreSQL Flexible
+  Server, Cache for Redis, Key Vault) and Google Cloud (`infra/gcp`: Cloud
+  Run, Cloud SQL, Memorystore, Cloud KMS, Secret Manager). Validated, not
+  yet applied to a real account.
+- Docs: Private platforms (VMware, Nutanix, Proxmox, Hyper-V, OpenShift,
+  air-gapped), none tested yet.
+
+### Fixed
+
+- Azure Key Vault (KMS and `azure-kv://` secret references) now gets its
+  managed identity token on Container Apps and App Service
+  (`IDENTITY_ENDPOINT`), not only from IMDS.
+
 ## [0.29.0] - 2026-10-29
 
 New migration: `062_record_locks.sql`. Apply it before starting this
