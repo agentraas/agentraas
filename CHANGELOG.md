@@ -15,6 +15,28 @@ safe to re-run.
 
 ## [Unreleased]
 
+## [0.30.2] - 2026-10-30
+
+### Security
+
+- A call naming its own `resource_id` no longer skips the automatic record
+  lock: it takes both locks (in a fixed order, so two calls can't deadlock).
+- Enterprise: `require_org_admin` no longer promotes a user who already has
+  a member or auditor role, even in an org that has no admin yet.
+- `crypto-bigint` (advisory) is gone: SendGrid webhook signatures are now
+  checked with `ring` instead of the `p256` crate. `rsa` remains in
+  `Cargo.lock` only as a dependency of `sqlx-mysql`, which is never built.
+
+### Added
+
+- Redis over TLS: `rediss://` URLs work (redis client 0.32, rustls). The
+  Azure template now uses the TLS port 6380 and turns the plain port off.
+
+### Changed
+
+- The dashboard's Waiting for approval list looks up each org's lock
+  setting and each route once and reads Redis once, instead of per call.
+
 ### Fixed
 
 - With `ALLOWED_PRIVATE_NETWORKS` set, `.local` hostnames (Kubernetes

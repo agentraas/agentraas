@@ -18,7 +18,7 @@ variable "name" {
 variable "image" {
   description = "API image. Needs 0.23.0 or later (it carries the service catalog, the migrations and agentraas-migrate). A ghcr.io image is pulled through an Artifact Registry remote repository."
   type        = string
-  default     = "ghcr.io/agentraas/agentraas:0.30.1"
+  default     = "ghcr.io/agentraas/agentraas:0.30.2"
 }
 
 variable "public_url" {
