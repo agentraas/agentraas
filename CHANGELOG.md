@@ -15,6 +15,19 @@ safe to re-run.
 
 ## [Unreleased]
 
+## [0.30.3] - 2026-10-30
+
+### Added
+
+- `REDIS_CA_CERT`: trust a private CA for `rediss://` (Google Memorystore's
+  server CA). The Google Cloud template now uses Redis over TLS with it.
+- Record locks: callers waiting with `lock_wait_ms` are served in arrival
+  order, and while anyone waits a new call can't jump ahead.
+- Helm chart 0.7.2: the API runs as non-root (user 10001, group 0), with a
+  seccomp profile and every capability dropped (`podSecurityContext`). On
+  OpenShift, set `podSecurityContext.runAsUser=null`. The image was tested as
+  an arbitrary non-root user with a read-only filesystem and no capabilities.
+
 ### Changed
 
 - AWS template: ElastiCache now encrypts traffic in transit and the server

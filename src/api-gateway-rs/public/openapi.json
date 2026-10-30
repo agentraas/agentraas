@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "AgentRaaS API",
-  "version": "0.30.2",
+  "version": "0.30.3",
   "description": "Generated from the server's routes by infra/scripts/build-openapi.py. Guides: https://agentraas.io/docs"
  },
  "servers": [
