@@ -64,10 +64,9 @@ Useful variables (all in `variables.tf`): `license_token` for Enterprise,
 - No Cloud NAT: only private ranges go through the VPC; calls to Stripe,
   Slack and the rest leave Cloud Run directly. Add Cloud NAT and
   `egress = "ALL_TRAFFIC"` if you need a fixed outbound address.
-- No TLS or AUTH on Redis: Memorystore signs its TLS certificate with a
-  Google-managed private CA, and the server trusts public CAs only (it
-  speaks TLS to Redis since 0.30.2, so AWS and Azure use it). Redis has
-  only a private address in the network.
+- No AUTH on Redis: it has only a private address in the network. Traffic
+  to it is TLS, checked against Memorystore's own CA (`REDIS_CA_CERT`,
+  image 0.30.3 or later).
 - Google-managed encryption keys for Cloud SQL, Memorystore and Secret
   Manager (customer-managed keys need each service's agent granted first).
 - One Redis node (`redis_tier = "STANDARD_HA"` adds a replica) and, by

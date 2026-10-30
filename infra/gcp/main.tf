@@ -171,9 +171,9 @@ resource "google_sql_user" "this" {
   password = random_password.db.result
 }
 
-# ponytail: no TLS or AUTH on Redis. Memorystore's TLS uses a Google-managed
-# private CA, and the server only trusts public CAs; loading a custom CA
-# (REDIS_CA_CERT) would let this turn on. Private address only.
+# TLS to Redis (port 6378) signed by Memorystore's own server CA, which the
+# server trusts through REDIS_CA_CERT (image 0.30.3 or later). No AUTH:
+# private address only.
 resource "google_redis_instance" "this" {
   name                    = var.name
   region                  = var.region
@@ -182,7 +182,7 @@ resource "google_redis_instance" "this" {
   redis_version           = "REDIS_7_2"
   authorized_network      = google_compute_network.this.id
   connect_mode            = "PRIVATE_SERVICE_ACCESS"
-  transit_encryption_mode = "DISABLED"
+  transit_encryption_mode = "SERVER_AUTHENTICATION"
   depends_on              = [google_service_networking_connection.services]
 }
 
@@ -245,7 +245,8 @@ locals {
     RUST_LOG        = "info"
     DEPLOYMENT_MODE = "self-hosted"
     PUBLIC_URL      = local.public_url
-    REDIS_URL       = "redis://${google_redis_instance.this.host}:${google_redis_instance.this.port}"
+    REDIS_URL       = "rediss://${google_redis_instance.this.host}:${google_redis_instance.this.port}"
+    REDIS_CA_CERT   = google_redis_instance.this.server_ca_certs[0].cert
     # Google's front end appends the caller's address.
     CLIENT_IP_HEADER         = "x-forwarded-for:last"
     CREDENTIALS_KEY_PROVIDER = "gcp"
