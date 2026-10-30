@@ -3,7 +3,8 @@
 Status: built in 0.29.0 (2026-10-29) as "record locks" (`record_locks.rs`,
 migration 062, `/docs#record-locks`). 0.30.0 added `lock_wait_ms`, the
 last-write note for approvers, `lock` on custom actions, and turned locks
-on by default (migration 063). Not built: a FIFO wait list.
+on by default (migration 063). 0.30.3 added the FIFO wait list (a Redis
+sorted set per record, `resource_lock_q:<org>:<id>`).
 
 ## Problem
 
@@ -118,7 +119,7 @@ way it reports `would_deduplicate`.
 | Record id missing from the payload | No lock is taken and the call runs, logged once per action so the `from` paths can be fixed. Failing closed here would break every call with an optional field. |
 | Upstream slower than the lease | Prevented by the lease formula above; if it still happens the second agent may run, which is today's behaviour without any lock. |
 | Server crash mid-call | Lock expires on its lease; the dedup slot already turns the call into outcome unknown. |
-| Hot record (many agents) | No fairness: whoever retries first wins. A FIFO wait list per key is possible later if this shows up. |
+| Hot record (many agents) | Callers that wait (`lock_wait_ms`) queue in arrival order; while anyone waits, only the head may take the lock. A waiter that crashes drops out after the longest wait. |
 | Two orgs, same id | Different keys (org is in the key). |
 
 ## Rollout

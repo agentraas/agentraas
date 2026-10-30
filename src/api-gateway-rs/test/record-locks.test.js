@@ -37,7 +37,7 @@ const setLocks = (enabled) => client.put('/api/v1/record-locks', { org_id: orgId
 test.before(async () => {
   orgId = `org_locks_${RUN_ID}`;
   cookie = await registerAndVerify(`locks-${RUN_ID}@internal.test`, orgId);
-  for (const a of ['billing', 'support', 'trial']) {
+  for (const a of ['billing', 'support', 'trial', 'trial2']) {
     keys[a] = (await client.post('/api/v1/agents/connect', { org_id: orgId, agent_id: a, label: a }, asUser())).data.api_key;
   }
 });
@@ -88,6 +88,23 @@ test('lock_wait_ms waits for the record instead of refusing', async () => {
   assert.equal((await slow).status, 200);
   assert.equal(waited.status, 200, JSON.stringify(waited.data));
   assert.equal(await hits(`w_${RUN_ID}`), 1);
+});
+
+test('callers waiting for one record go in arrival order', async () => {
+  const customer = `cus_fifo_${RUN_ID}`;
+  const done = [];
+  const track = (name, p) => p.then((r) => { done.push(name); return r; });
+  const a = track('a', pay('billing', { amount: 24, customer, delay_ms: 1200 }));
+  await new Promise((r) => setTimeout(r, 200));
+  const b = track('b', pay('support', { amount: 25, customer, delay_ms: 700 }, { lock_wait_ms: 5000 }));
+  await new Promise((r) => setTimeout(r, 200));
+  const keys = await redis.keys(`resource_lock_q:${orgId}:*`);
+  assert.equal(keys.length, 1, 'the waiting caller is queued');
+  const c = track('c', pay('trial2', { amount: 26, customer }, { lock_wait_ms: 5000 }));
+  const results = await Promise.all([a, b, c]);
+  assert.deepEqual(results.map((r) => r.status), [200, 200, 200]);
+  assert.deepEqual(done, ['a', 'b', 'c'], 'c waited behind b although it needs no time to run');
+  assert.equal((await redis.keys(`resource_lock_q:${orgId}:*`)).length, 0, 'the queue is gone');
 });
 
 test('different customers, or no customer named, run side by side', async () => {

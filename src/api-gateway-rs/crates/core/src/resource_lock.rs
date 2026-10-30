@@ -55,15 +55,33 @@ pub async fn acquire(
     ttl_seconds: i64,
 ) -> redis::RedisResult<LockResult> {
     let token = format!("{:032x}|{agent_id}", rand::random::<u128>());
-    let result: Option<String> = redis::cmd("SET")
-        .arg(key(org_id, resource_id))
-        .arg(&token)
-        .arg("EX")
-        .arg(ttl_seconds)
-        .arg("NX")
-        .query_async(conn)
-        .await?;
-    if result.as_deref() == Some("OK") {
+    try_acquire(conn, org_id, resource_id, token, ttl_seconds).await
+}
+
+/// One attempt with a given token. Callers waiting for the record
+/// (`acquire_waiting`) queue up; while anyone is queued, only the one at the
+/// head may take the lock, so a new caller can't jump ahead of them.
+/// Queue entries older than the longest wait belong to callers that gave
+/// up or crashed and are dropped.
+async fn try_acquire(conn: &mut MultiplexedConnection, org_id: &str, resource_id: &str, token: String, ttl_seconds: i64) -> redis::RedisResult<LockResult> {
+    let got: i64 = redis::Script::new(
+        "redis.call('ZREMRANGEBYSCORE', KEYS[2], '-inf', ARGV[3])
+         local head = redis.call('ZRANGE', KEYS[2], 0, 0)
+         if head[1] and head[1] ~= ARGV[1] then return 0 end
+         if redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2], 'NX') then
+           redis.call('ZREM', KEYS[2], ARGV[1])
+           return 1
+         end
+         return 0",
+    )
+    .key(key(org_id, resource_id))
+    .key(queue_key(org_id, resource_id))
+    .arg(&token)
+    .arg(ttl_seconds)
+    .arg(now_ms() - MAX_WAIT_MS as i64 - 1000)
+    .invoke_async(conn)
+    .await?;
+    if got == 1 {
         return Ok(LockResult { acquired: true, token, held_by: None });
     }
     let held_by = holder(conn, org_id, resource_id).await?;
@@ -106,13 +124,27 @@ pub async fn acquire_waiting(
     wait_ms: u64,
 ) -> redis::RedisResult<LockResult> {
     let deadline = std::time::Instant::now() + std::time::Duration::from_millis(wait_ms.min(MAX_WAIT_MS));
+    let token = format!("{:032x}|{agent_id}", rand::random::<u128>());
+    let mut queued = false;
     loop {
-        let got = acquire(conn, org_id, resource_id, agent_id, ttl_seconds).await?;
+        let got = try_acquire(conn, org_id, resource_id, token.clone(), ttl_seconds).await?;
         let left = deadline.saturating_duration_since(std::time::Instant::now());
         if got.acquired || left.is_zero() {
+            if queued && !got.acquired {
+                redis::cmd("ZREM").arg(queue_key(org_id, resource_id)).arg(&token).query_async::<i64>(conn).await?;
+            }
             return Ok(got);
         }
-        // ponytail: polling, no FIFO; whoever retries first after release wins.
+        if !queued {
+            // Join the queue in arrival order; it expires on its own.
+            redis::pipe()
+                .cmd("ZADD").arg(queue_key(org_id, resource_id)).arg("NX").arg(now_ms()).arg(&token).ignore()
+                .cmd("PEXPIRE").arg(queue_key(org_id, resource_id)).arg(MAX_WAIT_MS + 1000).ignore()
+                .query_async::<()>(conn)
+                .await?;
+            queued = true;
+        }
+        // ponytail: each waiter polls (up to every 100 ms) rather than being woken.
         let held_ms = got.held_by.as_ref().map_or(50, |(_, ms)| (*ms).max(1) as u64);
         tokio::time::sleep(std::time::Duration::from_millis(held_ms.min(100)).min(left)).await;
     }
@@ -161,6 +193,14 @@ pub fn validate(spec: &LockSpec) -> Result<(), String> {
 
 fn key(org_id: &str, resource_id: &str) -> String {
     format!("resource_lock:{org_id}:{resource_id}")
+}
+
+fn queue_key(org_id: &str, resource_id: &str) -> String {
+    format!("resource_lock_q:{org_id}:{resource_id}")
+}
+
+fn now_ms() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64)
 }
 
 fn written_key(org_id: &str, resource_id: &str) -> String {
