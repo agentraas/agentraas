@@ -789,6 +789,8 @@ agentraas apply -f agentraas.yaml --prune     # also delete rules the file doesn
         <tr><td><code>PROXY_TIMEOUT_SECONDS</code></td><td>How long one forwarded call may take (default 30). A call that hits it is held as <a href="#ts-outcome-unknown">outcome unknown</a>, not retried.</td></tr>
         <tr><td><code>OTEL_EXPORTER_OTLP_ENDPOINT</code></td><td>Optional. Sends every call AgentRaaS handles (ran, deduplicated, blocked, held for approval) as an OpenTelemetry span over OTLP/HTTP to your collector or tracing tool (Langfuse, Grafana, Datadog, Honeycomb, Jaeger), named <code>execute_tool service.action</code> per the GenAI conventions. Calls sharing an <code>X-AgentRaaS-Run-Id</code> share a trace. Auth goes in <code>OTEL_EXPORTER_OTLP_HEADERS</code> (<code>key=value,key2=value2</code>); <code>OTEL_EXPORTER_OTLP_TRACES_ENDPOINT</code> takes a full URL instead. Payloads are never exported.</td></tr>
         <tr><td><code>SMTP_*</code></td><td>Optional. Without it, password-reset links are logged server-side instead of emailed.</td></tr>
+        <tr><td><code>REDIS_URL</code></td><td>Set by <code>./install.sh</code>. Use a <code>rediss://</code> URL for Redis over TLS (0.30.2 and later; the certificate must come from a public CA).</td></tr>
+        <tr><td><code>ALLOWED_PRIVATE_NETWORKS</code></td><td>Optional, self-hosted only. CIDR ranges agents may reach, for services that only have an internal address. See <a href="#private-platforms">Private platforms</a>.</td></tr>
       </table>
       <div class="callout"><p>Without a license key the server runs free with Community and Team features (human approvals, semantic dedup, SSO), no action limit. Enterprise features (agent identity, inbound webhooks, white-label, secret references) need an Enterprise key in <code>LICENSE_TOKEN</code>: ask <a href="mailto:hello@agentraas.io">hello@agentraas.io</a>. A missing or expired key falls back to the free tier; the server always starts.</p></div>
     </section>
@@ -890,7 +892,7 @@ CREDENTIALS_ENCRYPTION_KEY=...               # the output above</code></pre>
   --set postgresql.storageClass=&lt;your storage class&gt; \
   --set redis.storageClass=&lt;your storage class&gt; \
   --set clientIpHeader=x-real-ip</code></pre>
-      <p>The bundled Postgres and Redis are single instances, meant to get started. For production, run Postgres the way your platform already does (a database service or an operator such as CloudNativePG) and pass it with <code>postgresql.enabled=false</code> and <code>externalDatabase.url</code>; the same for Redis with <code>redis.enabled=false</code> and <code>externalRedis.url</code>. Run Redis with persistence: it holds the dedup slots.</p>
+      <p>The bundled Postgres and Redis are single instances, meant to get started. For production, run Postgres the way your platform already does (a database service or an operator such as CloudNativePG) and pass it with <code>postgresql.enabled=false</code> and <code>externalDatabase.url</code>; the same for Redis with <code>redis.enabled=false</code> and <code>externalRedis.url</code>. Run Redis with persistence: it holds the dedup slots. For Redis over TLS, use a <code>rediss://</code> URL (0.30.2 and later; the certificate must come from a public CA, as on AWS ElastiCache and Azure Cache for Redis).</p>
 
       <h3>OpenShift (untested)</h3>
       <p>OpenShift's default <code>restricted-v2</code> security policy runs every container as a random user ID in group 0 and does not let images run as root. How that affects each part of the chart:</p>
@@ -920,7 +922,7 @@ skopeo copy docker://docker.io/redis:7-alpine docker://registry.example.internal
 podman save -o agentraas-$V.tar ghcr.io/agentraas/agentraas:$V
 # on the inside
 podman load -i agentraas-$V.tar</code></pre>
-      <p>With Helm, point the chart at your registry: <code>--set image.repository=registry.example.internal/agentraas/agentraas --set image.tag=$V</code>, plus <code>postgresql.image</code> and <code>redis.image</code>. With Docker Compose on a VM, bring a checkout of the same release (compose mounts its <code>config</code> and <code>public</code> folders), load the Postgres, Redis and MinIO images named in <code>compose.yaml</code>, replace the <code>build:</code> block of <code>ar-api-rs</code> in <code>compose.yaml</code> with <code>image: ghcr.io/agentraas/agentraas:$V</code>, then run <code>./install.sh</code>. On any other container platform, run <code>agentraas-migrate</code> from the same image before the API starts.</p>
+      <p>With Helm, point the chart at your registry: <code>--set image.repository=registry.example.internal/agentraas/agentraas --set image.tag=$V</code>, plus <code>postgresql.image</code> and <code>redis.image</code> if you use the bundled datastores (the migration step runs from the AgentRaaS image itself, chart 0.7.1 and later). With Docker Compose on a VM, bring a checkout of the same release (compose mounts its <code>config</code> and <code>public</code> folders), load the Postgres, Redis and MinIO images named in <code>compose.yaml</code>, replace the <code>build:</code> block of <code>ar-api-rs</code> in <code>compose.yaml</code> with <code>image: ghcr.io/agentraas/agentraas:$V</code>, then run <code>./install.sh</code>. On any other container platform, run <code>agentraas-migrate</code> from the same image before the API starts.</p>
       <ul>
         <li><strong>License key.</strong> <code>LICENSE_TOKEN</code> is checked offline: its signature against a public key built into the server, its expiry against the server's clock, re-read every 6 hours. No network call is made. Keep the clock right (an internal NTP source), since a key that looks expired falls back to the free tier.</li>
         <li><strong>What needs a way out.</strong> Calls to internet services (Stripe, Slack and the rest of the catalog) and approvals sent to Slack, Teams, Telegram or Discord need to reach those services. Approvals in the dashboard work offline, and email approvals work with an internal SMTP relay (<code>SMTP_HOST</code>). In a fully isolated network, where every service has a private address, list those ranges in <code>ALLOWED_PRIVATE_NETWORKS</code> (see the note above).</li>
@@ -999,7 +1001,7 @@ histogram_quantile(0.95, sum by (le) (rate(agentraas_call_duration_ms_bucket[5m]
         <tr><td>Seats</td><td colspan="2">3</td><td>Unlimited</td></tr>
       </table>
       <p>For production, self-host: your API keys and data stay on your servers. AgentRaaS Cloud is the quickest way to try it; use test or restricted keys there for now.</p>
-      <p>On Cloud, duplicates AgentRaaS caught, blocked calls, approval waits and undos are never counted. Need Enterprise, a contract, invoicing or SLA-backed support? <a href="mailto:hello@agentraas.io">Talk to us</a>.</p>
+      <p>On Cloud, duplicates AgentRaaS caught, blocked calls, approval waits, undos and shadow calls are never counted. Need Enterprise, a contract, invoicing or SLA-backed support? <a href="mailto:hello@agentraas.io">Talk to us</a>.</p>
     </section>
 
     <section id="troubleshooting">

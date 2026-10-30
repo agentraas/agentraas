@@ -1,6 +1,6 @@
 # AgentRaaS Privacy Policy
 
-**Last updated: October 7, 2026**
+**Last updated: October 30, 2026**
 
 This policy explains what AgentRaaS collects, stores, and does with your
 data — whether you're using a self-hosted deployment or one operated by us.
@@ -29,7 +29,10 @@ future requests. The raw key is shown to you exactly once.
 **Audit logs:** every request your agents make through AgentRaaS is logged —
 timestamp, service/action, status, duration, and a masked reference to
 which key was used. Full request/response payloads are not stored in the
-audit log by default.
+audit log by default. Calls from an agent in shadow mode are logged the
+same way and are never sent to the service. When a payment call is caught
+as a duplicate, its amount and currency are kept on that audit row, for
+savings reports.
 
 **Custom Action endpoints:** URLs you register are stored so agents can
 invoke them by name. We do not store the *content* sent to or received
@@ -43,6 +46,11 @@ action with a known reverse keeps the identifiers needed to undo it (for
 example a charge id) for 30 days; and calls you send with the
 `X-AgentRaaS-Record` header are kept with their full payload and response,
 encrypted, for 30 days or until you delete the recording.
+
+**Savings report email:** if you turn on the monthly report email, we store
+the recipient addresses you enter and email them last month's report. The
+report holds counts, agent and service names and money amounts, never
+request payloads, error texts or end-user ids.
 
 **Website analytics:** the website and dashboard use Cloudflare Web
 Analytics, which sets no cookies and counts page views without identifying

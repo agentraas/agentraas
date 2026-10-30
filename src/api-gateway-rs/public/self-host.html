@@ -137,7 +137,7 @@
 <pre><code>git clone https://github.com/agentraas/agentraas
 cd agentraas
 ./install.sh</code></pre>
-  <p class="note"><code>install.sh</code> generates fresh secrets, runs the database migrations and starts the stack (Postgres, Redis, the API and dashboard). The first run compiles from source and takes a few minutes. Kubernetes: see the <a href="/docs#helm">Helm chart</a>.</p>
+  <p class="note"><code>install.sh</code> generates fresh secrets, runs the database migrations and starts the stack (Postgres, Redis, the API and dashboard). The first run compiles from source and takes a few minutes. Kubernetes: see the <a href="/docs#helm">Helm chart</a>. AWS, Azure and Google Cloud: Terraform in the repository's <code>infra/aws</code>, <code>infra/azure</code> and <code>infra/gcp</code> (validated, not yet applied to a real account). VMware, Nutanix, OpenShift or air-gapped: see <a href="/docs#private-platforms">Private platforms</a>.</p>
   <table>
     <tr><th>Platform</th><th>You need</th><th>Run it from</th></tr>
     <tr><td><b>Linux</b></td><td>Docker with Compose, or Podman with podman-compose</td><td>Any terminal</td></tr>
@@ -166,6 +166,7 @@ cd agentraas
     <li>Set <code>PUBLIC_URL</code> to your real domain: approval links, email links and the Connect Agent URLs use it.</li>
     <li>Behind a reverse proxy, set <code>CLIENT_IP_HEADER</code> so rate limits apply per visitor.</li>
     <li>Set <code>SMTP_*</code> for password resets and email alerts.</li>
+    <li>If agents call services that only have an internal address, list those ranges in <code>ALLOWED_PRIVATE_NETWORKS</code>; private addresses are refused otherwise.</li>
     <li>Back up Postgres: it holds the audit trail and stored credentials (encrypted with <code>CREDENTIALS_ENCRYPTION_KEY</code>; keep that key safe, or keep it in your KMS: <a href="/docs#kms">Vault, AWS, Google Cloud or Azure</a>).</li>
   </ul>
   <p>All settings: <a href="/docs#self-hosting">Self-hosting in the docs</a>.</p>

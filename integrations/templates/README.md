@@ -5,7 +5,7 @@ tools it's built to sit alongside.
 
 | Tool | What's here | Install |
 |---|---|---|
-| **Python** | [`src/sdk`](../../src/sdk) — `Client`, tested end-to-end against a live instance | `pip install agentraas` (once published — see its README) |
+| **Python** | [`src/sdk`](../../src/sdk) — `Client`, tested end-to-end against a live instance | `pip install agentraas` |
 | **TypeScript/JS** | [`src/sdk-js`](../../src/sdk-js) — `Client`, dependency-free (global `fetch`), tested end-to-end | `npm install agentraas` |
 | **n8n** | [`n8n-nodes-agentraas`](https://github.com/sumedhchatse/n8n-nodes-agentraas) — a community node with a credential test, usable as an AI Agent tool | **Settings → Community Nodes** → install `n8n-nodes-agentraas` |
 | **Flowise** | [`flowise-custom-tool`](../flowise-custom-tool) — schema + function to paste into a Custom Tool | Copy-paste, no install (see its README) |
@@ -20,11 +20,9 @@ The **n8n node** compiles cleanly against the real, current `n8n-workflow`
 package (verified in this repo's dev environment — this caught a real
 breaking API change, `NodeConnectionType` → `NodeConnectionTypes`, between
 older and current n8n versions) and loads without error via plain
-`require()`. Full end-to-end registration in a live n8n instance (node
-appearing in the palette, executing a real workflow) was not confirmed in
-this repo's environment — n8n 2.x's custom-node loading didn't surface the
-package the way documented, and we ran out of time chasing why. If you hit
-an issue installing it, please open an issue with your n8n version.
+`require()`. It is published on npm as `n8n-nodes-agentraas`, and n8n
+approved it for its community nodes directory on 2026-10-11. If you hit an
+issue installing it, please open an issue with your n8n version.
 
 The **Flowise** and **Langflow** integrations are written to each tool's
 documented extension API but not load-tested against a running instance of

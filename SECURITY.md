@@ -51,6 +51,14 @@ servers, notification webhooks, inbound-webhook destinations) goes through
   including IPv4 addresses embedded in IPv6 (`::ffff:a.b.c.d` and the
   transition forms).
 
+Self-hosted servers can let agents reach their own internal services with
+`ALLOWED_PRIVATE_NETWORKS` (CIDR ranges, since 0.30.1). Only the listed
+ranges open up; `.local` names are accepted only when they resolve inside
+one. Loopback and link-local (including cloud metadata) stay blocked
+whatever is listed, and the setting is ignored on Cloud. List only the
+ranges your agents' services live in, not the one your database and Redis
+are on.
+
 The same guard covers SSO: the issuer URL an org admin enters, and the
 token and JWKS endpoints its discovery document names, are checked before
 the server calls them. Slack approval callbacks are only sent to
@@ -91,7 +99,9 @@ exempt, for the built-in demo service.
   mode, a size-limited payload preview. The OpenTelemetry export never
   includes the payload.
 - Key rotation is manual today: decrypt with the old key and re-encrypt
-  with the new one. There is no envelope encryption or KMS integration.
+  with the new one. The master key itself can be kept encrypted by a KMS
+  (Vault/OpenBao, AWS KMS, Google Cloud KMS, Azure Key Vault) and
+  unwrapped once at startup (`crates/api/src/kms.rs`).
 
 ### Duplicate suppression under concurrency (Redis)
 
@@ -114,6 +124,8 @@ exempt, for the built-in demo service.
   failover without persistence) reopens slots for calls inside their TTL.
   Run Redis with persistence (AOF) and never share it with untrusted
   clients: anyone who can write to it can mark calls as already done.
+  Since 0.30.2 a `rediss://` `REDIS_URL` connects over TLS (the
+  certificate must come from a public CA).
 
 ### Network exposure
 

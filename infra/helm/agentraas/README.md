@@ -25,12 +25,14 @@ What it does:
   stored third-party credentials can't be decrypted without it. To keep
   it in Vault, AWS KMS, Google Cloud KMS or Azure Key Vault instead, see
   `values.yaml` and https://agentraas.io/docs#kms.
-- Runs every file in `infra/migrations` before the API starts (an init
-  container, under a Postgres advisory lock, so replicas don't race). All
-  migrations are safe to re-run.
+- Runs every migration before the API starts: an init container runs
+  `agentraas-migrate` from the AgentRaaS image itself (chart 0.7.1 and
+  later), under a Postgres advisory lock so replicas don't race. The
+  migrations always match the image version, and an external database
+  needs no Postgres image. All migrations are safe to re-run.
 - Mounts `config/services.json` (the built-in service catalog) as a
-  ConfigMap. Both are symlinks into the repo, so the chart never drifts
-  from them.
+  ConfigMap. It is a symlink into the repo, so the chart never drifts
+  from it.
 - Runs the API with a read-only root filesystem and probes on `/health`.
 - `/metrics` (Prometheus) is on when `metricsToken` is set; scrape it with
   that token as a bearer token.
@@ -38,6 +40,12 @@ What it does:
 See `values.yaml` for every option. Set `clientIpHeader` to the header your
 ingress writes with the client IP (e.g. `x-real-ip` for ingress-nginx),
 otherwise every client shares one rate-limit bucket.
+
+For Redis over TLS, give `externalRedis.url` a `rediss://` URL (image 0.30.2
+and later; the certificate must come from a public CA). For agents that call
+services on your own network, list those ranges with `extraEnv`, e.g.
+`--set-string extraEnv.ALLOWED_PRIVATE_NETWORKS=10.20.0.0/16`; see
+https://agentraas.io/docs#private-platforms.
 
 Verified: `helm lint`, `kubeconform -strict` on both value sets, the
 migration step against an empty Postgres (twice concurrently, then again),

@@ -13,7 +13,7 @@
 - An agent could be prompt-injected into leaking a secret or sending data to a new address: action policies (`no_secrets`, `new_destination`, `domains`) block or hold those calls.
 - An agent did something wrong and it needs reversing: the undo log refunds a Stripe charge, deletes a Slack message or runs a custom reverse action, once, for 30 days after the action.
 - A new or changed agent needs trying on real traffic before it may act: shadow mode records every write it would make, with what AgentRaaS would have done (run, duplicate, blocked, needs approval), and sends none of them; reads still go through unless blocked too.
-- Two agents might change the same record at once (a Stripe customer, a HubSpot contact): record locks let one call per record run at a time and give the other a 409 naming who holds it.
+- Two agents might change the same record at once (a Stripe customer, a HubSpot contact): record locks (on by default) let one call per record run at a time and give the other a 409 naming who holds it, or make it wait up to 5 seconds with `lock_wait_ms`.
 - Someone who never opens the dashboard (a client, a manager) needs to see what AgentRaaS caught: savings reports count duplicates, blocked calls and approvals per agent and service, estimate the money in duplicate payments stopped per currency, export as HTML or CSV, and can be emailed monthly.
 - An agent needs testing against real provider answers without calling them again: record a run with the X-AgentRaaS-Record header, replay it with X-AgentRaaS-Replay (webhook, SDK option or MCP); each answer says whether the payload still matches.
 - A company's security review requires that keys stay in its own vault: self-hosted, the master key can be held by Vault, AWS KMS, Google Cloud KMS or Azure Key Vault, and Enterprise service keys can stay in the company's secrets manager, fetched per call and never stored by AgentRaaS (https://agentraas.io/docs#kms, https://agentraas.io/docs#secret-refs).
@@ -42,7 +42,7 @@ Measured overhead: 2.1 to 2.4 ms added per call at the median (one machine, Inte
   - Local webhook tunnel: `agentraas tunnel`
 - JavaScript/TypeScript: `npm install agentraas` (client, `exactlyOnce`, and `protectTools` for the Vercel AI SDK)
 - n8n: Settings → Community Nodes → install `n8n-nodes-agentraas`
-- Self-host the full platform (free, no action limit): clone the GitHub repository and run `./install.sh`
+- Self-host the full platform (free, no action limit): clone the GitHub repository and run `./install.sh`; or the Helm chart for Kubernetes, Terraform for AWS, Azure and Google Cloud (validated, not yet applied to a real account), and notes for VMware, Nutanix, OpenShift and air-gapped networks (https://agentraas.io/docs#private-platforms)
 - Hosted, to try it: a free AgentRaaS Cloud account at https://agentraas.io/dashboard (also https://cloud.agentraas.io; "Connect a service": pick Stripe, Slack, GitHub, Resend, Notion, Zendesk, Jira and others, paste the API key, copy the URL and key your agent uses; one AgentRaaS key per agent covers every connected service, and each key can be limited to some services)
 - Live read-only demo, no signup: https://agentraas.io/api/v1/demo/session
 
