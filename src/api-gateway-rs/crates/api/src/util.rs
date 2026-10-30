@@ -115,6 +115,76 @@ fn is_private_or_reserved_ip(ip: &std::net::IpAddr) -> bool {
     }
 }
 
+type Network = (std::net::IpAddr, u8);
+
+/// Private ranges a self-hosted operator lets agents reach, for services
+/// that only exist on an internal or air-gapped network:
+/// `ALLOWED_PRIVATE_NETWORKS=10.20.0.0/16,fd00:1::/64`. Loopback and
+/// link-local (cloud metadata) stay blocked whatever is listed. Ignored on
+/// Cloud, where every org shares the server's network.
+fn allowed_private_networks() -> &'static [Network] {
+    static NETS: std::sync::OnceLock<Vec<Network>> = std::sync::OnceLock::new();
+    NETS.get_or_init(|| {
+        let Some(raw) = configured_env("ALLOWED_PRIVATE_NETWORKS") else { return Vec::new() };
+        if std::env::var("DEPLOYMENT_MODE").map_or(true, |m| m == "cloud") {
+            tracing::warn!("ALLOWED_PRIVATE_NETWORKS is ignored on Cloud");
+            return Vec::new();
+        }
+        let nets = parse_networks(&raw);
+        if nets.len() != raw.split(',').filter(|s| !s.trim().is_empty()).count() {
+            tracing::warn!(raw, "ALLOWED_PRIVATE_NETWORKS: entries that aren't ip/prefix were skipped");
+        }
+        tracing::info!(?nets, "agents may reach these private networks");
+        nets
+    })
+}
+
+fn parse_networks(raw: &str) -> Vec<Network> {
+    raw.split(',')
+        .filter_map(|s| {
+            let (ip, len) = s.trim().split_once('/')?;
+            let ip: std::net::IpAddr = ip.parse().ok()?;
+            let len: u8 = len.parse().ok()?;
+            (len <= if ip.is_ipv4() { 32 } else { 128 }).then_some((ip, len))
+        })
+        .collect()
+}
+
+fn in_network(ip: &std::net::IpAddr, (net, len): &Network) -> bool {
+    use std::net::IpAddr::{V4, V6};
+    match (ip, net) {
+        (V4(a), V4(b)) => {
+            let mask = u32::MAX.checked_shl(32 - u32::from(*len)).unwrap_or(0);
+            u32::from(*a) & mask == u32::from(*b) & mask
+        }
+        (V6(a), V6(b)) => {
+            let mask = u128::MAX.checked_shl(128 - u32::from(*len)).unwrap_or(0);
+            u128::from(*a) & mask == u128::from(*b) & mask
+        }
+        _ => false,
+    }
+}
+
+/// Loopback, unspecified and link-local: never reachable, allowed list or not.
+fn always_blocked(ip: &std::net::IpAddr) -> bool {
+    use std::net::IpAddr::{V4, V6};
+    ip.is_loopback()
+        || ip.is_unspecified()
+        || match ip {
+            V4(v4) => v4.is_link_local(),
+            V6(v6) => (v6.segments()[0] & 0xffc0) == 0xfe80 || v6.to_ipv4_mapped().is_some_and(|v4| v4.is_loopback() || v4.is_link_local()),
+        }
+}
+
+fn is_blocked_with(ip: &std::net::IpAddr, allowed: &[Network]) -> bool {
+    is_private_or_reserved_ip(ip) && (always_blocked(ip) || !allowed.iter().any(|n| in_network(ip, n)))
+}
+
+/// Whether agents may not reach `ip` (private/reserved and not allowed).
+fn is_blocked_target(ip: &std::net::IpAddr) -> bool {
+    is_blocked_with(ip, allowed_private_networks())
+}
+
 /// SSRF guard for custom-action target URLs / notification webhook URLs.
 /// Returns `Some(error message)`
 /// on rejection, `None` if the URL is safe to register.
@@ -139,7 +209,7 @@ pub async fn validate_target_url(target_url: &str) -> Option<String> {
     match lookup_result {
         Ok(addrs) => {
             for addr in addrs {
-                if is_private_or_reserved_ip(&addr.ip()) {
+                if is_blocked_target(&addr.ip()) {
                     return Some("Target resolves to a private/internal IP address, which is not allowed.".to_string());
                 }
             }
@@ -174,7 +244,7 @@ fn filter_public(host: &str, addrs: Vec<std::net::SocketAddr>) -> Vec<std::net::
     if host.eq_ignore_ascii_case("localhost") {
         return addrs;
     }
-    addrs.into_iter().filter(|a| !is_private_or_reserved_ip(&a.ip())).collect()
+    addrs.into_iter().filter(|a| !is_blocked_target(&a.ip())).collect()
 }
 
 #[cfg(test)]
@@ -187,6 +257,24 @@ mod public_only_resolver_tests {
         assert_eq!(filter_public("evil.example", addrs.clone()), vec!["93.184.216.34:0".parse().unwrap()]);
         assert!(filter_public("evil.example", vec!["127.0.0.1:0".parse().unwrap()]).is_empty());
         assert_eq!(filter_public("localhost", vec!["127.0.0.1:0".parse().unwrap()]).len(), 1);
+    }
+
+    #[test]
+    fn allowed_private_networks_open_only_what_is_listed() {
+        use super::{is_blocked_with, parse_networks};
+        let nets = parse_networks("10.20.0.0/16, fd00:1::/64, junk, 192.168.1.0/99");
+        assert_eq!(nets.len(), 2, "bad entries are skipped");
+        let blocked = |ip: &str| is_blocked_with(&ip.parse().unwrap(), &nets);
+        assert!(!blocked("10.20.3.4"));
+        assert!(blocked("10.21.0.1"), "outside the listed range");
+        assert!(!blocked("fd00:1::5"));
+        assert!(blocked("fd00:2::5"));
+        assert!(!blocked("93.184.216.34"), "public addresses are unaffected");
+        let everything = parse_networks("0.0.0.0/0,::/0");
+        for ip in ["127.0.0.1", "169.254.169.254", "::1", "fe80::1", "::ffff:169.254.169.254", "0.0.0.0"] {
+            assert!(is_blocked_with(&ip.parse().unwrap(), &everything), "{ip} stays blocked even when everything is allowed");
+        }
+        assert!(!is_blocked_with(&"192.168.1.9".parse().unwrap(), &everything));
     }
 }
 
