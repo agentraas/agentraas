@@ -165,9 +165,8 @@ resource "azurerm_postgresql_flexible_server_database" "this" {
 }
 
 
-# --- Redis, private endpoint only.
-# ponytail: plain-text port with an access key, no TLS (the server's Redis
-# client has none); it is reachable only from inside the virtual network.
+# --- Redis, private endpoint only, TLS port with an access key (the server
+# speaks rediss:// since 0.30.2).
 
 resource "azurerm_redis_cache" "this" {
   name                          = local.unique
@@ -176,7 +175,7 @@ resource "azurerm_redis_cache" "this" {
   sku_name                      = var.redis_sku_name
   family                        = var.redis_family
   capacity                      = var.redis_capacity
-  non_ssl_port_enabled          = true
+  non_ssl_port_enabled          = false
   minimum_tls_version           = "1.2"
   public_network_access_enabled = false
   redis_version                 = "6"
@@ -242,7 +241,7 @@ locals {
       "database-url"    = "postgres://agentraas:${random_password.db.result}@${azurerm_postgresql_flexible_server.this.fqdn}:5432/agentraas?sslmode=require"
       "jwt-secret"      = random_password.jwt.result
       "credentials-key" = local.kms ? var.credentials_key_ciphertext : random_bytes.credentials_key.base64
-      "redis-url"       = "redis://:${azurerm_redis_cache.this.primary_access_key}@${azurerm_redis_cache.this.hostname}:6379"
+      "redis-url"       = "rediss://:${azurerm_redis_cache.this.primary_access_key}@${azurerm_redis_cache.this.hostname}:6380"
     },
     var.license_token != "" ? { "license-token" = var.license_token } : {}
   )

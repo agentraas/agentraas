@@ -65,6 +65,8 @@ assignments can take a few minutes to apply. Run `terraform apply` again.
   Do this before you store any service key: switching keys later makes the
   ones already stored unreadable. To move an existing install, encrypt its
   current `CREDENTIALS_ENCRYPTION_KEY` instead of a new one.
+- **Image 0.30.2 or later**: the template connects to Redis over TLS
+  (`rediss://`, port 6380), which earlier servers can't speak.
 - **Image 0.30.0 or later** for the Key Vault mode: earlier servers only
   asked IMDS for the identity token, not Container Apps' own endpoint.
 - **Never purge the Key Vault** (`key_vault_name` output) or its
@@ -76,9 +78,6 @@ assignments can take a few minutes to apply. Run `terraform apply` again.
 
 ## What it leaves out on purpose
 
-- No TLS on Redis: the server's Redis client has none. Redis uses its
-  plain-text port with an access key and has only a private endpoint in the
-  virtual network.
 - One Redis node (Basic) and, by default, one database server
   (`db_high_availability` adds a zone-redundant standby).
 - Azure has announced the retirement of Azure Cache for Redis in favor of

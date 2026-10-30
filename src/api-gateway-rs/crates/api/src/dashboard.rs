@@ -369,16 +369,13 @@ async fn usage_stream(
 
     let redis_client = state.redis.clone();
     tokio::spawn(async move {
-        #[allow(deprecated)]
-        let conn_result = redis_client.get_async_connection().await;
-        let Ok(conn) = conn_result else { return };
-        let mut pubsub = conn.into_pubsub();
+        let Ok(mut pubsub) = redis_client.get_async_pubsub().await else { return };
         if pubsub.subscribe("usage:updates").await.is_err() {
             return;
         }
         let mut stream = pubsub.on_message();
         while let Some(msg) = stream.next().await {
-            let Ok(payload) = msg.get_payload::<String>() else { continue };
+            let Ok(payload): Result<String, _> = msg.get_payload() else { continue };
             let Ok(val) = serde_json::from_str::<Value>(&payload) else { continue };
             let Some(org_id) = val.get("org_id").and_then(Value::as_str) else { continue };
             if !org_ids.contains(org_id) {

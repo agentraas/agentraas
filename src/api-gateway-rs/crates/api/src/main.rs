@@ -336,7 +336,7 @@ async fn health(State(state): State<SharedState>) -> impl IntoResponse {
     let db_ok = sqlx::query("SELECT 1").execute(&state.pg).await.is_ok();
     let redis_ok = match state.redis_conn_result() {
         Ok(mut conn) => redis::cmd("PING")
-            .query_async::<_, String>(&mut conn)
+            .query_async::<String>(&mut conn)
             .await
             .is_ok(),
         Err(_) => false,
