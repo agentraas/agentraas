@@ -169,20 +169,28 @@ pub fn verify_sendgrid(raw_body: &str, signature_header: Option<&str>, timestamp
     let mut signed_payload = ts.as_bytes().to_vec();
     signed_payload.extend_from_slice(raw_body.as_bytes());
 
-    use p256::ecdsa::signature::Verifier;
-    use p256::ecdsa::{Signature, VerifyingKey};
-    use p256::pkcs8::DecodePublicKey;
-
-    let Ok(verifying_key) = VerifyingKey::from_public_key_pem(public_key_pem) else {
+    let Some(point) = p256_point_from_pem(public_key_pem) else {
         return VerifyResult::fail("Malformed signature or public key.");
     };
-    let Ok(signature) = Signature::from_der(&sig_bytes) else {
-        return VerifyResult::fail("Malformed signature or public key.");
-    };
-    match verifying_key.verify(&signed_payload, &signature) {
+    let key = ring::signature::UnparsedPublicKey::new(&ring::signature::ECDSA_P256_SHA256_ASN1, point);
+    match key.verify(&signed_payload, &sig_bytes) {
         Ok(()) => VerifyResult::ok(),
         Err(_) => VerifyResult::fail("Signature mismatch."),
     }
+}
+
+/// The uncompressed point of a P-256 public key given as SPKI PEM (with or
+/// without the BEGIN/END lines). Every such key is the same 26-byte DER
+/// header (id-ecPublicKey, prime256v1) followed by the 65-byte point.
+fn p256_point_from_pem(pem: &str) -> Option<Vec<u8>> {
+    const SPKI_P256_PREFIX: [u8; 26] = [
+        0x30, 0x59, 0x30, 0x13, 0x06, 0x07, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01, 0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07, 0x03, 0x42, 0x00,
+    ];
+    use base64::Engine;
+    let body: String = pem.lines().filter(|l| !l.starts_with("-----")).flat_map(|l| l.trim().chars()).collect();
+    let der = base64::engine::general_purpose::STANDARD.decode(body).ok()?;
+    let point = der.strip_prefix(&SPKI_P256_PREFIX[..])?;
+    (point.len() == 65 && point[0] == 0x04).then(|| point.to_vec())
 }
 
 /// HubSpot Webhook v3: `X-HubSpot-Signature-v3` (base64) +
@@ -219,4 +227,25 @@ pub const HEADER_NAMES: &[(&str, &str)] = &[
 
 pub fn header_name_for(provider: &str) -> Option<&'static str> {
     HEADER_NAMES.iter().find(|(p, _)| *p == provider).map(|(_, h)| *h)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::verify_sendgrid;
+
+    // Key and signature made with openssl (prime256v1, SHA-256, DER signature).
+    const PUB: &str = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEAgq0a+1Q291KsGGpaMjsa0CPDqZIHxbcnp7iNEEx1T5lXmNS8XVEO5+m+2gwdeErfL4Xf336HkXLdPuO9morNA==";
+    const SIG: &str = "MEUCIQC0P3ZOhW5Y9CpMy3gtgFBD+Nb+YCadZtsQR//TL2uU7wIgFXkk5mCpcV0A2b8SKGzEegATUjRj9INh257mLDuFIi4=";
+    const BODY: &str = r#"{"event":"delivered"}"#;
+
+    #[test]
+    fn sendgrid_signatures_verify_and_tampering_fails() {
+        let pem = format!("-----BEGIN PUBLIC KEY-----\n{}\n{}\n-----END PUBLIC KEY-----\n", &PUB[..64], &PUB[64..]);
+        assert!(verify_sendgrid(BODY, Some(SIG), Some("1700000000"), &pem).valid, "PEM with headers");
+        assert!(verify_sendgrid(BODY, Some(SIG), Some("1700000000"), PUB).valid, "bare base64 key");
+        assert!(!verify_sendgrid(r#"{"event":"bounce"}"#, Some(SIG), Some("1700000000"), PUB).valid, "changed body");
+        assert!(!verify_sendgrid(BODY, Some(SIG), Some("1700000001"), PUB).valid, "changed timestamp");
+        assert!(!verify_sendgrid(BODY, Some(SIG), Some("1700000000"), "bm90IGEga2V5").valid, "not a P-256 key");
+        assert!(!verify_sendgrid(BODY, None, Some("1700000000"), PUB).valid);
+    }
 }
