@@ -88,7 +88,7 @@ async fn decide(
     dedup_hash: &str,
     idempotency_key: Option<&str>,
     circuit_key: &str,
-    lock: Option<&crate::record_locks::Lock>,
+    locks: &[crate::record_locks::Lock],
 ) -> (String, String) {
     let unknown = |gate: &str| ("would_error".to_string(), format!("The {gate} check could not be read; the live call would have failed."));
 
@@ -113,7 +113,7 @@ async fn decide(
     }
 
     // A record lock is read, never taken: taking it would block live agents.
-    if let Some(lock) = lock {
+    for lock in locks {
         match agentraas_core::resource_lock::holder(&mut conn, org_id, &lock.id).await {
             Ok(Some((agent, _))) => return ("would_wait_for_lock".into(), format!("Another call ({agent}) holds the lock on this {}; the live call would get 409.", lock.label)),
             Ok(None) => {}
@@ -192,7 +192,7 @@ pub(crate) async fn answer(
     run_id: Option<&str>,
     step_id: Option<&str>,
     circuit_key: &str,
-    lock: Option<&crate::record_locks::Lock>,
+    locks: &[crate::record_locks::Lock],
     rule: Rule,
 ) -> Response {
     let start = std::time::Instant::now();
@@ -209,7 +209,7 @@ pub(crate) async fn answer(
         DedupHashMode::Fields { fields, normalize } => dedup::hash_field_values(api_key, service, action, payload, fields, normalize, end_user_id),
         DedupHashMode::Payload => dedup::hash_payload(api_key, service, action, payload, end_user_id),
     };
-    let (decision, detail) = decide(state, webhook, mcp, org_id, agent_id, service, action, payload, &dedup_hash, idempotency_key, circuit_key, lock).await;
+    let (decision, detail) = decide(state, webhook, mcp, org_id, agent_id, service, action, payload, &dedup_hash, idempotency_key, circuit_key, locks).await;
     log_audit(&state.pg, req_id, api_key, org_id, agent_id, service, action, "shadow", Some(&decision), start.elapsed().as_millis() as i64, Some(&dedup_hash), state.enterprise_mode, Some(payload), run_id, step_id, end_user_id).await;
     (
         StatusCode::OK,

@@ -69,6 +69,17 @@ test('two agents, same customer, at once: one runs, the other gets 409', async (
   assert.equal(retry.status, 200, JSON.stringify(retry.data));
 });
 
+test('naming a resource_id does not skip the record lock', async () => {
+  const customer = `cus_both_${RUN_ID}`;
+  const slow = pay('billing', { amount: 22, customer, delay_ms: 1200 }, { resource_id: `order_${RUN_ID}` });
+  await new Promise((r) => setTimeout(r, 300));
+  const second = await pay('support', { amount: 23, customer, hit_tag: `both_${RUN_ID}` });
+  assert.equal(second.status, 409, JSON.stringify(second.data));
+  assert.match(second.data.record, /mockpay customer/);
+  assert.equal((await slow).status, 200);
+  assert.equal(await hits(`both_${RUN_ID}`), 0);
+});
+
 test('lock_wait_ms waits for the record instead of refusing', async () => {
   const customer = `cus_wait_${RUN_ID}`;
   const slow = pay('billing', { amount: 25, customer, delay_ms: 800 });

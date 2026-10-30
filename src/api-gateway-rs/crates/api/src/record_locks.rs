@@ -4,7 +4,7 @@
 //! customer, a HubSpot contact, a Razorpay payment); with the org's switch
 //! on, `agent::handle_request` locks `<service>:<record>:<hash of its id>`
 //! for the call through `agentraas_core::resource_lock`, the same lock an
-//! explicit `resource_id` takes. Explicit `resource_id` still wins. A call
+//! explicit `resource_id` takes; a call naming both takes both. A call
 //! whose payload doesn't name the record runs without a lock.
 //!
 //! Custom actions name their record with `lock` when registered.
@@ -38,14 +38,23 @@ pub struct Lock {
     pub label: String,
 }
 
-/// The lock for this call: the explicit `resource_id`, or the record the
-/// route names (`spec`, from `ResolvedRoute::lock`) unless the org turned
-/// automatic locks off. A settings read that fails means no automatic lock
-/// (the call still runs, as before).
-pub async fn lock_for(state: &SharedState, org_id: &str, service: &str, spec: Option<&LockSpec>, payload: &Value, explicit: Option<&str>) -> Option<Lock> {
-    if let Some(id) = explicit {
-        return Some(Lock { id: id.to_string(), label: format!("resource_id {id}") });
+/// The locks for this call, in the order to take them: the record the route
+/// names (unless the org turned automatic locks off) and an explicit
+/// `resource_id`. Both, when both apply: a `resource_id` must not let a
+/// call skip its record lock.
+pub async fn locks_for(state: &SharedState, org_id: &str, service: &str, spec: Option<&LockSpec>, payload: &Value, explicit: Option<&str>) -> Vec<Lock> {
+    let mut locks: Vec<Lock> = lock_for(state, org_id, service, spec, payload).await.into_iter().collect();
+    if let Some(id) = explicit.filter(|id| !locks.iter().any(|l| l.id == *id)) {
+        locks.push(Lock { id: id.to_string(), label: format!("resource_id {id}") });
     }
+    locks.sort_by(|a, b| a.id.cmp(&b.id));
+    locks
+}
+
+/// The automatic record lock: the record the route names (`spec`, from
+/// `ResolvedRoute::lock`) unless the org turned automatic locks off. A
+/// settings read that fails means no automatic lock (the call still runs).
+pub async fn lock_for(state: &SharedState, org_id: &str, service: &str, spec: Option<&LockSpec>, payload: &Value) -> Option<Lock> {
     let spec = spec?;
     let id = agentraas_core::resource_lock::derived_id(service, spec, payload)?;
     match sqlx::query_scalar::<_, bool>("SELECT enabled FROM record_lock_settings WHERE org_id = $1").bind(org_id).fetch_optional(&state.pg).await {
@@ -58,14 +67,47 @@ pub async fn lock_for(state: &SharedState, org_id: &str, service: &str, spec: Op
     }
 }
 
-/// Whether another call changed the record a held call acts on after it was
-/// held (for the approver). False when unknown.
+/// A held call, for `changed_since`.
+pub struct Held<'a> {
+    pub org_id: &'a str,
+    pub service: &'a str,
+    pub action: &'a str,
+    pub payload: &'a Value,
+    pub req_id: &'a str,
+    pub held_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// For each held call: whether another call changed its record after it
+/// was held (for the approver). False when unknown. Each org's setting and
+/// each route are looked up once, and Redis is asked once.
 #[cfg_attr(not(feature = "enterprise"), allow(dead_code))]
-pub async fn changed_since(state: &SharedState, org_id: &str, service: &str, action: &str, payload: &Value, req_id: &str, held_at: chrono::DateTime<chrono::Utc>) -> bool {
-    let Ok(Some(route)) = crate::agent::db::resolve_route(state, service, action, org_id).await else { return false };
-    let Some(lock) = lock_for(state, org_id, service, route.lock.as_ref(), payload, None).await else { return false };
-    let Ok(mut conn) = state.redis_conn_result() else { return false };
-    agentraas_core::resource_lock::written_since(&mut conn, org_id, &lock.id, held_at.timestamp_millis(), req_id).await.unwrap_or(false)
+pub async fn changed_since(state: &SharedState, held: &[Held<'_>]) -> Vec<bool> {
+    let mut specs: std::collections::HashMap<(&str, &str, &str), Option<LockSpec>> = std::collections::HashMap::new();
+    let mut enabled: std::collections::HashMap<&str, bool> = std::collections::HashMap::new();
+    let mut checks = Vec::new();
+    let mut slot = Vec::with_capacity(held.len());
+    for h in held {
+        let key = (h.org_id, h.service, h.action);
+        if !specs.contains_key(&key) {
+            let spec = crate::agent::db::resolve_route(state, h.service, h.action, h.org_id).await.ok().flatten().and_then(|r| r.lock);
+            specs.insert(key, spec);
+        }
+        let id = specs[&key].as_ref().and_then(|spec| agentraas_core::resource_lock::derived_id(h.service, spec, h.payload));
+        if id.is_some() && !enabled.contains_key(h.org_id) {
+            let on = sqlx::query_scalar::<_, bool>("SELECT enabled FROM record_lock_settings WHERE org_id = $1").bind(h.org_id).fetch_optional(&state.pg).await;
+            enabled.insert(h.org_id, matches!(on, Ok(Some(true) | None)));
+        }
+        slot.push(id.filter(|_| enabled.get(h.org_id) == Some(&true)).map(|id| {
+            checks.push((h.org_id, id, h.held_at.timestamp_millis(), h.req_id));
+            checks.len() - 1
+        }));
+    }
+    let refs: Vec<(&str, &str, i64, &str)> = checks.iter().map(|(o, id, ms, r)| (*o, id.as_str(), *ms, *r)).collect();
+    let answers = match state.redis_conn_result() {
+        Ok(mut conn) => agentraas_core::resource_lock::written_since(&mut conn, &refs).await.unwrap_or_default(),
+        Err(_) => Vec::new(),
+    };
+    slot.into_iter().map(|i| i.and_then(|i| answers.get(i).copied()).unwrap_or(false)).collect()
 }
 
 /// `lock_wait_ms` from a request (body field, header or MCP argument): how

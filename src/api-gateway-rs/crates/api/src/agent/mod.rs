@@ -403,8 +403,8 @@ pub async fn replay_webhook(
     .await
 }
 
-/// (org_id, resource_id, token) of a resource lock this request holds.
-type HeldLock = (String, String, String);
+/// (org_id, [(resource_id, token)]) of the resource locks this request holds.
+type HeldLock = (String, Vec<(String, String)>);
 
 pub(crate) async fn handle_request(state: &SharedState, source: Source, identity: RequestIdentity) -> Response {
     let mut held_lock: Option<HeldLock> = None;
@@ -415,10 +415,12 @@ pub(crate) async fn handle_request(state: &SharedState, source: Source, identity
     resp
 }
 
-async fn release_resource_lock(state: &SharedState, (org_id, resource_id, token): HeldLock) {
+async fn release_resource_lock(state: &SharedState, (org_id, locks): HeldLock) {
     if let Ok(mut conn) = state.redis_conn_result() {
-        if let Err(err) = agentraas_core::resource_lock::release(&mut conn, &org_id, &resource_id, &token).await {
-            tracing::warn!(?err, "resource_lock release failed, it expires on its TTL");
+        for (resource_id, token) in locks {
+            if let Err(err) = agentraas_core::resource_lock::release(&mut conn, &org_id, &resource_id, &token).await {
+                tracing::warn!(?err, "resource_lock release failed, it expires on its TTL");
+            }
         }
     }
 }
@@ -583,7 +585,7 @@ async fn handle_request_inner(
         Target::Http(r) => r.lock.as_ref(),
         Target::Mcp(_) => None,
     };
-    let lock = crate::record_locks::lock_for(state, &org_id, &service, route_lock, &payload, resource_id.as_deref()).await;
+    let locks = crate::record_locks::locks_for(state, &org_id, &service, route_lock, &payload, resource_id.as_deref()).await;
 
     // Shadow mode: before anything that claims, counts or forwards. A rule
     // we can't read is not a pass (fail closed).
@@ -595,7 +597,7 @@ async fn handle_request_inner(
                 Target::Http(r) if r.credential_key.is_empty() => service.clone(),
                 Target::Http(r) => r.credential_key.clone(),
             };
-            return crate::shadow::answer(state, webhook, mcp, &req_id, &api_key, &org_id, &agent_id, &service, &action, &payload, idempotency_key.as_deref(), end_user_id.as_deref(), run_id.as_deref(), step_id.as_deref(), &circuit_key, lock.as_ref(), rule).await;
+            return crate::shadow::answer(state, webhook, mcp, &req_id, &api_key, &org_id, &agent_id, &service, &action, &payload, idempotency_key.as_deref(), end_user_id.as_deref(), run_id.as_deref(), step_id.as_deref(), &circuit_key, &locks, rule).await;
         }
         Ok(_) => {}
         Err(err) => {
@@ -782,14 +784,17 @@ async fn handle_request_inner(
     // claim just above: dedup catches a retry of THIS exact request,
     // this catches a second, different request (this agent or
     // another) racing to act on the same declared resource_id right now.
-    if let Some(lock) = &lock {
+    // Up to two locks (the record and an explicit resource_id), always
+    // taken in id order; one that is busy releases those already taken
+    // (`handle_request` releases `held_lock` on return).
+    for lock in &locks {
         match agentraas_core::resource_lock::acquire_waiting(&mut conn, &org_id, &lock.id, &agent_id, forward::resource_lock_ttl_seconds(state), lock_wait_ms).await {
             Ok(got) if !got.acquired => {
                 let _ = dedup::release_dedup_slot(&mut conn, &claim.key).await;
                 log_audit(&state.pg, &req_id, &api_key, &org_id, &agent_id, &service, &action, "blocked", Some("resource_locked"), start.elapsed().as_millis() as i64, Some(&dedup_hash), false, None, run_id.as_deref(), step_id.as_deref(), end_user_id.as_deref()).await;
                 return Response::Json(StatusCode::CONFLICT, Json(crate::record_locks::locked_body(&req_id, lock, got.held_by)));
             }
-            Ok(got) => *held_lock = Some((org_id.clone(), lock.id.clone(), got.token)),
+            Ok(got) => held_lock.get_or_insert_with(|| (org_id.clone(), Vec::new())).1.push((lock.id.clone(), got.token)),
             Err(err) => tracing::error!(?err, "resource_lock acquire failed, continuing without it"),
         }
     }
@@ -1097,7 +1102,7 @@ async fn handle_request_inner(
                 map.insert("__payloadDigest".to_string(), Value::String(payload_digest.clone()));
             }
             let _ = dedup::complete_dedup_slot_with_ttl(&mut conn, &claim.key, &stored, dedup_ttl_seconds).await;
-            if let Some((_, lock_id, _)) = held_lock.as_ref() {
+            for (lock_id, _) in held_lock.as_ref().map_or(&[][..], |(_, l)| l) {
                 let _ = agentraas_core::resource_lock::mark_written(&mut conn, &org_id, lock_id, &req_id).await;
             }
             if let (Some(run_id), Some(step_id)) = (&run_id, &step_id) {

@@ -52,11 +52,13 @@ in `config/services.json`:
 - the value is normalized (trimmed; emails lowercased) and hashed, so no
   customer id or email sits in Redis in clear text;
 - custom actions get the same `lock` field when registered;
-- an explicit `resource_id` from the agent still wins over the derived key.
+- an explicit `resource_id` from the agent is taken as well as the derived
+  key (since 0.30.2; it used to replace it, which let a call skip the record
+  lock). Both are taken in id order, so two calls can't deadlock.
 
 The same Redis `SET NX EX` + token mechanism as today, so no new moving
-part. One lock per call, never several, so there is no lock ordering to
-get wrong and no deadlock.
+part. At most two locks per call, taken in id order with a bounded wait,
+so there is no deadlock.
 
 ### Lease
 
