@@ -1,9 +1,9 @@
 # Cross-agent locks (design)
 
 Status: built in 0.29.0 (2026-10-29) as "record locks" (`record_locks.rs`,
-migration 062, `/docs#record-locks`). Not built from this doc: the
-optional `wait_ms`, the last-write note on the approval page, `lock` on
-custom actions, and a FIFO wait list.
+migration 062, `/docs#record-locks`). 0.30.0 added `lock_wait_ms`, the
+last-write note for approvers, `lock` on custom actions, and turned locks
+on by default (migration 063). Not built: a FIFO wait list.
 
 ## Problem
 

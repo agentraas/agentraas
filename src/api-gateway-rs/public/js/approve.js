@@ -25,6 +25,7 @@
     const pending = r.status === 'pending';
     $('buttons').hidden = !pending;
     $('title').textContent = pending ? 'Approve this agent action?' : 'This request is ' + r.status;
+    if (pending && r.record_changed) msg('Another call changed this record after this request was made. Check it still makes sense before approving.', 'bad');
   }
 
   async function decide(decision) {

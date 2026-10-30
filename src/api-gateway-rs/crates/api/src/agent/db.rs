@@ -728,6 +728,9 @@ pub struct ResolvedRoute {
     /// actions have no config schema for this yet, so this is always
     /// `false` for them.
     pub streaming: bool,
+    /// The record this action changes (`record_locks`): the catalog's
+    /// `"lock"` entry, or a custom action's `lock`.
+    pub lock: Option<agentraas_core::resource_lock::LockSpec>,
 }
 
 /// Looks up a registered custom action, shaped like a `SERVICE_ROUTES`
@@ -748,9 +751,10 @@ pub async fn resolve_custom_route(
         content_type: String,
         extra_headers: Value,
         fanout_urls: Value,
+        lock: Option<Value>,
     }
     let row = sqlx::query_as::<_, Row>(
-        "SELECT method, target_url, auth_type, auth_header_name, content_type, extra_headers, fanout_urls
+        "SELECT method, target_url, auth_type, auth_header_name, content_type, extra_headers, fanout_urls, lock
          FROM custom_actions WHERE org_id=$1 AND name=$2 AND revoked_at IS NULL LIMIT 1",
     )
     .bind(org_id)
@@ -796,6 +800,7 @@ pub async fn resolve_custom_route(
             .unwrap_or_default(),
         credential_key: format!("custom:{action_name}"),
         streaming: false,
+        lock: row.lock.and_then(|v| serde_json::from_value(v).ok()),
     }))
 }
 
@@ -878,6 +883,7 @@ pub async fn resolve_route(
         fanout_urls: Vec::new(),
         credential_key: service.to_string(),
         streaming: r.streaming,
+        lock: r.lock.clone(),
     }))
 }
 

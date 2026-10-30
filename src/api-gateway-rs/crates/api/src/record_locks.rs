@@ -7,8 +7,12 @@
 //! explicit `resource_id` takes. Explicit `resource_id` still wins. A call
 //! whose payload doesn't name the record runs without a lock.
 //!
-//! Off by default (`record_lock_settings`): two legitimate calls on one
-//! customer at the same moment would get a 409 and have to retry.
+//! Custom actions name their record with `lock` when registered.
+//!
+//! On by default since 0.30.0 (an org without a `record_lock_settings` row
+//! is on); an org turns it off when two legitimate calls on one customer at
+//! the same moment must both run. A caller can wait for a busy record
+//! (`lock_wait_ms`, up to 5 s) instead of getting a 409 at once.
 //! Shadow calls never take a lock; they only report one that is held.
 
 use axum::extract::{Query, State};
@@ -21,6 +25,7 @@ use serde_json::{json, Value};
 use crate::agent::db::{check_org_write_permission, get_user_org_ids};
 use crate::auth::{check_dashboard_rate_limit, is_valid_identifier, AuthUser};
 use crate::state::{ApiError, SharedState};
+use agentraas_core::resource_lock::LockSpec;
 
 pub fn router() -> Router<SharedState> {
     Router::new().route("/api/v1/record-locks", get(get_settings).put(put_settings))
@@ -34,23 +39,39 @@ pub struct Lock {
 }
 
 /// The lock for this call: the explicit `resource_id`, or the record the
-/// catalog action names when the org has automatic locks on. A settings read
-/// that fails means no automatic lock (the call still runs, as before).
-pub async fn lock_for(state: &SharedState, org_id: &str, service: &str, action: &str, payload: &Value, explicit: Option<&str>) -> Option<Lock> {
+/// route names (`spec`, from `ResolvedRoute::lock`) unless the org turned
+/// automatic locks off. A settings read that fails means no automatic lock
+/// (the call still runs, as before).
+pub async fn lock_for(state: &SharedState, org_id: &str, service: &str, spec: Option<&LockSpec>, payload: &Value, explicit: Option<&str>) -> Option<Lock> {
     if let Some(id) = explicit {
         return Some(Lock { id: id.to_string(), label: format!("resource_id {id}") });
     }
-    let route = state.service_routes.get(&format!("{service}.{action}"))?;
-    let spec = route.lock.as_ref()?;
+    let spec = spec?;
     let id = agentraas_core::resource_lock::derived_id(service, spec, payload)?;
     match sqlx::query_scalar::<_, bool>("SELECT enabled FROM record_lock_settings WHERE org_id = $1").bind(org_id).fetch_optional(&state.pg).await {
-        Ok(Some(true)) => Some(Lock { id, label: format!("{service} {}", spec.record.replace('_', " ")) }),
-        Ok(_) => None,
+        Ok(Some(true) | None) => Some(Lock { id, label: format!("{service} {}", spec.record.replace('_', " ")) }),
+        Ok(Some(false)) => None,
         Err(err) => {
             tracing::warn!(?err, org_id, "record lock setting unreadable, running without an automatic lock");
             None
         }
     }
+}
+
+/// Whether another call changed the record a held call acts on after it was
+/// held (for the approver). False when unknown.
+#[cfg_attr(not(feature = "enterprise"), allow(dead_code))]
+pub async fn changed_since(state: &SharedState, org_id: &str, service: &str, action: &str, payload: &Value, req_id: &str, held_at: chrono::DateTime<chrono::Utc>) -> bool {
+    let Ok(Some(route)) = crate::agent::db::resolve_route(state, service, action, org_id).await else { return false };
+    let Some(lock) = lock_for(state, org_id, service, route.lock.as_ref(), payload, None).await else { return false };
+    let Ok(mut conn) = state.redis_conn_result() else { return false };
+    agentraas_core::resource_lock::written_since(&mut conn, org_id, &lock.id, held_at.timestamp_millis(), req_id).await.unwrap_or(false)
+}
+
+/// `lock_wait_ms` from a request (body field, header or MCP argument): how
+/// long to wait for a busy record. Capped in `resource_lock::acquire_waiting`.
+pub fn wait_ms(raw: Option<&Value>) -> u64 {
+    raw.and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|s| s.trim().parse().ok()))).unwrap_or(0)
 }
 
 /// The 409 body for a call refused because another call holds the record.
@@ -88,7 +109,7 @@ async fn get_settings(State(state): State<SharedState>, user: AuthUser, Query(q)
     let enabled: Option<bool> = sqlx::query_scalar("SELECT enabled FROM record_lock_settings WHERE org_id = $1").bind(&q.org_id).fetch_optional(&state.pg).await?;
     let mut actions: Vec<String> = state.service_routes.iter().filter(|(_, r)| r.lock.is_some()).map(|(k, _)| k.clone()).collect();
     actions.sort();
-    Ok(Json(json!({ "enabled": enabled.unwrap_or(false), "actions": actions })))
+    Ok(Json(json!({ "enabled": enabled.unwrap_or(true), "actions": actions })))
 }
 
 #[derive(Deserialize)]

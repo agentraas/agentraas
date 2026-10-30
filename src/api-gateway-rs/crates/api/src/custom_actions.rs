@@ -46,6 +46,9 @@ struct CreateCustomActionBody {
     /// Optional: how to reverse this action (another custom action of this
     /// org, and which fields to fill from the call), for the undo log.
     undo: Option<agentraas_core::undo::UndoSpec>,
+    /// Optional: the record this action changes, for record locks
+    /// (`{"record": "order", "from": ["order_id"]}`).
+    lock: Option<agentraas_core::resource_lock::LockSpec>,
 }
 
 /// Validates and (for `secret: true` entries) encrypts a submitted
@@ -154,6 +157,9 @@ async fn create_custom_action(
     if let Some(spec) = &body.undo {
         agentraas_core::undo::validate(spec).map_err(|e| ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, e))?;
     }
+    if let Some(spec) = &body.lock {
+        agentraas_core::resource_lock::validate(spec).map_err(|e| ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, e))?;
+    }
 
     let mut tx = state.pg.begin().await?;
     sqlx::query("UPDATE custom_actions SET revoked_at = NOW() WHERE org_id=$1 AND name=$2 AND revoked_at IS NULL")
@@ -162,8 +168,8 @@ async fn create_custom_action(
         .execute(&mut *tx)
         .await?;
     sqlx::query(
-        "INSERT INTO custom_actions (user_id, org_id, name, method, target_url, auth_type, auth_header_name, content_type, extra_headers, fanout_urls, undo_action, undo_with)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",
+        "INSERT INTO custom_actions (user_id, org_id, name, method, target_url, auth_type, auth_header_name, content_type, extra_headers, fanout_urls, undo_action, undo_with, lock)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)",
     )
     .bind(user.sub)
     .bind(&org_id)
@@ -177,6 +183,7 @@ async fn create_custom_action(
     .bind(json!(fanout_urls))
     .bind(body.undo.as_ref().map(|u| u.action.clone()))
     .bind(body.undo.as_ref().map(|u| json!(u.with)))
+    .bind(body.lock.as_ref().map(|l| json!(l)))
     .execute(&mut *tx)
     .await?;
     tx.commit().await?;
@@ -208,9 +215,10 @@ async fn list_custom_actions(State(state): State<SharedState>, user: AuthUser) -
         created_at: chrono::DateTime<chrono::Utc>,
         extra_header_count: Option<i32>,
         fanout_url_count: Option<i32>,
+        lock: Option<Value>,
     }
     let rows = sqlx::query_as::<_, Row>(
-        "SELECT id, org_id, name, method, target_url, auth_type, created_at,
+        "SELECT id, org_id, name, method, target_url, auth_type, created_at, lock,
                 jsonb_array_length(extra_headers) as extra_header_count,
                 jsonb_array_length(fanout_urls) as fanout_url_count
          FROM custom_actions WHERE user_id = $1 AND revoked_at IS NULL ORDER BY created_at DESC",
@@ -226,6 +234,7 @@ async fn list_custom_actions(State(state): State<SharedState>, user: AuthUser) -
                     "target_url": r.target_url, "auth_type": r.auth_type, "created_at": r.created_at,
                     "extra_header_count": r.extra_header_count.unwrap_or(0),
                     "fanout_url_count": r.fanout_url_count.unwrap_or(0),
+                    "lock": r.lock,
                 })
             })
             .collect(),

@@ -1166,7 +1166,7 @@
 <div class="modal-overlay" id="shadow-rules-modal-overlay">
   <div class="modal" role="dialog" aria-modal="true" aria-label="Shadow mode">
     <h3>Shadow mode</h3>
-    <p class="sub">Run an agent against real traffic without letting it act. Every write it makes is checked against your rules and recorded under Shadow calls, but never sent, and its stored keys are never used. The agent gets a placeholder answer marked <code>"shadow": true</code>. Reads are still sent unless you block them too. See <a href="/docs#shadow-mode" target="_blank" rel="noopener">Shadow mode</a>.</p>
+    <p class="sub">Run an agent against real traffic without letting it act. Every write it makes is checked against your rules and recorded under Shadow calls, but never sent, and its stored keys are never used. The agent gets a placeholder answer marked <code>"shadow": true</code>. Reads are still sent unless you block them too. With roles (Enterprise), only org admins can change this. See <a href="/docs#shadow-mode" target="_blank" rel="noopener">Shadow mode</a>.</p>
     <div class="modal-error" id="shadow-rules-error"></div>
     <form id="shadow-rules-form">
       <div class="field"><label for="shadow-agent">Agent ID</label><input type="text" id="shadow-agent" placeholder="refund-agent" required></div>
@@ -1186,7 +1186,7 @@
 <div class="modal-overlay" id="record-locks-modal-overlay">
   <div class="modal" role="dialog" aria-modal="true" aria-label="Record locks">
     <h3>Record locks</h3>
-    <p class="sub">Stop two agents from changing the same record at the same moment: the same Stripe customer, HubSpot contact or Razorpay payment. When this is on, a second call on a record that another call is still changing gets <code>409</code> with who holds it and when to retry, instead of racing it. Calls on different records are not affected. Off by default, because two legitimate calls on one customer at once would then have to retry. See <a href="/docs#record-locks" target="_blank" rel="noopener">Record locks</a>.</p>
+    <p class="sub">Stop two agents from changing the same record at the same moment: the same Stripe customer, HubSpot contact or Razorpay payment. When this is on, a second call on a record that another call is still changing gets <code>409</code> with who holds it and when to retry, instead of racing it. Calls on different records are not affected. On by default; turn it off if two calls on one customer at the same moment must both run. Agents can also wait for a busy record with <code>lock_wait_ms</code> (up to 5 seconds). See <a href="/docs#record-locks" target="_blank" rel="noopener">Record locks</a>.</p>
     <div class="modal-error" id="record-locks-error"></div>
     <div class="field"><label><input type="checkbox" id="record-locks-on"> Lock records automatically for this org</label></div>
     <div class="meta" id="record-locks-actions" style="color:var(--muted);font-size:12.5px;"></div>

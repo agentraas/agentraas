@@ -445,7 +445,16 @@ async fn find_link(state: &SharedState, token: &str) -> Result<LinkRow, ApiError
 /// and mail scanners fetch GET URLs on their own.
 async fn link_view(State(state): State<SharedState>, Json(body): Json<LinkBody>) -> Result<Json<Value>, ApiError> {
     let r = find_link(&state, &body.token).await?;
-    Ok(Json(json!({ "reqId": r.req_id, "org_id": r.org_id, "service": r.service, "action": r.action, "payload": r.payload, "status": r.status, "created_at": r.created_at })))
+    let changed = r.status == "pending" && crate::record_locks::changed_since(&state, &r.org_id, &r.service, &r.action, &r.payload, &r.req_id, r.created_at).await;
+    Ok(Json(json!({ "reqId": r.req_id, "org_id": r.org_id, "service": r.service, "action": r.action, "payload": r.payload, "status": r.status, "created_at": r.created_at, "record_changed": changed })))
+}
+
+/// `record_locks::changed_since` for a row of `list_pending`.
+async fn record_changed(state: &SharedState, row: &Value) -> bool {
+    let s = |k: &str| row.get(k).and_then(Value::as_str).unwrap_or_default();
+    let Some(held_at) = row.get("created_at").and_then(Value::as_str).and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok()) else { return false };
+    let payload = row.get("payload").cloned().unwrap_or(Value::Null);
+    crate::record_locks::changed_since(state, s("org_id"), s("service"), s("action"), &payload, s("req_id"), held_at.to_utc()).await
 }
 
 /// The decision. `claim_pending` inside approve/deny lets only one click
@@ -486,6 +495,11 @@ async fn list_pending(State(state): State<SharedState>, user: AuthUser) -> Resul
     .bind(&org_ids)
     .fetch_all(&state.pg)
     .await?;
+    let mut rows = rows;
+    for row in &mut rows {
+        let changed = record_changed(&state, row).await;
+        row["record_changed"] = json!(changed);
+    }
     Ok(Json(json!({ "pending": rows })))
 }
 
@@ -733,11 +747,13 @@ async fn approve(state: &SharedState, req_id: &str, org_id: &str, resolved_by: S
 
     // A held call gave up its record lock while it waited (it could wait for
     // hours); it takes it again now. If another call holds the record at this
-    // moment, the approved call goes to the dead-letter queue to replay.
+    // moment (after waiting up to 5 s for it), the approved call goes to the
+    // dead-letter queue to replay.
     let mut held_lock = None;
-    if let Some(lock) = crate::record_locks::lock_for(state, &row.org_id, &row.service, &row.action, &row.payload, None).await {
+    if let Some(lock) = crate::record_locks::lock_for(state, &row.org_id, &row.service, resolved_route.lock.as_ref(), &row.payload, None).await {
         if let Ok(mut conn) = state.redis_conn_result() {
-            match agentraas_core::resource_lock::acquire(&mut conn, &row.org_id, &lock.id, &row.agent_id, crate::agent::forward::resource_lock_ttl_seconds(state)).await {
+            let ttl = crate::agent::forward::resource_lock_ttl_seconds(state);
+            match agentraas_core::resource_lock::acquire_waiting(&mut conn, &row.org_id, &lock.id, &row.agent_id, ttl, agentraas_core::resource_lock::MAX_WAIT_MS).await {
                 Ok(got) if !got.acquired => {
                     let _ = dedup::release_dedup_slot(&mut conn, &format!("dedup:{}", row.dedup_hash)).await;
                     let message = format!("record busy: another call was changing this {} when it was approved", lock.label);
@@ -755,6 +771,9 @@ async fn approve(state: &SharedState, req_id: &str, org_id: &str, resolved_by: S
     let forwarded = crate::agent::forward::forward_with_retry(state, &resolved_route, &row.service, &row.action, &row.org_id, &row.payload, req_id, &circuit_key, None, Some(&dedup::upstream_idempotency_key(&row.dedup_hash))).await;
     // Kept until its TTL when the outcome is unknown: it may still be running.
     if let (Some((id, token)), Ok(mut conn)) = (&held_lock, state.redis_conn_result()) {
+        if forwarded.is_ok() {
+            let _ = agentraas_core::resource_lock::mark_written(&mut conn, &row.org_id, id, req_id).await;
+        }
         if !matches!(&forwarded, Err(e) if e.outcome_unknown) {
             let _ = agentraas_core::resource_lock::release(&mut conn, &row.org_id, id, token).await;
         }

@@ -2174,7 +2174,7 @@
       for (const p of pending) {
         const div = document.createElement('div');
         div.className = 'cred-row';
-        div.innerHTML = `<div class="info"><div class="svc">${escapeHtml(serviceName(p.service))} ${escapeHtml(p.action)} by ${escapeHtml(p.agent_id)}</div><div class="meta">${escapeHtml(p.org_id)} · ${escapeHtml(rowTime(p.created_at))}</div><pre style="margin:6px 0 0;font-size:11.5px;white-space:pre-wrap;word-break:break-all;">${escapeHtml(JSON.stringify(p.payload, null, 2))}</pre></div>
+        div.innerHTML = `<div class="info"><div class="svc">${escapeHtml(serviceName(p.service))} ${escapeHtml(p.action)} by ${escapeHtml(p.agent_id)}</div><div class="meta">${escapeHtml(p.org_id)} · ${escapeHtml(rowTime(p.created_at))}</div>${p.record_changed ? '<div class="meta" style="color:var(--warn, #b45309);">Another call changed this record after this one was held. Check it still makes sense before approving.</div>' : ''}<pre style="margin:6px 0 0;font-size:11.5px;white-space:pre-wrap;word-break:break-all;">${escapeHtml(JSON.stringify(p.payload, null, 2))}</pre></div>
           <div style="display:flex;gap:6px;"><button class="btn" data-approve="${escapeHtml(p.req_id)}" style="padding:6px 12px;font-size:12px;">Approve</button><button class="revoke" data-deny="${escapeHtml(p.req_id)}">Deny</button></div>`;
         list.appendChild(div);
       }

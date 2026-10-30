@@ -94,6 +94,7 @@ pub fn build_tool_entry(tool_name: &str, svc_name: &str, act_name: &str, validat
                 "step_id": { "type": "string", "description": "Optional, used with run_id — a stable identifier for this specific step (e.g. \"fetch-invoice\"). If this exact run_id+step_id already completed, the saved result is returned immediately instead of executing again — lets a retried task automatically resume past whatever steps already succeeded." },
                 "end_user_id": { "type": "string", "description": "Optional — scopes credential lookup to this specific end-user instead of the org's shared credential (On-Behalf-Of End-User Identity). No fallback: if no credential is connected for this exact end-user, the call fails rather than silently using a shared/admin key. Also scopes deduplication, so two end-users calling with identical-looking payloads never collide." },
                 "resource_id": { "type": "string", "description": "Optional — the thing this call acts on (an order, an account). While a call naming a resource_id is in flight, another call naming the same one is refused instead of racing it." },
+                "lock_wait_ms": { "type": "integer", "description": "Optional, up to 5000: when another call is changing the same record, wait this many milliseconds for it to finish instead of being refused at once." },
             },
             "required": ["payload"],
         },
@@ -356,6 +357,7 @@ async fn handle_tools_call(state: &SharedState, headers: &HeaderMap, id: &Value,
                 fanout_urls: Vec::new(),
                 credential_key: svc.clone(),
                 streaming: r.streaming,
+                lock: r.lock.clone(),
             };
             (svc.clone(), act.clone(), Target::Http(route))
         })
@@ -388,6 +390,7 @@ async fn handle_tools_call(state: &SharedState, headers: &HeaderMap, id: &Value,
         step_id: arg("step_id"),
         end_user_id: arg("end_user_id"),
         resource_id: arg("resource_id"),
+        lock_wait_ms: crate::record_locks::wait_ms(arguments.get("lock_wait_ms")),
         target: Some(target),
         tape: crate::agent::tape_from(headers),
     };

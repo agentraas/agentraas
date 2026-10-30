@@ -92,8 +92,67 @@ pub async fn release(
     Ok(())
 }
 
+/// Longest a call may wait for a busy record (`lock_wait_ms`).
+pub const MAX_WAIT_MS: u64 = 5000;
+
+/// `acquire`, retried until the lock is free or `wait_ms` (capped at
+/// `MAX_WAIT_MS`) has passed. 0 = one try.
+pub async fn acquire_waiting(
+    conn: &mut MultiplexedConnection,
+    org_id: &str,
+    resource_id: &str,
+    agent_id: &str,
+    ttl_seconds: i64,
+    wait_ms: u64,
+) -> redis::RedisResult<LockResult> {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(wait_ms.min(MAX_WAIT_MS));
+    loop {
+        let got = acquire(conn, org_id, resource_id, agent_id, ttl_seconds).await?;
+        let left = deadline.saturating_duration_since(std::time::Instant::now());
+        if got.acquired || left.is_zero() {
+            return Ok(got);
+        }
+        // ponytail: polling, no FIFO; whoever retries first after release wins.
+        let held_ms = got.held_by.as_ref().map_or(50, |(_, ms)| (*ms).max(1) as u64);
+        tokio::time::sleep(std::time::Duration::from_millis(held_ms.min(100)).min(left)).await;
+    }
+}
+
+/// Days a record's last-write mark is kept (it only matters while a held
+/// call waits for approval).
+const WRITTEN_TTL_SECONDS: i64 = 30 * 86_400;
+
+/// Notes that call `req_id` changed the record now, so a call held for
+/// approval can tell the approver the record changed after it was made.
+pub async fn mark_written(conn: &mut MultiplexedConnection, org_id: &str, resource_id: &str, req_id: &str) -> redis::RedisResult<()> {
+    let now_ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis());
+    redis::cmd("SET").arg(written_key(org_id, resource_id)).arg(format!("{now_ms}|{req_id}")).arg("EX").arg(WRITTEN_TTL_SECONDS).query_async(conn).await
+}
+
+/// Whether a call other than `req_id` changed the record after `since_ms`.
+pub async fn written_since(conn: &mut MultiplexedConnection, org_id: &str, resource_id: &str, since_ms: i64, req_id: &str) -> redis::RedisResult<bool> {
+    let v: Option<String> = redis::cmd("GET").arg(written_key(org_id, resource_id)).query_async(conn).await?;
+    Ok(v.as_deref().and_then(|v| v.split_once('|')).is_some_and(|(ms, by)| by != req_id && ms.parse::<i64>().is_ok_and(|ms| ms > since_ms)))
+}
+
+/// Checks a `lock` spec submitted with a custom action.
+pub fn validate(spec: &LockSpec) -> Result<(), String> {
+    let ok_record = !spec.record.is_empty() && spec.record.len() <= 50 && spec.record.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+    if !ok_record {
+        return Err("lock.record must be 1-50 letters, digits or underscores (e.g. \"customer\").".into());
+    }
+    if spec.from.is_empty() || spec.from.len() > 5 || spec.from.iter().any(|p| p.is_empty() || p.len() > 200) {
+        return Err("lock.from must list 1-5 payload paths (e.g. [\"customer\", \"billing.email\"]).".into());
+    }
+    Ok(())
+}
+
 fn key(org_id: &str, resource_id: &str) -> String {
     format!("resource_lock:{org_id}:{resource_id}")
+}
+
+fn written_key(org_id: &str, resource_id: &str) -> String {
+    format!("record_written:{org_id}:{resource_id}")
 }
 
 #[cfg(test)]
@@ -115,5 +174,13 @@ mod tests {
         );
         assert_eq!(derived_id("stripe", &spec, &json!({"amount": 5})), None, "no record named, no lock");
         assert_eq!(derived_id("stripe", &spec, &json!({"customer": ""})), None);
+    }
+
+    #[test]
+    fn custom_lock_specs_are_checked() {
+        assert!(validate(&LockSpec { record: "order".into(), from: vec!["order_id".into()] }).is_ok());
+        assert!(validate(&LockSpec { record: "bad record".into(), from: vec!["x".into()] }).is_err());
+        assert!(validate(&LockSpec { record: "order".into(), from: vec![] }).is_err());
+        assert!(validate(&LockSpec { record: "order".into(), from: vec!["a".into(); 6] }).is_err());
     }
 }

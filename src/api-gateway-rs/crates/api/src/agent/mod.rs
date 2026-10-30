@@ -168,6 +168,9 @@ pub(crate) struct RequestIdentity {
     /// (409) rather than allowed to race with this one. See
     /// `agentraas_core::resource_lock`.
     pub(crate) resource_id: Option<String>,
+    /// How long to wait for a busy record before the 409 (`lock_wait_ms`,
+    /// capped at 5 s). 0 = refuse at once.
+    pub(crate) lock_wait_ms: u64,
     /// Already resolved by the caller (MCP resolves tool names itself);
     /// `None` = resolve `service.action` here.
     pub(crate) target: Option<Target>,
@@ -207,6 +210,7 @@ async fn webhook_handler(
     let payload = body.get("payload").cloned().unwrap_or(json!({}));
     let end_user_id = body.get("end_user_id").and_then(Value::as_str).map(String::from);
     let resource_id = body.get("resource_id").and_then(Value::as_str).map(String::from);
+    let lock_wait_ms = crate::record_locks::wait_ms(body.get("lock_wait_ms"));
 
     handle_request(
         &state,
@@ -223,6 +227,7 @@ async fn webhook_handler(
             step_id,
             end_user_id,
             resource_id,
+            lock_wait_ms,
             target: None,
             tape: tape_from(&headers),
         },
@@ -244,6 +249,7 @@ async fn sdk_handler(
     let step_id = header_value(&headers, "x-agentraas-step-id");
     let end_user_id = header_value(&headers, "x-agentraas-end-user");
     let resource_id = header_value(&headers, "x-agentraas-resource-id");
+    let lock_wait_ms = crate::record_locks::wait_ms(header_value(&headers, "x-agentraas-lock-wait-ms").map(Value::String).as_ref());
 
     handle_request(
         &state,
@@ -260,6 +266,7 @@ async fn sdk_handler(
             step_id,
             end_user_id,
             resource_id,
+            lock_wait_ms,
             target: None,
             tape: tape_from(&headers),
         },
@@ -366,6 +373,7 @@ pub(crate) async fn resolve_route(state: &SharedState, org_id: &str, service: &s
                 fanout_urls: Vec::new(),
                 credential_key: service.to_string(),
                 streaming: r.streaming,
+                lock: r.lock.clone(),
             }),
             None => Err(err_response(StatusCode::BAD_REQUEST, req_id, format!("Unknown service.action: {route_key}"))),
         }
@@ -390,7 +398,7 @@ pub async fn replay_webhook(
     handle_request(
         state,
         Source::Webhook,
-        RequestIdentity { org_id, agent_id, api_key, service, action, payload, idempotency_key: None, run_id: None, step_id: None, end_user_id: None, resource_id: None, target: None, tape: None },
+        RequestIdentity { org_id, agent_id, api_key, service, action, payload, idempotency_key: None, run_id: None, step_id: None, end_user_id: None, resource_id: None, lock_wait_ms: 0, target: None, tape: None },
     )
     .await
 }
@@ -437,6 +445,7 @@ async fn handle_request_inner(
         step_id,
         end_user_id,
         resource_id,
+        lock_wait_ms,
         target,
         tape,
     } = identity;
@@ -570,7 +579,11 @@ async fn handle_request_inner(
 
     // The record this call locks, if any (explicit resource_id, or an
     // automatic record lock; `crate::record_locks`).
-    let lock = crate::record_locks::lock_for(state, &org_id, &service, &action, &payload, resource_id.as_deref()).await;
+    let route_lock = match &target {
+        Target::Http(r) => r.lock.as_ref(),
+        Target::Mcp(_) => None,
+    };
+    let lock = crate::record_locks::lock_for(state, &org_id, &service, route_lock, &payload, resource_id.as_deref()).await;
 
     // Shadow mode: before anything that claims, counts or forwards. A rule
     // we can't read is not a pass (fail closed).
@@ -770,7 +783,7 @@ async fn handle_request_inner(
     // this catches a second, different request (this agent or
     // another) racing to act on the same declared resource_id right now.
     if let Some(lock) = &lock {
-        match agentraas_core::resource_lock::acquire(&mut conn, &org_id, &lock.id, &agent_id, forward::resource_lock_ttl_seconds(state)).await {
+        match agentraas_core::resource_lock::acquire_waiting(&mut conn, &org_id, &lock.id, &agent_id, forward::resource_lock_ttl_seconds(state), lock_wait_ms).await {
             Ok(got) if !got.acquired => {
                 let _ = dedup::release_dedup_slot(&mut conn, &claim.key).await;
                 log_audit(&state.pg, &req_id, &api_key, &org_id, &agent_id, &service, &action, "blocked", Some("resource_locked"), start.elapsed().as_millis() as i64, Some(&dedup_hash), false, None, run_id.as_deref(), step_id.as_deref(), end_user_id.as_deref()).await;
@@ -1084,6 +1097,9 @@ async fn handle_request_inner(
                 map.insert("__payloadDigest".to_string(), Value::String(payload_digest.clone()));
             }
             let _ = dedup::complete_dedup_slot_with_ttl(&mut conn, &claim.key, &stored, dedup_ttl_seconds).await;
+            if let Some((_, lock_id, _)) = held_lock.as_ref() {
+                let _ = agentraas_core::resource_lock::mark_written(&mut conn, &org_id, lock_id, &req_id).await;
+            }
             if let (Some(run_id), Some(step_id)) = (&run_id, &step_id) {
                 let checkpoint_key = agentraas_core::checkpoint::step_key(run_id, step_id);
                 let _ = agentraas_core::checkpoint::write_checkpoint(&mut conn, &checkpoint_key, &stored, state.checkpoint_ttl_seconds).await;
@@ -1478,6 +1494,7 @@ async fn demo_live_test(State(state): State<SharedState>, user: AuthUser) -> Res
             step_id: None,
             end_user_id: None,
             resource_id: None,
+            lock_wait_ms: 0,
             target: None,
             tape: None,
         },
@@ -1501,6 +1518,7 @@ async fn demo_live_test(State(state): State<SharedState>, user: AuthUser) -> Res
             step_id: None,
             end_user_id: None,
             resource_id: None,
+            lock_wait_ms: 0,
             target: None,
             tape: None,
         };
