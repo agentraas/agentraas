@@ -15,6 +15,12 @@ safe to re-run.
 
 ## [Unreleased]
 
+### Fixed
+
+- With `ALLOWED_PRIVATE_NETWORKS` set, `.local` hostnames (Kubernetes
+  `*.svc.cluster.local`) are accepted when they resolve inside a listed
+  range; they were refused by name before the address check.
+
 ## [0.30.1] - 2026-10-30
 
 ### Added

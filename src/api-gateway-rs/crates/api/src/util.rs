@@ -200,7 +200,9 @@ pub async fn validate_target_url(target_url: &str) -> Option<String> {
     };
     let hostname = hostname.to_lowercase();
     const BLOCKED: &[&str] = &["localhost", "ar-postgres", "ar-redis", "ar-minio", "ar-api"];
-    if BLOCKED.contains(&hostname.as_str()) || hostname.ends_with(".local") {
+    // `.local` names (mDNS, Kubernetes `*.svc.cluster.local`) only when the
+    // operator opened private ranges; their addresses are checked below.
+    if BLOCKED.contains(&hostname.as_str()) || (hostname.ends_with(".local") && allowed_private_networks().is_empty()) {
         return Some("Local or internal hostnames are not allowed.".to_string());
     }
 
