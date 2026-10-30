@@ -12,25 +12,23 @@ spec:
     metadata:
       labels: {app.kubernetes.io/instance: {{ .Release.Name }}, app.kubernetes.io/component: api}
       annotations:
-        # Restart the API when the migrations or service catalog change.
+        # Restart the API when the service catalog changes.
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets: {{- toYaml . | nindent 8 }}
       {{- end }}
       initContainers:
-        # Every migration is safe to re-run, so all of them run on each start,
-        # in one session holding an advisory lock so replicas don't race.
+        # The image's own migrations (they match its version), all of them on
+        # each start under an advisory lock so replicas don't race; every
+        # migration is safe to re-run. Same image as the API, so an external
+        # database needs no Postgres image.
         - name: migrate
-          image: {{ .Values.postgresql.image }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
           envFrom: [{secretRef: {name: {{ include "agentraas.secretName" . }}}}]
-          command: ["sh", "-c"]
-          args:
-            - |
-              until pg_isready -q -d "$DATABASE_URL"; do echo "waiting for postgres"; sleep 2; done
-              { echo "SELECT pg_advisory_lock(727274);"; for f in /migrations/*.sql; do echo "\\i $f"; done; } \
-                | psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q
-          volumeMounts: [{name: migrations, mountPath: /migrations}]
+          command: ["agentraas-migrate"]
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true}
       containers:
         - name: api
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
@@ -56,7 +54,6 @@ spec:
           securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true}
       volumes:
         - {name: config, configMap: {name: {{ $name }}-config}}
-        - {name: migrations, configMap: {name: {{ $name }}-migrations}}
 ---
 apiVersion: v1
 kind: Service
