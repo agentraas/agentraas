@@ -259,6 +259,7 @@
       <a href="#self-hosting">Self-hosting</a>
       <a href="#helm">Kubernetes (Helm)</a>
       <a href="#kms">Key management (KMS)</a>
+      <a href="#private-platforms">Private platforms</a>
       <a href="#secret-refs">Secret references</a>
       <a href="#metrics">Metrics</a>
       <a href="#latency">Latency</a>
@@ -640,7 +641,7 @@ const result = await client.call("stripe", "charge.create", { amount: 5000, curr
   "response": { "id": "shadow_payment", "status": "succeeded" },
   "message": "Shadow mode: nothing was sent to stripe. This is a placeholder answer, not the provider's." }</code></pre>
       <p>Each call is still run past your rules, without side effects: a live duplicate is found but no dedup slot is taken (so the same call made live later still runs), spend caps are checked but not counted, validation, action policies and approval rules are checked. <code>decision</code> says what would have happened: <code>would_execute</code>, <code>would_deduplicate</code>, <code>would_wait_for_lock</code>, <code>would_block:&lt;reason&gt;</code> (including an open circuit breaker or a used-up plan) or <code>would_need_approval:&lt;reason&gt;</code>. A policy limit that AgentRaaS reads from the provider first (<code>max_from</code>) is not checked in shadow mode, since that read would use the keys; <code>detail</code> says so. If AgentRaaS can't read whether an agent is in shadow mode, it refuses the call with <code>503</code> rather than send it.</p>
-      <p>The calls are listed under <b>Monitor → Shadow calls</b>, filterable by agent, service and decision, with a payload preview after PII/DLP redaction (no preview when redaction is off). <b>Go live</b> takes the agent out of shadow mode; the recorded calls are not replayed. API: <code>GET/POST /api/v1/shadow-rules</code>, <code>DELETE /api/v1/shadow-rules/&lt;id&gt;?org_id=</code>, <code>POST /api/v1/shadow-rules/promote</code> (<code>{"org_id", "agent_id"}</code>), <code>GET /api/v1/shadow-calls?org_id=&amp;agent_id=&amp;service=&amp;decision=</code>. Shadow calls are in the audit log with status <code>shadow</code>.</p>
+      <p>The calls are listed under <b>Monitor → Shadow calls</b>, filterable by agent, service and decision, with a payload preview after PII/DLP redaction (no preview when redaction is off). <b>Go live</b> takes the agent out of shadow mode; the recorded calls are not replayed. API: <code>GET/POST /api/v1/shadow-rules</code>, <code>DELETE /api/v1/shadow-rules/&lt;id&gt;?org_id=</code>, <code>POST /api/v1/shadow-rules/promote</code> (<code>{"org_id", "agent_id"}</code>), <code>GET /api/v1/shadow-calls?org_id=&amp;agent_id=&amp;service=&amp;decision=</code>. Shadow calls are in the audit log with status <code>shadow</code>. Any member who can write to the org can change shadow rules; with roles (Enterprise), only org admins can.</p>
     </section>
 
     <section id="reports">
@@ -656,12 +657,14 @@ PUT /api/v1/reports/settings  {"org_id": "org_acme", "enabled": true, "recipient
 
     <section id="record-locks">
       <h2>Record locks <span class="badge free">Free</span></h2>
-      <p>Duplicate protection catches the same call sent twice. Record locks catch two different calls on the same record at the same moment: a billing agent changing customer <code>cus_123</code>'s subscription while a support agent refunds that customer, or two agents updating one HubSpot contact. Turn them on per org in <b>Rules → Record locks</b> (off by default). While one call on a record runs, a second call on that record, from any agent, gets <code>409</code> instead of racing it:</p>
+      <p>Duplicate protection catches the same call sent twice. Record locks catch two different calls on the same record at the same moment: a billing agent changing customer <code>cus_123</code>'s subscription while a support agent refunds that customer, or two agents updating one HubSpot contact. They are on by default; turn them off per org in <b>Rules → Record locks</b>. While one call on a record runs, a second call on that record, from any agent, gets <code>409</code> instead of racing it:</p>
       <pre><code>{ "error": "Another call is changing this stripe customer right now. Retry after it finishes.",
   "code": "resource_locked", "record": "stripe customer",
   "held_by_agent": "billing-agent", "retry_after_ms": 1800, "reqId": "req_..." }</code></pre>
       <p>Which record an action changes is set in the service catalog: Stripe charges, subscriptions and invoices lock the <code>customer</code>, refunds lock the charge or payment intent, a subscription cancel locks the subscription, HubSpot <code>contact.update</code> the contact, Razorpay refunds the payment, Cashfree refunds the order, Jira transitions and deletes the issue, Shopify inventory updates the item, Zoho invoices the customer (the dashboard lists them). A call whose payload doesn't name the record runs without a lock, and calls on different records never wait for each other. The record id is hashed before it is stored, and the lock is released as soon as the call ends; it is kept only when the outcome is unknown (the call may still be running), at most for the longest a call can take.</p>
-      <p>A call held for approval gives up its lock while it waits and takes it again when it is approved; if another call holds the record at that moment, the approved call goes to <b>Failed requests</b> to replay. Shadow calls never take a lock; one that finds the record locked reports <code>would_wait_for_lock</code>. For your own endpoints, or to lock something else, send <code>resource_id</code> yourself (it always wins over the automatic lock). API: <code>GET /api/v1/record-locks?org_id=</code>, <code>PUT /api/v1/record-locks</code> with <code>{"org_id", "enabled"}</code>.</p>
+      <p>To wait instead of getting the <code>409</code> at once, send <code>lock_wait_ms</code> (up to 5000): in the webhook body, as the <code>X-AgentRaaS-Lock-Wait-Ms</code> header on SDK calls, or as an MCP tool argument. The call then runs as soon as the record is free, or gets the <code>409</code> when the time is up. Waiting callers are not queued: whichever asks first after the record is free goes next.</p>
+      <p>A custom action can name the record it changes when you register it: <code>"lock": {"record": "order", "from": ["order_id", "order.id"]}</code> (the first payload path that has a value wins).</p>
+      <p>A call held for approval gives up its lock while it waits and takes it again when it is approved, waiting up to 5 seconds for it; if another call still holds the record, the approved call goes to <b>Failed requests</b> to replay. If another call changed the record while it waited, the dashboard's <b>Waiting for approval</b> list and the approval link page say so, so the approver can check the call still makes sense. Shadow calls never take a lock; one that finds the record locked reports <code>would_wait_for_lock</code>. For your own endpoints, or to lock something else, send <code>resource_id</code> yourself (it always wins over the automatic lock). API: <code>GET /api/v1/record-locks?org_id=</code>, <code>PUT /api/v1/record-locks</code> with <code>{"org_id", "enabled"}</code>.</p>
     </section>
 
     <section id="approvals">
@@ -774,7 +777,7 @@ agentraas apply -f agentraas.yaml --prune     # also delete rules the file doesn
       <p>Self-hosted AgentRaaS has no enforced monthly usage limit on any tier; it's your infrastructure. One Docker Compose service, no data leaving your control.</p>
       <pre><code>./install.sh</code></pre>
       <p>Linux: Docker or Podman. macOS: Docker Desktop or Colima. Windows: Docker Desktop with WSL2, run from a WSL terminal with the repo cloned inside WSL. Details on <a href="/self-host">Self-hosting</a>.</p>
-      <p>On AWS with managed services (ECS Fargate, RDS, ElastiCache, KMS), use the Terraform in <a href="https://github.com/agentraas/agentraas/tree/main/infra/aws"><code>infra/aws</code></a>. On any other container platform, run <code>agentraas-migrate</code> from the same image before the API starts: the image carries the service catalog and the migrations.</p>
+      <p>On AWS with managed services (ECS Fargate, RDS, ElastiCache, KMS), use the Terraform in <a href="https://github.com/agentraas/agentraas/tree/main/infra/aws"><code>infra/aws</code></a>; on Azure (Container Apps, Database for PostgreSQL, Cache for Redis, Key Vault) <a href="https://github.com/agentraas/agentraas/tree/main/infra/azure"><code>infra/azure</code></a>; on Google Cloud (Cloud Run, Cloud SQL, Memorystore, Cloud KMS) <a href="https://github.com/agentraas/agentraas/tree/main/infra/gcp"><code>infra/gcp</code></a>. None of the three has been applied to a real account yet. On VMware, Nutanix, OpenShift or air-gapped networks, see <a href="#private-platforms">Private platforms</a>. On any other container platform, run <code>agentraas-migrate</code> from the same image before the API starts: the image carries the service catalog and the migrations.</p>
       <p><code>./install.sh</code> generates fresh secrets, runs migrations, and starts the stack. Key environment variables (full reference in <code>.env.example</code>):</p>
       <table>
         <tr><th>Variable</th><th>Purpose</th></tr>
@@ -852,6 +855,81 @@ CREDENTIALS_KEY_PROVIDER=azure
 CREDENTIALS_KMS_KEY=https://my-vault.vault.azure.net/keys/agentraas/&lt;version&gt;
 CREDENTIALS_ENCRYPTION_KEY=...               # the output above</code></pre>
       <p>Then delete <code>key.bin</code> and the plain key from your shell history. If the server can't reach the KMS it refuses to start and says why. Keep deletion protection on the KMS key: if it is deleted, every stored secret is lost. To rotate, rotate the KMS key and re-encrypt the same 32 bytes (Vault: <code>vault write transit/rewrap/agentraas ciphertext=...</code>); stored data stays as it is.</p>
+    </section>
+
+    <section id="private-platforms">
+      <h2>Private platforms</h2>
+      <p>AgentRaaS is one container image plus Postgres and Redis, so it runs on private infrastructure the same two ways it runs anywhere else: a Linux VM with <code>./install.sh</code>, or Kubernetes with the <a href="#helm">Helm chart</a>. Nothing in it calls home, and the license check works offline.</p>
+      <div class="callout"><p>We have not tested AgentRaaS on any of the platforms on this page yet. <code>./install.sh</code> is tested on fresh Linux and macOS hosts in CI, and the Helm chart passes <code>helm lint</code> and <code>kubeconform</code> and its migration step has been run against an empty Postgres, but neither has been run on these hypervisors or distributions. What follows is what should work given how the image and chart are built. If something doesn't, tell us in <a href="https://github.com/agentraas/agentraas/discussions">GitHub Discussions</a> or at <a href="mailto:hello@agentraas.io">hello@agentraas.io</a>.</p></div>
+      <table>
+        <tr><th>Platform</th><th>How</th><th>Tested by us</th></tr>
+        <tr><td>Nutanix AHV, VMware vSphere, Proxmox VE, Hyper-V, bare metal</td><td>A Linux VM (or host) with Docker or Podman, then <code>./install.sh</code></td><td>No</td></tr>
+        <tr><td>Nutanix Kubernetes Platform, VMware Tanzu, Rancher</td><td>Helm chart</td><td>No</td></tr>
+        <tr><td>Red Hat OpenShift</td><td>Helm chart, with the changes below</td><td>No</td></tr>
+        <tr><td>Air-gapped networks</td><td>The published image, mirrored to your registry</td><td>No</td></tr>
+      </table>
+      <div class="callout"><p>Know this before you plan an internal deployment: AgentRaaS refuses to send agent calls to private or internal addresses (for example 10.x, 172.16-31.x, 192.168.x, 100.64-127.x, loopback, link-local, and <code>.local</code> names). This guard protects the server from being used to reach its own network, and it applies to built-in services, custom actions and registered MCP servers alike. There is no switch to turn it off today. Calls to services on the internet work; calls to a service that only has a private address are refused. The KMS and secret-reference lookups below are not affected: they use their own connection, so a Vault on your internal network works.</p></div>
+
+      <h3>Virtual machines and bare metal</h3>
+      <p>On Nutanix AHV, vSphere, Proxmox, Hyper-V or a physical server, create a Linux VM and install as on any Linux host. Nothing in AgentRaaS depends on the hypervisor.</p>
+      <pre><code>git clone https://github.com/agentraas/agentraas && cd agentraas
+./install.sh</code></pre>
+      <ul>
+        <li>The first run compiles the API from source, so the VM needs internet access to Docker Hub and crates.io for that step. Without it, see <a href="#pp-air-gapped">Air-gapped</a>.</li>
+        <li>On RHEL, Rocky or Alma, <code>install.sh</code> relabels the project folder for SELinux and asks for <code>sudo</code> to do it.</li>
+        <li>The API listens on <code>127.0.0.1:13000</code> only. Put your reverse proxy or load balancer in front of it with TLS, set <code>PUBLIC_URL</code> in <code>.env</code> to the address people use, and set <code>CLIENT_IP_HEADER</code> to the header that proxy writes (<code>x-real-ip</code> for nginx). See <a href="#self-hosting">Self-hosting</a>.</li>
+        <li>A VM snapshot is not a database backup. Back up Postgres with <code>pg_dump</code>, and keep a copy of <code>.env</code> somewhere safe: it holds <code>CREDENTIALS_ENCRYPTION_KEY</code>, without which stored service keys can't be decrypted.</li>
+      </ul>
+
+      <h3>Nutanix Kubernetes Platform, Tanzu, Rancher</h3>
+      <p>These are standard Kubernetes, so the Helm chart in <code>infra/helm/agentraas</code> applies as it is. The values you will most likely set are the ingress class, the storage class for the bundled datastores, and the client IP header:</p>
+      <pre><code>helm install agentraas ./infra/helm/agentraas \
+  --set publicUrl=https://agentraas.example.internal \
+  --set ingress.enabled=true --set ingress.className=nginx \
+  --set ingress.host=agentraas.example.internal \
+  --set postgresql.storageClass=&lt;your storage class&gt; \
+  --set redis.storageClass=&lt;your storage class&gt; \
+  --set clientIpHeader=x-real-ip</code></pre>
+      <p>The bundled Postgres and Redis are single instances, meant to get started. For production, run Postgres the way your platform already does (a database service or an operator such as CloudNativePG) and pass it with <code>postgresql.enabled=false</code> and <code>externalDatabase.url</code>; the same for Redis with <code>redis.enabled=false</code> and <code>externalRedis.url</code>. Run Redis with persistence: it holds the dedup slots.</p>
+
+      <h3>OpenShift (untested)</h3>
+      <p>OpenShift's default <code>restricted-v2</code> security policy runs every container as a random user ID in group 0 and does not let images run as root. How that affects each part of the chart:</p>
+      <table>
+        <tr><th>Part</th><th>Expected</th><th>What may need changing</th></tr>
+        <tr><td>API container</td><td>Should run unchanged</td><td>The image has no <code>USER</code> line, so elsewhere it runs as root, but it doesn't need root: it only reads <code>/usr/local/bin</code>, <code>/public</code>, <code>/config</code> and <code>/migrations</code> (all readable by any user), listens on port 3000 and writes nothing to disk. The chart already runs it with a read-only root filesystem and no privilege escalation.</td></tr>
+        <tr><td>Pod security settings</td><td>Probably fine</td><td>The chart doesn't set <code>runAsNonRoot</code>, a seccomp profile or <code>capabilities: drop: [ALL]</code>. OpenShift normally adds these when it admits the pod; if your namespace enforces the Kubernetes <code>restricted</code> Pod Security level directly, add them to <code>templates/deployment.yaml</code> (the chart has no values for them).</td></tr>
+        <tr><td>Bundled Postgres and Redis</td><td>Most likely to fail</td><td>They use the Docker Hub images, which expect to start as root and switch to their own user. Turn both off and use a Postgres and Redis your cluster already runs: <code>postgresql.enabled=false</code>, <code>redis.enabled=false</code>.</td></tr>
+        <tr><td>Migration init container</td><td>Needs one value</td><td>It runs <code>psql</code> from <code>postgresql.image</code>, even when the bundled database is off. The AgentRaaS image itself has <code>psql</code> and the migrations, so with the bundled database off, point it there: <code>--set postgresql.image=ghcr.io/agentraas/agentraas:&lt;version&gt;</code>.</td></tr>
+        <tr><td>Ingress</td><td>Works</td><td>OpenShift turns the chart's Ingress into a Route. Its router adds the client address to the end of <code>X-Forwarded-For</code>, so set <code>clientIpHeader=x-forwarded-for:last</code>, but only if nothing else sits in front of the router.</td></tr>
+      </table>
+      <pre><code>helm install agentraas ./infra/helm/agentraas \
+  --set publicUrl=https://agentraas.apps.example.internal \
+  --set ingress.enabled=true --set ingress.host=agentraas.apps.example.internal \
+  --set postgresql.enabled=false --set externalDatabase.url=postgres://user:pass@host:5432/agentraas \
+  --set postgresql.image=ghcr.io/agentraas/agentraas:&lt;version&gt; \
+  --set redis.enabled=false --set externalRedis.url=redis://host:6379 \
+  --set clientIpHeader=x-forwarded-for:last</code></pre>
+
+      <h3 id="pp-air-gapped">Air-gapped</h3>
+      <p><code>./install.sh</code> compiles from source and needs the internet, so an air-gapped install uses the published image instead. Everything the server needs is inside it: the service catalog (<code>/config</code>), every database migration and <code>agentraas-migrate</code> to apply them (<code>/migrations</code>), and the dashboard (<code>/public</code>). Copy it, and the datastore images, to your own registry from a connected machine:</p>
+      <pre><code>V=&lt;version&gt;   # e.g. the chart's appVersion
+skopeo copy docker://ghcr.io/agentraas/agentraas:$V docker://registry.example.internal/agentraas/agentraas:$V
+skopeo copy docker://docker.io/postgres:15-alpine docker://registry.example.internal/library/postgres:15-alpine
+skopeo copy docker://docker.io/redis:7-alpine docker://registry.example.internal/library/redis:7-alpine</code></pre>
+      <p>With no route between the two networks, carry a file across instead:</p>
+      <pre><code>podman pull ghcr.io/agentraas/agentraas:$V
+podman save -o agentraas-$V.tar ghcr.io/agentraas/agentraas:$V
+# on the inside
+podman load -i agentraas-$V.tar</code></pre>
+      <p>With Helm, point the chart at your registry: <code>--set image.repository=registry.example.internal/agentraas/agentraas --set image.tag=$V</code>, plus <code>postgresql.image</code> and <code>redis.image</code>. With Docker Compose on a VM, bring a checkout of the same release (compose mounts its <code>config</code> and <code>public</code> folders), load the Postgres, Redis and MinIO images named in <code>compose.yaml</code>, replace the <code>build:</code> block of <code>ar-api-rs</code> in <code>compose.yaml</code> with <code>image: ghcr.io/agentraas/agentraas:$V</code>, then run <code>./install.sh</code>. On any other container platform, run <code>agentraas-migrate</code> from the same image before the API starts.</p>
+      <ul>
+        <li><strong>License key.</strong> <code>LICENSE_TOKEN</code> is checked offline: its signature against a public key built into the server, its expiry against the server's clock, re-read every 6 hours. No network call is made. Keep the clock right (an internal NTP source), since a key that looks expired falls back to the free tier.</li>
+        <li><strong>What needs a way out.</strong> Calls to internet services (Stripe, Slack and the rest of the catalog) and approvals sent to Slack, Teams, Telegram or Discord need to reach those services. Approvals in the dashboard work offline, and email approvals work with an internal SMTP relay (<code>SMTP_HOST</code>). Remember the private-address guard above: in a fully isolated network, where every service has a private address, agent calls to those services are refused today.</li>
+      </ul>
+
+      <h3>Keeping service keys on-premises</h3>
+      <p>Use HashiCorp Vault or OpenBao for both layers AgentRaaS supports. Keep <code>CREDENTIALS_ENCRYPTION_KEY</code> encrypted by the Vault transit engine, so the master key never sits in <code>.env</code> (<a href="#kms">Key management</a>, <code>CREDENTIALS_KEY_PROVIDER=vault</code>), and, on Enterprise, paste <code>vault://</code> references instead of service keys so they never enter AgentRaaS at all (<a href="#secret-refs">Secret references</a>). Both work against a Vault on your internal network.</p>
+      <p>The key managers built into hypervisors and storage, such as Nutanix's native key manager or vSphere's Native Key Provider, encrypt disks and VMs. They don't give an application a way to decrypt its own key, so they can't stand in for Vault here. Disk encryption is still worth turning on: it protects the Postgres data at rest.</p>
     </section>
 
     <section id="secret-refs">

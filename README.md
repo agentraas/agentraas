@@ -80,7 +80,10 @@ cd agentraas
 `install.sh` generates the secrets, builds the image (the first Rust build
 takes a few minutes), starts Postgres, Redis and MinIO, and runs the
 migrations. Then open `http://localhost:13000/dashboard` and register.
-Kubernetes: a Helm chart is in `infra/helm/`. Render: [one-click deploy](https://render.com/deploy?repo=https://github.com/agentraas/agentraas).
+Kubernetes: a Helm chart is in `infra/helm/`. AWS, Azure and Google Cloud:
+Terraform in `infra/aws`, `infra/azure`, `infra/gcp` (validated, not yet
+applied to a real account). VMware, Nutanix, OpenShift, air-gapped:
+[private platforms](https://agentraas.io/docs#private-platforms). Render: [one-click deploy](https://render.com/deploy?repo=https://github.com/agentraas/agentraas).
 
 Works with Docker or Podman. Linux: either one. macOS: Docker Desktop (or
 Colima).
@@ -111,8 +114,9 @@ rather than `restart`.
   exactly once.
 - **Shadow mode:** run an agent on real traffic with its writes recorded and
   checked against your rules but never sent ([docs](https://agentraas.io/docs#shadow-mode)).
-- **Record locks:** two agents can't change the same Stripe customer or CRM
-  contact at the same moment; the second gets a 409 naming the holder
+- **Record locks:** on by default, two agents can't change the same Stripe
+  customer or CRM contact at the same moment; the second gets a 409 naming
+  the holder, or waits up to 5 s for it. Custom actions can name their record
   ([docs](https://agentraas.io/docs#record-locks)).
 - **Savings reports:** duplicates caught, calls blocked, approvals and an
   estimate of the money in duplicate payments stopped, per agent and service,
