@@ -15,6 +15,14 @@ safe to re-run.
 
 ## [Unreleased]
 
+### Changed
+
+- AWS template: ElastiCache now encrypts traffic in transit and the server
+  connects with `rediss://` (needs image 0.30.2 or later). The Google Cloud
+  template keeps plain Redis: Memorystore's TLS certificate comes from a
+  Google-managed private CA, which the server doesn't trust.
+- Docs, knowledge base and deck updated for 0.28.0 to 0.30.2.
+
 ## [0.30.2] - 2026-10-30
 
 ### Security

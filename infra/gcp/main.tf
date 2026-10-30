@@ -171,8 +171,9 @@ resource "google_sql_user" "this" {
   password = random_password.db.result
 }
 
-# ponytail: no TLS or AUTH on Redis (the server's Redis client has no TLS);
-# it has only a private address inside the network.
+# ponytail: no TLS or AUTH on Redis. Memorystore's TLS uses a Google-managed
+# private CA, and the server only trusts public CAs; loading a custom CA
+# (REDIS_CA_CERT) would let this turn on. Private address only.
 resource "google_redis_instance" "this" {
   name                    = var.name
   region                  = var.region

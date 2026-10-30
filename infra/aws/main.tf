@@ -190,8 +190,9 @@ resource "aws_elasticache_subnet_group" "this" {
   subnet_ids = aws_subnet.private[*].id
 }
 
-# ponytail: no TLS or AUTH on Redis (the server's Redis client has no TLS);
-# it is reachable only from the API's security group inside the VPC.
+# TLS in transit (rediss://), no AUTH: reachable only from the API's
+# security group inside the VPC. ponytail: add an AUTH token if your policy
+# needs one.
 resource "aws_elasticache_replication_group" "this" {
   replication_group_id       = var.name
   description                = "${var.name} dedup, locks and limits"
@@ -204,7 +205,7 @@ resource "aws_elasticache_replication_group" "this" {
   security_group_ids         = [aws_security_group.data.id]
   at_rest_encryption_enabled = true
   kms_key_id                 = aws_kms_key.this.arn
-  transit_encryption_enabled = false
+  transit_encryption_enabled = true
 }
 
 # --- App secret, read by ECS when it starts the containers.
@@ -343,7 +344,7 @@ locals {
     RUST_LOG                 = "info"
     DEPLOYMENT_MODE          = "self-hosted"
     PUBLIC_URL               = local.public_url
-    REDIS_URL                = "redis://${aws_elasticache_replication_group.this.primary_endpoint_address}:6379"
+    REDIS_URL                = "rediss://${aws_elasticache_replication_group.this.primary_endpoint_address}:6379"
     CLIENT_IP_HEADER         = "x-forwarded-for:last"
     CREDENTIALS_KEY_PROVIDER = "aws"
     CREDENTIALS_KMS_KEY      = aws_kms_key.this.arn

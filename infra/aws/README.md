@@ -58,8 +58,8 @@ OpenTelemetry and the rest, `deletion_protection` (on by default).
 - No NAT gateway: API tasks run in public subnets with public IPs so they
   can reach Stripe, Slack and the rest; only the load balancer can reach
   them. Add a NAT gateway and private subnets if your policy needs it.
-- No TLS on Redis: the server's Redis client has none. Redis is reachable
-  only from the API's security group.
+- Redis has no password: it is reachable only from the API's security
+  group, and traffic to it is encrypted (TLS, image 0.30.2 or later).
 - One Redis node and, by default, one database instance (`db_multi_az` adds
   a standby).
 
