@@ -114,20 +114,25 @@ pub(crate) async fn gcp_token(http: &reqwest::Client) -> anyhow::Result<String> 
     Ok(field(&tok, &["access_token"])?.to_string())
 }
 
-// Azure Key Vault token from managed identity (IMDS; `AZURE_CLIENT_ID` picks
-// a user-assigned identity). ponytail: no App Service IDENTITY_ENDPOINT or
-// client-secret login; add if someone needs it.
+// Azure Key Vault token from managed identity (`AZURE_CLIENT_ID` picks a
+// user-assigned identity). ponytail: no client-secret login; add if someone
+// needs it.
 pub(crate) async fn azure_token(http: &reqwest::Client) -> anyhow::Result<String> {
-    let mut url = "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https%3A%2F%2Fvault.azure.net".to_string();
+    // Container Apps and App Service hand out tokens from their own endpoint
+    // (IDENTITY_ENDPOINT + IDENTITY_HEADER); VMs and AKS from IMDS.
+    let (mut url, header) = match (configured_env("IDENTITY_ENDPOINT"), configured_env("IDENTITY_HEADER")) {
+        (Some(endpoint), Some(secret)) => (format!("{endpoint}?api-version=2019-08-01&resource=https%3A%2F%2Fvault.azure.net"), ("X-IDENTITY-HEADER", secret)),
+        _ => ("http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https%3A%2F%2Fvault.azure.net".to_string(), ("Metadata", "true".to_string())),
+    };
     if let Some(id) = configured_env("AZURE_CLIENT_ID") {
         url.push_str(&format!("&client_id={id}"));
     }
     let tok = json_ok(
         http.get(url)
-            .header("Metadata", "true")
+            .header(header.0, header.1)
             .send()
             .await
-            .context("Azure IMDS unreachable (no managed identity?)")?,
+            .context("Azure managed identity endpoint unreachable (no managed identity?)")?,
     )
     .await?;
     Ok(field(&tok, &["access_token"])?.to_string())
