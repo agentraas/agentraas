@@ -46,7 +46,9 @@ Facts from the code that shape this design:
 - **Registered MCP servers must have a public address.** Registration and
   every forward run `validate_target_url`, and the shared HTTP client drops
   private addresses at connect time (`PublicOnlyResolver`). A Playwright
-  MCP server on `localhost` or the LAN can't be registered. Exposing a
+  MCP server on `localhost` can't be registered; one on the LAN can on a
+  self-hosted server that lists its range in `ALLOWED_PRIVATE_NETWORKS`
+  (0.30.1; loopback stays blocked). Exposing a
   browser that is logged in to a seller account on a public URL is not
   acceptable, so path 2 needs a tunnel or a different hosting answer.
 - **The server-side MCP forward is one bare JSON POST.** It sends
@@ -174,10 +176,10 @@ seller's machine and never be exposed publicly. Paths:
 
 - **`agentraas wrap` around the adapter** (local, works today): dedup and a
   local log only. Enough for the first experiment.
-- **Self-hosted AgentRaaS next to the adapter**: blocked today by the
-  private-address guard. Allowing one named internal target per org (an
-  explicit allow-list, off by default) is a separate design and a security
-  review, not something to slip in here.
+- **Self-hosted AgentRaaS next to the adapter**: works since 0.30.1 when
+  the adapter runs on another LAN host and its range is in
+  `ALLOWED_PRIVATE_NETWORKS` (server-wide, not per org; the same host as
+  AgentRaaS via loopback stays blocked).
 - **A tunnel from the seller's machine** (`agentraas tunnel` exists for
   local development; whether it can carry MCP calls to a registered server
   is unchecked).
