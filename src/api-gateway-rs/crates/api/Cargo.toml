@@ -41,7 +41,7 @@ anyhow = "1"
 async-trait = "0.1"
 
 bcrypt = "0.15"
-jsonwebtoken = "9"
+jsonwebtoken = { version = "10.3", default-features = false, features = ["use_pem", "aws_lc_rs"] }
 time = "0.3"
 chrono = { version = "0.4", features = ["serde"] }
 chrono-tz = "0.10"

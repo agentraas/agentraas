@@ -17,6 +17,12 @@ safe to re-run.
 
 ## [0.30.3] - 2026-10-30
 
+### Security
+
+- `jsonwebtoken` 9.3 to 10.4 (type confusion that could bypass claim
+  checks, fixed in 10.3.0). Uses the `aws-lc-rs` backend, so `rsa` and
+  `crypto-bigint` stay out of the build.
+
 ### Added
 
 - `REDIS_CA_CERT`: trust a private CA for `rediss://` (Google Memorystore's
