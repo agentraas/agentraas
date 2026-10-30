@@ -18,6 +18,9 @@ spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets: {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- with .Values.podSecurityContext }}
+      securityContext: {{- toYaml . | nindent 8 }}
+      {{- end }}
       initContainers:
         # The image's own migrations (they match its version), all of them on
         # each start under an advisory lock so replicas don't race; every
@@ -28,7 +31,7 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           envFrom: [{secretRef: {name: {{ include "agentraas.secretName" . }}}}]
           command: ["agentraas-migrate"]
-          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
       containers:
         - name: api
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
@@ -51,7 +54,7 @@ spec:
           readinessProbe: {httpGet: {path: /health, port: http}, periodSeconds: 10}
           livenessProbe: {httpGet: {path: /health, port: http}, periodSeconds: 20, failureThreshold: 6, initialDelaySeconds: 10}
           resources: {{- toYaml .Values.resources | nindent 12 }}
-          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
       volumes:
         - {name: config, configMap: {name: {{ $name }}-config}}
 ---

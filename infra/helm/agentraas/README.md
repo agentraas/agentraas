@@ -42,12 +42,18 @@ ingress writes with the client IP (e.g. `x-real-ip` for ingress-nginx),
 otherwise every client shares one rate-limit bucket.
 
 For Redis over TLS, give `externalRedis.url` a `rediss://` URL (image 0.30.2
-and later; the certificate must come from a public CA). For agents that call
+and later; the certificate must come from a public CA, or set
+`extraEnv.REDIS_CA_CERT` to your CA's PEM, from 0.30.3). For agents that call
 services on your own network, list those ranges with `extraEnv`, e.g.
 `--set-string extraEnv.ALLOWED_PRIVATE_NETWORKS=10.20.0.0/16`; see
 https://agentraas.io/docs#private-platforms.
 
+The API runs as non-root (`podSecurityContext`, user 10001, group 0, seccomp
+`RuntimeDefault`, every capability dropped). On OpenShift add
+`--set podSecurityContext.runAsUser=null` so it assigns the user ID.
+
 Verified: `helm lint`, `kubeconform -strict` on both value sets, the
 migration step against an empty Postgres (twice concurrently, then again),
-and the API image running read-only with only the ConfigMap mounted. Not
+and the API image running read-only with only the ConfigMap mounted, and
+(0.7.2) as an arbitrary non-root user in group 0 with no capabilities. Not
 yet run on a real cluster.

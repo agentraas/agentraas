@@ -35,6 +35,16 @@ metricsToken: ""
 # Extra environment variables for the API (SMTP_HOST, OTEL_EXPORTER_OTLP_ENDPOINT, ...).
 extraEnv: {}
 
+# The API and its migration step run as any non-root user with a read-only
+# filesystem (tested as an arbitrary UID in group 0, all capabilities
+# dropped). On OpenShift, set runAsUser: null so the restricted SCC assigns
+# the namespace's UID.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 0
+  seccompProfile: {type: RuntimeDefault}
+
 resources:
   requests: {cpu: 100m, memory: 128Mi}
   limits: {memory: 512Mi}
