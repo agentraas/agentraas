@@ -238,6 +238,12 @@ async fn check_member(state: &SharedState, user: &AuthUser, org_id: &str, write:
     if write && !check_org_write_permission(&state.pg, user.sub, org_id).await? {
         return Err(ApiError::new(StatusCode::FORBIDDEN, "Auditors have read-only access to this org."));
     }
+    // Putting an agent in or out of shadow mode decides whether its writes
+    // really happen, so with roles (Enterprise) only org admins may.
+    #[cfg(feature = "enterprise")]
+    if write {
+        crate::ee::require_org_admin(state, user.sub, org_id).await?;
+    }
     Ok(())
 }
 
