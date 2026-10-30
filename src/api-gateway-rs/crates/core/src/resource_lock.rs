@@ -87,7 +87,7 @@ pub async fn release(
     redis::Script::new("if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) end return 0")
         .key(key(org_id, resource_id))
         .arg(token)
-        .invoke_async::<_, i64>(conn)
+        .invoke_async::<i64>(conn)
         .await?;
     Ok(())
 }
@@ -129,10 +129,22 @@ pub async fn mark_written(conn: &mut MultiplexedConnection, org_id: &str, resour
     redis::cmd("SET").arg(written_key(org_id, resource_id)).arg(format!("{now_ms}|{req_id}")).arg("EX").arg(WRITTEN_TTL_SECONDS).query_async(conn).await
 }
 
-/// Whether a call other than `req_id` changed the record after `since_ms`.
-pub async fn written_since(conn: &mut MultiplexedConnection, org_id: &str, resource_id: &str, since_ms: i64, req_id: &str) -> redis::RedisResult<bool> {
-    let v: Option<String> = redis::cmd("GET").arg(written_key(org_id, resource_id)).query_async(conn).await?;
-    Ok(v.as_deref().and_then(|v| v.split_once('|')).is_some_and(|(ms, by)| by != req_id && ms.parse::<i64>().is_ok_and(|ms| ms > since_ms)))
+/// For each (org_id, resource_id, since_ms, req_id): whether a call other
+/// than `req_id` changed the record after `since_ms`. One round trip.
+pub async fn written_since(conn: &mut MultiplexedConnection, checks: &[(&str, &str, i64, &str)]) -> redis::RedisResult<Vec<bool>> {
+    if checks.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut pipe = redis::pipe();
+    for (org_id, resource_id, _, _) in checks {
+        pipe.get(written_key(org_id, resource_id));
+    }
+    let values: Vec<Option<String>> = pipe.query_async(conn).await?;
+    Ok(values
+        .iter()
+        .zip(checks)
+        .map(|(v, (_, _, since_ms, req_id))| v.as_deref().and_then(|v| v.split_once('|')).is_some_and(|(ms, by)| by != *req_id && ms.parse::<i64>().is_ok_and(|ms| ms > *since_ms)))
+        .collect())
 }
 
 /// Checks a `lock` spec submitted with a custom action.

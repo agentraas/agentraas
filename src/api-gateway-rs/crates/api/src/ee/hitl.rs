@@ -445,17 +445,11 @@ async fn find_link(state: &SharedState, token: &str) -> Result<LinkRow, ApiError
 /// and mail scanners fetch GET URLs on their own.
 async fn link_view(State(state): State<SharedState>, Json(body): Json<LinkBody>) -> Result<Json<Value>, ApiError> {
     let r = find_link(&state, &body.token).await?;
-    let changed = r.status == "pending" && crate::record_locks::changed_since(&state, &r.org_id, &r.service, &r.action, &r.payload, &r.req_id, r.created_at).await;
+    let held = crate::record_locks::Held { org_id: &r.org_id, service: &r.service, action: &r.action, payload: &r.payload, req_id: &r.req_id, held_at: r.created_at };
+    let changed = r.status == "pending" && crate::record_locks::changed_since(&state, &[held]).await.first() == Some(&true);
     Ok(Json(json!({ "reqId": r.req_id, "org_id": r.org_id, "service": r.service, "action": r.action, "payload": r.payload, "status": r.status, "created_at": r.created_at, "record_changed": changed })))
 }
 
-/// `record_locks::changed_since` for a row of `list_pending`.
-async fn record_changed(state: &SharedState, row: &Value) -> bool {
-    let s = |k: &str| row.get(k).and_then(Value::as_str).unwrap_or_default();
-    let Some(held_at) = row.get("created_at").and_then(Value::as_str).and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok()) else { return false };
-    let payload = row.get("payload").cloned().unwrap_or(Value::Null);
-    crate::record_locks::changed_since(state, s("org_id"), s("service"), s("action"), &payload, s("req_id"), held_at.to_utc()).await
-}
 
 /// The decision. `claim_pending` inside approve/deny lets only one click
 /// win, so a link used twice (or racing a Slack click) runs the action once.
@@ -496,8 +490,19 @@ async fn list_pending(State(state): State<SharedState>, user: AuthUser) -> Resul
     .fetch_all(&state.pg)
     .await?;
     let mut rows = rows;
-    for row in &mut rows {
-        let changed = record_changed(&state, row).await;
+    let s = |row: &Value, k: &str| row.get(k).and_then(Value::as_str).map(String::from).unwrap_or_default();
+    let parsed: Vec<(String, String, String, String, Value, chrono::DateTime<chrono::Utc>)> = rows
+        .iter()
+        .map(|row| {
+            let held_at = row.get("created_at").and_then(Value::as_str).and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok()).map_or_else(chrono::Utc::now, |t| t.to_utc());
+            (s(row, "org_id"), s(row, "service"), s(row, "action"), s(row, "req_id"), row.get("payload").cloned().unwrap_or(Value::Null), held_at)
+        })
+        .collect();
+    let held: Vec<crate::record_locks::Held> = parsed
+        .iter()
+        .map(|(org_id, service, action, req_id, payload, held_at)| crate::record_locks::Held { org_id, service, action, payload, req_id, held_at: *held_at })
+        .collect();
+    for (row, changed) in rows.iter_mut().zip(crate::record_locks::changed_since(&state, &held).await) {
         row["record_changed"] = json!(changed);
     }
     Ok(Json(json!({ "pending": rows })))
@@ -750,7 +755,7 @@ async fn approve(state: &SharedState, req_id: &str, org_id: &str, resolved_by: S
     // moment (after waiting up to 5 s for it), the approved call goes to the
     // dead-letter queue to replay.
     let mut held_lock = None;
-    if let Some(lock) = crate::record_locks::lock_for(state, &row.org_id, &row.service, resolved_route.lock.as_ref(), &row.payload, None).await {
+    if let Some(lock) = crate::record_locks::lock_for(state, &row.org_id, &row.service, resolved_route.lock.as_ref(), &row.payload).await {
         if let Ok(mut conn) = state.redis_conn_result() {
             let ttl = crate::agent::forward::resource_lock_ttl_seconds(state);
             match agentraas_core::resource_lock::acquire_waiting(&mut conn, &row.org_id, &lock.id, &row.agent_id, ttl, agentraas_core::resource_lock::MAX_WAIT_MS).await {
