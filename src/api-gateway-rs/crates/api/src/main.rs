@@ -79,7 +79,12 @@ async fn main() -> anyhow::Result<()> {
         .connect(&database_url)
         .await?;
 
-    let redis = redis::Client::open(redis_url)?;
+    // REDIS_CA_CERT (PEM): trust this CA instead of the public ones for a
+    // rediss:// URL, e.g. Google Memorystore's private server CA.
+    let redis = match util::configured_env("REDIS_CA_CERT") {
+        Some(pem) => redis::Client::build_with_tls(redis_url, redis::TlsCertificates { client_tls: None, root_cert: Some(pem.into_bytes()) })?,
+        None => redis::Client::open(redis_url)?,
+    };
     // Established ONCE here and cloned (cheap — a handle to a background
     // task, not a new TCP connection) everywhere else in the app via
     // AppState::redis_conn_result() — see state.rs's field doc-comment for
