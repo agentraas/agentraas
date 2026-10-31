@@ -387,6 +387,18 @@ did not run, resend it as a new action with your own key:
 client.call("stripe", "charge.create", payload, idempotency_key="order-1042-retry-1")
 ```
 
+## Record locks
+
+When two agents change the same customer or order at once, the second gets
+a `409` ([how it works](https://agentraas.io/docs#record-locks)). To wait for
+the record instead (up to 5 seconds, first come first served), or to lock an
+id of your own choosing:
+
+```python
+client.call("stripe", "refund.create", payload, lock_wait_ms=2000)
+client.call("custom", "update_order", payload, resource_id="order-1042")
+```
+
 ## Record and replay
 
 Run an agent once against the real providers, then replay it (in a test, in

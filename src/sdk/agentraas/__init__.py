@@ -33,7 +33,7 @@ retry logic (or your agent framework's) is safe to use as-is.
 
 import requests
 
-__version__ = "0.15.1"
+__version__ = "0.16.0"
 
 DEFAULT_BASE_URL = "http://localhost:13000"
 
@@ -141,7 +141,8 @@ class Client:
             headers["X-AgentRaaS-Run-Id"] = str(self.run_id)
         return headers
 
-    def call(self, service, action, payload=None, idempotency_key=None):
+    def call(self, service, action, payload=None, idempotency_key=None,
+             resource_id=None, lock_wait_ms=None):
         """Make one protected request.
 
         Args:
@@ -156,6 +157,10 @@ class Client:
                 instead of AgentRaaS hashing the payload. A new key makes
                 it a new action (e.g. to resend after a 504 "outcome
                 unknown" once you're sure the first one didn't run).
+            resource_id: Optional. Lock this id while the call runs, so
+                another agent touching the same thing gets a 409.
+            lock_wait_ms: Optional. If the record is locked, wait up to
+                this long (max 5000) for it instead of failing with 409.
 
         Returns:
             The upstream response body as a dict (or the cached result,
@@ -168,6 +173,10 @@ class Client:
         headers = self._headers()
         if idempotency_key:
             headers["X-AgentRaaS-Idempotency-Key"] = str(idempotency_key)
+        if resource_id:
+            headers["X-AgentRaaS-Resource-Id"] = str(resource_id)
+        if lock_wait_ms:
+            headers["X-AgentRaaS-Lock-Wait-Ms"] = str(int(lock_wait_ms))
         try:
             response = self._session.post(
                 url, headers=headers, json=payload or {}, timeout=self.timeout
@@ -190,10 +199,10 @@ class Client:
 
         return response.json()
 
-    def custom(self, action, payload=None, idempotency_key=None):
+    def custom(self, action, payload=None, idempotency_key=None, **kw):
         """Shorthand for call("custom", action, payload) — calls one of
         your registered Custom Actions by name."""
-        return self.call("custom", action, payload, idempotency_key=idempotency_key)
+        return self.call("custom", action, payload, idempotency_key=idempotency_key, **kw)
 
     def service(self, name):
         """Returns a proxy for dot-notation calls: client.service("stripe").charge.create(payload)."""

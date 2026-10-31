@@ -18,9 +18,13 @@ BODY = {
 }
 
 
+SEEN = {}
+
+
 class Stub(BaseHTTPRequestHandler):
     def do_POST(self):
         self.rfile.read(int(self.headers.get("Content-Length", 0)))
+        SEEN.update(self.headers)
         body = json.dumps(BODY if self.path.startswith("/v1/sdk/stripe") else {"error": "nope", "reqId": "req_2"}).encode()
         self.send_response(422 if self.path.startswith("/v1/sdk/stripe") else 401)
         self.send_header("Content-Type", "application/json")
@@ -58,6 +62,13 @@ err_out = io.StringIO()
 with contextlib.redirect_stderr(err_out):
     code = cli(["call", "stripe", "charge.create", '{"amount": "49.99"}', "--key", "k", "--url", client.base_url])
 assert code == 1 and "49.99, without quotes" in err_out.getvalue(), (code, err_out.getvalue())
+
+# Record-lock options travel as headers.
+try:
+    client.call("other", "x", {}, resource_id="cust_1", lock_wait_ms=2000)
+except agentraas.AgentRaaSError:
+    pass
+assert SEEN.get("X-AgentRaaS-Resource-Id") == "cust_1" and SEEN.get("X-AgentRaaS-Lock-Wait-Ms") == "2000", SEEN
 
 server.shutdown()
 print("client errors: ok")
