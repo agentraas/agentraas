@@ -13,7 +13,9 @@ const BODY = {
   next_step: 'Nothing was sent. Fix every field listed in validation_errors, following each hint, and send the call again.',
 };
 
+let seen = {};
 const server = http.createServer((req, res) => {
+  seen = req.headers;
   req.resume();
   req.on('end', () => {
     const v = req.url.startsWith('/v1/sdk/stripe');
@@ -39,6 +41,10 @@ server.listen(0, '127.0.0.1', async () => {
       assert.equal(err.message, 'nope (reqId=req_2)');
       return true;
     });
+    // Record-lock options travel as headers.
+    await assert.rejects(client.call('other', 'x', {}, { resourceId: 'cust_1', lockWaitMs: 2000 }));
+    assert.equal(seen['x-agentraas-resource-id'], 'cust_1');
+    assert.equal(seen['x-agentraas-lock-wait-ms'], '2000');
     console.log('client errors: ok');
   } finally { server.close(); }
 });

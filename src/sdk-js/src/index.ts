@@ -56,6 +56,10 @@ export interface CallOptions {
    * "outcome unknown" once you're sure the first one didn't run).
    */
   idempotencyKey?: string;
+  /** Lock this id while the call runs, so another agent touching the same thing gets a 409. */
+  resourceId?: string;
+  /** If the record is locked, wait up to this long (max 5000) instead of failing with 409. */
+  lockWaitMs?: number;
 }
 
 /** One failing field of a 422: what was wrong and how to fix it. */
@@ -130,7 +134,7 @@ export class Client {
    * @param action Dotted action name for a curated service (e.g.
    *   "charge.create"), or your Custom Action's registered name.
    * @param payload Request body, forwarded to the upstream API.
-   * @param options Optional `idempotencyKey`, see {@link CallOptions}.
+   * @param options Optional `idempotencyKey`, `resourceId`, `lockWaitMs`, see {@link CallOptions}.
    * @returns The upstream response body (or the cached result, with
    *   `cached: true`, if this exact request already ran).
    * @throws {AgentRaaSError} on any non-2xx response.
@@ -142,6 +146,8 @@ export class Client {
 
     const headers = this.headers();
     if (options.idempotencyKey) headers['X-AgentRaaS-Idempotency-Key'] = String(options.idempotencyKey);
+    if (options.resourceId) headers['X-AgentRaaS-Resource-Id'] = String(options.resourceId);
+    if (options.lockWaitMs) headers['X-AgentRaaS-Lock-Wait-Ms'] = String(Math.floor(options.lockWaitMs));
 
     let response: Response;
     try {

@@ -137,6 +137,18 @@ await client.call("stripe", "charge.create", { amount: 5000, currency: "usd" },
 A new key makes it a new action, for example to resend after a 504
 "outcome unknown" once you're sure the first attempt didn't run.
 
+## Record locks
+
+When two agents change the same customer or order at once, the second gets
+a `409` ([how it works](https://agentraas.io/docs#record-locks)). To wait for
+the record instead (up to 5 seconds, first come first served), or to lock an
+id of your own choosing:
+
+```typescript
+await client.call("stripe", "refund.create", payload, { lockWaitMs: 2000 });
+await client.call("custom", "update_order", payload, { resourceId: "order-1042" });
+```
+
 ## Record and replay
 
 Run an agent once against the real providers, then replay it (in a test, in
