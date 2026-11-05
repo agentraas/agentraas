@@ -63,6 +63,26 @@ async def ship(order):
       return stripe.Charge.create(customer=customer, amount=amount,
                                   idempotency_key=idempotency_key).id
   ```
+- Give each accepted business operation a stable key when two legitimate
+  orders can have the same customer and amount. For the local decorator, set
+  `key=` explicitly: its default argument fingerprint omits the
+  `idempotency_key` parameter. This recipe uses the order's key for both the
+  local slot and the provider request:
+
+  ```python
+  @exactly_once(key=lambda customer, amount, *, idempotency_key: idempotency_key)
+  def charge(customer, amount, *, idempotency_key):
+      return stripe.Charge.create(customer=customer, amount=amount,
+                                  idempotency_key=idempotency_key).id
+
+  charge("cus_1", 4200, idempotency_key="order-001")  # first order
+  charge("cus_1", 4200, idempotency_key="order-001")  # retry: cached result
+  charge("cus_1", 4200, idempotency_key="order-002")  # new order: runs once
+  ```
+
+  A key identifies one operation, including its tenant and action where those
+  are part of the business identity. Keep that operation's payload stable
+  across retries.
 - A duplicate that arrives while the first call is still running waits for
   its result (up to `wait=30` seconds, then `InFlightError`).
 - Results must be JSON-serializable (return ids or dicts, not SDK objects).

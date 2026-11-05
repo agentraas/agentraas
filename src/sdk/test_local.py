@@ -136,6 +136,23 @@ def test_idempotency_key_is_injected_and_stable_across_retries():
     assert charge("cus_2") == "ch_1" and seen[2] != seen[0]  # different call, different key
 
 
+def test_explicit_business_keys_preserve_distinct_orders():
+    calls = []
+
+    @exactly_once(store=store(),
+                  key=lambda customer, amount, *, idempotency_key: idempotency_key)
+    def charge(customer, amount, *, idempotency_key):
+        calls.append(idempotency_key)
+        return {"id": f"ch_{len(calls)}"}
+
+    first = charge("cus_1", 4200, idempotency_key="order-001")
+    assert charge("cus_1", amount=4200, idempotency_key="order-001") == first
+    second = charge("cus_1", 4200, idempotency_key="order-002")
+    assert charge("cus_1", 4200, idempotency_key="order-002") == second
+    assert first != second
+    assert calls == ["order-001", "order-002"]
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):
